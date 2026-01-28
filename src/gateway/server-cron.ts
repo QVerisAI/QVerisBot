@@ -1,17 +1,24 @@
 import { resolveDefaultAgentId } from "../agents/agent-scope.js";
 import type { CliDeps } from "../cli/deps.js";
 import { loadConfig } from "../config/config.js";
-import { resolveAgentMainSessionKey } from "../config/sessions.js";
+import {
+  loadSessionStore,
+  resolveAgentMainSessionKey,
+  resolveStorePath,
+  updateSessionStore,
+} from "../config/sessions.js";
 import { runCronIsolatedAgentTurn } from "../cron/isolated-agent.js";
 import { appendCronRunLog, resolveCronRunLogPath } from "../cron/run-log.js";
 import { CronService } from "../cron/service.js";
 import { resolveCronStorePath } from "../cron/store.js";
+import type { CronDeliveryMode, CronOrigin } from "../cron/types.js";
 import { runHeartbeatOnce } from "../infra/heartbeat-runner.js";
 import { requestHeartbeatNow } from "../infra/heartbeat-wake.js";
 import { enqueueSystemEvent } from "../infra/system-events.js";
 import { getChildLogger } from "../logging.js";
 import { normalizeAgentId } from "../routing/session-key.js";
 import { defaultRuntime } from "../runtime.js";
+import { normalizeSessionDeliveryFields } from "../utils/delivery-context.js";
 
 export type GatewayCronState = {
   cron: CronService;
@@ -52,6 +59,46 @@ export function buildGatewayCronService(params: {
         cfg: runtimeConfig,
         agentId,
       });
+
+      // If origin is provided and deliveryMode is "origin" (default), update the
+      // session's delivery context so the heartbeat routes replies to the origin.
+      const origin = opts?.origin;
+      const deliveryMode = opts?.deliveryMode ?? "origin";
+      if (origin && deliveryMode === "origin" && (origin.channel || origin.to)) {
+        const storePath = resolveStorePath(runtimeConfig.session?.store, { agentId });
+        const store = loadSessionStore(storePath);
+        const entry = store[sessionKey];
+        if (entry) {
+          const deliveryFields = normalizeSessionDeliveryFields({
+            deliveryContext: {
+              channel: origin.channel,
+              to: origin.to,
+              accountId: origin.accountId,
+              threadId: origin.threadId,
+            },
+          });
+          // Update session entry with origin delivery context
+          const updatedEntry = {
+            ...entry,
+            updatedAt: Date.now(),
+            deliveryContext: deliveryFields.deliveryContext,
+            lastChannel: deliveryFields.lastChannel ?? entry.lastChannel,
+            lastTo: deliveryFields.lastTo ?? entry.lastTo,
+            lastAccountId: deliveryFields.lastAccountId ?? entry.lastAccountId,
+            lastThreadId: deliveryFields.lastThreadId ?? entry.lastThreadId,
+          };
+          store[sessionKey] = updatedEntry;
+          void updateSessionStore(storePath, (s) => {
+            s[sessionKey] = updatedEntry;
+          }).catch((err) => {
+            cronLogger.warn(
+              { err: String(err), sessionKey },
+              "cron: failed to update session delivery context for origin routing",
+            );
+          });
+        }
+      }
+
       enqueueSystemEvent(text, { sessionKey });
     },
     requestHeartbeatNow,

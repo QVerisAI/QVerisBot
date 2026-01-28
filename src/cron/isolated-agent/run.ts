@@ -234,10 +234,18 @@ export async function runCronIsolatedAgentTurn(params: {
     deliveryMode === "explicit" || (deliveryMode === "auto" && hasExplicitTarget);
   const bestEffortDeliver = agentPayload?.bestEffortDeliver === true;
 
-  const resolvedDelivery = await resolveDeliveryTarget(cfgWithAgentDefaults, agentId, {
-    channel: agentPayload?.channel ?? "last",
-    to: agentPayload?.to,
-  });
+  const resolvedDelivery = await resolveDeliveryTarget(
+    cfgWithAgentDefaults,
+    agentId,
+    {
+      channel: agentPayload?.channel ?? "last",
+      to: agentPayload?.to,
+    },
+    {
+      origin: params.job.origin,
+      deliveryMode: params.job.deliveryMode,
+    },
+  );
 
   const userTimezone = resolveUserTimezone(params.cfg.agents?.defaults?.userTimezone);
   const userTimeFormat = resolveUserTimeFormat(params.cfg.agents?.defaults?.timeFormat);

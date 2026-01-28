@@ -85,6 +85,27 @@ export const CronIsolationSchema = Type.Object(
   { additionalProperties: false },
 );
 
+/**
+ * Origin context: where the cron job was created.
+ * Used for routing replies back to the originating session/channel.
+ */
+export const CronOriginSchema = Type.Object(
+  {
+    channel: Type.Optional(NonEmptyString),
+    to: Type.Optional(Type.String()),
+    accountId: Type.Optional(Type.String()),
+    threadId: Type.Optional(Type.Union([Type.String(), Type.Integer()])),
+    sessionKey: Type.Optional(Type.String()),
+  },
+  { additionalProperties: false },
+);
+
+/** Delivery routing mode for cron job replies */
+export const CronDeliveryModeSchema = Type.Union([
+  Type.Literal("origin"),
+  Type.Literal("current"),
+]);
+
 export const CronJobStateSchema = Type.Object(
   {
     nextRunAtMs: Type.Optional(Type.Integer({ minimum: 0 })),
@@ -115,6 +136,8 @@ export const CronJobSchema = Type.Object(
     payload: CronPayloadSchema,
     isolation: Type.Optional(CronIsolationSchema),
     state: CronJobStateSchema,
+    origin: Type.Optional(CronOriginSchema),
+    deliveryMode: Type.Optional(CronDeliveryModeSchema),
   },
   { additionalProperties: false },
 );
@@ -140,6 +163,8 @@ export const CronAddParamsSchema = Type.Object(
     wakeMode: Type.Union([Type.Literal("next-heartbeat"), Type.Literal("now")]),
     payload: CronPayloadSchema,
     isolation: Type.Optional(CronIsolationSchema),
+    origin: Type.Optional(CronOriginSchema),
+    deliveryMode: Type.Optional(CronDeliveryModeSchema),
   },
   { additionalProperties: false },
 );
@@ -157,6 +182,8 @@ export const CronJobPatchSchema = Type.Object(
     payload: Type.Optional(CronPayloadPatchSchema),
     isolation: Type.Optional(CronIsolationSchema),
     state: Type.Optional(Type.Partial(CronJobStateSchema)),
+    origin: Type.Optional(CronOriginSchema),
+    deliveryMode: Type.Optional(CronDeliveryModeSchema),
   },
   { additionalProperties: false },
 );

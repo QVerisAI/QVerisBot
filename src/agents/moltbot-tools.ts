@@ -88,6 +88,12 @@ export function createMoltbotTools(options?: {
     }),
     createCronTool({
       agentSessionKey: options?.agentSessionKey,
+      originContext: {
+        channel: options?.agentChannel,
+        to: options?.agentTo,
+        accountId: options?.agentAccountId,
+        threadId: options?.agentThreadId,
+      },
     }),
     createMessageTool({
       agentAccountId: options?.agentAccountId,
