@@ -34,8 +34,9 @@ import {
   updateSessionStore,
 } from "../config/sessions.js";
 import type { AgentDefaultsConfig } from "../config/types.agent-defaults.js";
+import type { CronOrigin } from "../cron/types.js";
 import { formatErrorMessage } from "../infra/errors.js";
-import { peekSystemEvents } from "../infra/system-events.js";
+import { peekSystemEventEntries, peekSystemEvents } from "../infra/system-events.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
 import { getQueueSize } from "../process/command-queue.js";
 import { CommandLane } from "../process/lanes.js";
@@ -51,6 +52,7 @@ import {
 } from "./heartbeat-wake.js";
 import type { OutboundSendDeps } from "./outbound/deliver.js";
 import { deliverOutboundPayloads } from "./outbound/deliver.js";
+import type { OutboundTarget } from "./outbound/targets.js";
 import {
   resolveHeartbeatDeliveryTarget,
   resolveHeartbeatSenderContext,
@@ -96,6 +98,36 @@ const EXEC_EVENT_PROMPT =
   "An async command you ran earlier has completed. The result is shown in the system messages above. " +
   "Please relay the command output to the user in a helpful way. If the command succeeded, share the relevant output. " +
   "If it failed, explain what went wrong.";
+
+/**
+ * Apply cron job origin context to override heartbeat delivery target.
+ * This routes replies back to where the cron job was created.
+ */
+function applyOriginToDelivery(
+  delivery: OutboundTarget,
+  origin: CronOrigin,
+  _cfg: MoltbotConfig,
+): OutboundTarget {
+  // Only override if origin has usable channel/to
+  if (!origin.channel && !origin.to) {
+    return delivery;
+  }
+
+  const channel = origin.channel ?? delivery.channel;
+  const to = origin.to ?? delivery.to;
+
+  // If we still don't have a valid channel, keep the original delivery
+  if (channel === "none" || !channel) {
+    return delivery;
+  }
+
+  return {
+    ...delivery,
+    channel,
+    to,
+    accountId: origin.accountId ?? delivery.accountId,
+  };
+}
 
 function resolveActiveHoursTimezone(cfg: MoltbotConfig, raw?: string): string {
   const trimmed = raw?.trim();
@@ -480,7 +512,16 @@ export async function runHeartbeatOnce(opts: {
 
   const { entry, sessionKey, storePath } = resolveHeartbeatSession(cfg, agentId, heartbeat);
   const previousUpdatedAt = entry?.updatedAt;
-  const delivery = resolveHeartbeatDeliveryTarget({ cfg, entry, heartbeat });
+  let delivery = resolveHeartbeatDeliveryTarget({ cfg, entry, heartbeat });
+
+  // Check if any pending system events have origin context (from cron jobs).
+  // If so, override delivery target to route replies back to the origin.
+  const pendingEventEntries = peekSystemEventEntries(sessionKey);
+  const originFromEvent = pendingEventEntries.find((e) => e.origin)?.origin;
+  if (originFromEvent && (originFromEvent.channel || originFromEvent.to)) {
+    delivery = applyOriginToDelivery(delivery, originFromEvent, cfg);
+  }
+
   const visibility =
     delivery.channel !== "none"
       ? resolveHeartbeatVisibility({
