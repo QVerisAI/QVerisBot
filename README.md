@@ -1,11 +1,11 @@
-# 🦞 Moltbot — Personal AI Assistant
+# QVerisBot — Personal AI Assistant with Universal Toolbox
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/moltbot/moltbot/main/docs/whatsapp-clawd.jpg" alt="Clawdbot" width="400">
+  <img src="https://raw.githubusercontent.com/moltbot/moltbot/main/docs/whatsapp-clawd.jpg" alt="QVerisBot" width="400">
 </p>
 
 <p align="center">
-  <strong>EXFOLIATE! EXFOLIATE!</strong>
+  <strong>Your Professional AI Assistant with QVeris Universal Toolbox</strong>
 </p>
 
 <p align="center">
@@ -16,8 +16,17 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge" alt="MIT License"></a>
 </p>
 
-**Moltbot** is a *personal AI assistant* you run on your own devices.
-It answers you on the channels you already use (WhatsApp, Telegram, Slack, Discord, Google Chat, Signal, iMessage, Microsoft Teams, WebChat), plus extension channels like BlueBubbles, Matrix, Zalo, and Zalo Personal. It can speak and listen on macOS/iOS/Android, and can render a live Canvas you control. The Gateway is just the control plane — the product is the assistant.
+**QVerisBot** is an AI Agent developed by the **QVeris AI** team, based on [Moltbot](https://github.com/moltbot/moltbot). It's a *personal AI assistant* you run on your own devices.
+
+## What Makes QVerisBot Better
+
+Compared to Moltbot (formerly Clawdbot), QVerisBot offers:
+
+- **QVeris Universal Toolbox** — Search and invoke various external trusted tools, turning the assistant into a versatile professional helper, not just a chatbot
+- **Feishu (飞书) Group Chat Support** — Native integration with Feishu, better suited for Chinese users
+- **Multi-functional Professional Assistant** — Beyond conversation, QVerisBot can handle complex tasks across multiple domains
+
+QVerisBot answers you on the channels you already use (WhatsApp, Telegram, Slack, Discord, Google Chat, Signal, iMessage, Microsoft Teams, WebChat, **Feishu**), plus extension channels like BlueBubbles, Matrix, Zalo, and Zalo Personal. It can speak and listen on macOS/iOS/Android, and can render a live Canvas you control. The Gateway is just the control plane — the product is the assistant.
 
 If you want a personal, single-user assistant that feels local, fast, and always-on, this is it.
 
@@ -64,9 +73,9 @@ moltbot onboard --install-daemon
 moltbot gateway --port 18789 --verbose
 
 # Send a message
-moltbot message send --to +1234567890 --message "Hello from Moltbot"
+moltbot message send --to +1234567890 --message "Hello from QVerisBot"
 
-# Talk to the assistant (optionally deliver back to any connected channel: WhatsApp/Telegram/Slack/Discord/Google Chat/Signal/iMessage/BlueBubbles/Microsoft Teams/Matrix/Zalo/Zalo Personal/WebChat)
+# Talk to the assistant (optionally deliver back to any connected channel: WhatsApp/Telegram/Slack/Discord/Google Chat/Signal/iMessage/BlueBubbles/Microsoft Teams/Matrix/Zalo/Zalo Personal/WebChat/Feishu)
 moltbot agent --message "Ship checklist" --thinking high
 ```
 
@@ -103,11 +112,11 @@ Note: `pnpm moltbot ...` runs TypeScript directly (via `tsx`). `pnpm build` prod
 
 ## Security defaults (DM access)
 
-Moltbot connects to real messaging surfaces. Treat inbound DMs as **untrusted input**.
+QVerisBot connects to real messaging surfaces. Treat inbound DMs as **untrusted input**.
 
 Full security guide: [Security](https://docs.molt.bot/gateway/security)
 
-Default behavior on Telegram/WhatsApp/Signal/iMessage/Microsoft Teams/Discord/Google Chat/Slack:
+Default behavior on Telegram/WhatsApp/Signal/iMessage/Microsoft Teams/Discord/Google Chat/Slack/Feishu:
 - **DM pairing** (`dmPolicy="pairing"` / `channels.discord.dm.policy="pairing"` / `channels.slack.dm.policy="pairing"`): unknown senders receive a short pairing code and the bot does not process their message.
 - Approve with: `moltbot pairing approve <channel> <code>` (then the sender is added to a local allowlist store).
 - Public inbound DMs require an explicit opt-in: set `dmPolicy="open"` and include `"*"` in the channel allowlist (`allowFrom` / `channels.discord.dm.allowFrom` / `channels.slack.dm.allowFrom`).
@@ -116,8 +125,10 @@ Run `moltbot doctor` to surface risky/misconfigured DM policies.
 
 ## Highlights
 
+- **[QVeris Universal Toolbox](https://qveris.ai)** — Search and call external trusted tools for various professional tasks.
+- **[Feishu Support](https://docs.molt.bot/channels/feishu)** — Native Feishu group chat integration for Chinese users.
 - **[Local-first Gateway](https://docs.molt.bot/gateway)** — single control plane for sessions, channels, tools, and events.
-- **[Multi-channel inbox](https://docs.molt.bot/channels)** — WhatsApp, Telegram, Slack, Discord, Google Chat, Signal, iMessage, BlueBubbles, Microsoft Teams, Matrix, Zalo, Zalo Personal, WebChat, macOS, iOS/Android.
+- **[Multi-channel inbox](https://docs.molt.bot/channels)** — WhatsApp, Telegram, Slack, Discord, Google Chat, Signal, iMessage, BlueBubbles, Microsoft Teams, Matrix, Zalo, Zalo Personal, WebChat, Feishu, macOS, iOS/Android.
 - **[Multi-agent routing](https://docs.molt.bot/gateway/configuration)** — route inbound channels/accounts/peers to isolated agents (workspaces + per-agent sessions).
 - **[Voice Wake](https://docs.molt.bot/nodes/voicewake) + [Talk Mode](https://docs.molt.bot/nodes/talk)** — always-on speech for macOS/iOS/Android with ElevenLabs.
 - **[Live Canvas](https://docs.molt.bot/platforms/mac/canvas)** — agent-driven visual workspace with [A2UI](https://docs.molt.bot/platforms/mac/canvas#canvas-a2ui).
@@ -139,7 +150,7 @@ Run `moltbot doctor` to surface risky/misconfigured DM policies.
 - [Media pipeline](https://docs.molt.bot/nodes/images): images/audio/video, transcription hooks, size caps, temp file lifecycle. Audio details: [Audio](https://docs.molt.bot/nodes/audio).
 
 ### Channels
-- [Channels](https://docs.molt.bot/channels): [WhatsApp](https://docs.molt.bot/channels/whatsapp) (Baileys), [Telegram](https://docs.molt.bot/channels/telegram) (grammY), [Slack](https://docs.molt.bot/channels/slack) (Bolt), [Discord](https://docs.molt.bot/channels/discord) (discord.js), [Google Chat](https://docs.molt.bot/channels/googlechat) (Chat API), [Signal](https://docs.molt.bot/channels/signal) (signal-cli), [iMessage](https://docs.molt.bot/channels/imessage) (imsg), [BlueBubbles](https://docs.molt.bot/channels/bluebubbles) (extension), [Microsoft Teams](https://docs.molt.bot/channels/msteams) (extension), [Matrix](https://docs.molt.bot/channels/matrix) (extension), [Zalo](https://docs.molt.bot/channels/zalo) (extension), [Zalo Personal](https://docs.molt.bot/channels/zalouser) (extension), [WebChat](https://docs.molt.bot/web/webchat).
+- [Channels](https://docs.molt.bot/channels): [WhatsApp](https://docs.molt.bot/channels/whatsapp) (Baileys), [Telegram](https://docs.molt.bot/channels/telegram) (grammY), [Slack](https://docs.molt.bot/channels/slack) (Bolt), [Discord](https://docs.molt.bot/channels/discord) (discord.js), [Google Chat](https://docs.molt.bot/channels/googlechat) (Chat API), [Signal](https://docs.molt.bot/channels/signal) (signal-cli), [iMessage](https://docs.molt.bot/channels/imessage) (imsg), [BlueBubbles](https://docs.molt.bot/channels/bluebubbles) (extension), [Microsoft Teams](https://docs.molt.bot/channels/msteams) (extension), [Matrix](https://docs.molt.bot/channels/matrix) (extension), [Zalo](https://docs.molt.bot/channels/zalo) (extension), [Zalo Personal](https://docs.molt.bot/channels/zalouser) (extension), [WebChat](https://docs.molt.bot/web/webchat), **Feishu** (extension).
 - [Group routing](https://docs.molt.bot/concepts/group-messages): mention gating, reply tags, per-channel chunking and routing. Channel rules: [Channels](https://docs.molt.bot/channels).
 
 ### Apps + nodes
@@ -149,6 +160,7 @@ Run `moltbot doctor` to surface risky/misconfigured DM policies.
 - [macOS node mode](https://docs.molt.bot/nodes): system.run/notify + canvas/camera exposure.
 
 ### Tools + automation
+- **QVeris Universal Toolbox**: search and invoke external trusted tools for finance, research, data analysis, and more.
 - [Browser control](https://docs.molt.bot/tools/browser): dedicated moltbot Chrome/Chromium, snapshots, actions, uploads, profiles.
 - [Canvas](https://docs.molt.bot/platforms/mac/canvas): [A2UI](https://docs.molt.bot/platforms/mac/canvas#canvas-a2ui) push/reset, eval, snapshot.
 - [Nodes](https://docs.molt.bot/nodes): camera snap/clip, screen record, [location.get](https://docs.molt.bot/nodes/location-command), notifications.
@@ -170,7 +182,7 @@ Run `moltbot doctor` to surface risky/misconfigured DM policies.
 ## How it works (short)
 
 ```
-WhatsApp / Telegram / Slack / Discord / Google Chat / Signal / iMessage / BlueBubbles / Microsoft Teams / Matrix / Zalo / Zalo Personal / WebChat
+WhatsApp / Telegram / Slack / Discord / Google Chat / Signal / iMessage / BlueBubbles / Microsoft Teams / Matrix / Zalo / Zalo Personal / WebChat / Feishu
                │
                ▼
 ┌───────────────────────────────┐
@@ -180,6 +192,7 @@ WhatsApp / Telegram / Slack / Discord / Google Chat / Signal / iMessage / BlueBu
 └──────────────┬────────────────┘
                │
                ├─ Pi agent (RPC)
+               ├─ QVeris Toolbox
                ├─ CLI (moltbot …)
                ├─ WebChat UI
                ├─ macOS app
@@ -189,6 +202,7 @@ WhatsApp / Telegram / Slack / Discord / Google Chat / Signal / iMessage / BlueBu
 ## Key subsystems
 
 - **[Gateway WebSocket network](https://docs.molt.bot/concepts/architecture)** — single WS control plane for clients, tools, and events (plus ops: [Gateway runbook](https://docs.molt.bot/gateway)).
+- **[QVeris Universal Toolbox](https://qveris.ai)** — search and invoke external trusted tools for professional tasks.
 - **[Tailscale exposure](https://docs.molt.bot/gateway/tailscale)** — Serve/Funnel for the Gateway dashboard + WS (remote access: [Remote](https://docs.molt.bot/gateway/remote)).
 - **[Browser control](https://docs.molt.bot/tools/browser)** — moltbot‑managed Chrome/Chromium with CDP control.
 - **[Canvas + A2UI](https://docs.molt.bot/platforms/mac/canvas)** — agent‑driven visual workspace (A2UI host: [Canvas/A2UI](https://docs.molt.bot/platforms/mac/canvas#canvas-a2ui)).
@@ -197,14 +211,14 @@ WhatsApp / Telegram / Slack / Discord / Google Chat / Signal / iMessage / BlueBu
 
 ## Tailscale access (Gateway dashboard)
 
-Moltbot can auto-configure Tailscale **Serve** (tailnet-only) or **Funnel** (public) while the Gateway stays bound to loopback. Configure `gateway.tailscale.mode`:
+QVerisBot can auto-configure Tailscale **Serve** (tailnet-only) or **Funnel** (public) while the Gateway stays bound to loopback. Configure `gateway.tailscale.mode`:
 
 - `off`: no Tailscale automation (default).
 - `serve`: tailnet-only HTTPS via `tailscale serve` (uses Tailscale identity headers by default).
 - `funnel`: public HTTPS via `tailscale funnel` (requires shared password auth).
 
 Notes:
-- `gateway.bind` must stay `loopback` when Serve/Funnel is enabled (Moltbot enforces this).
+- `gateway.bind` must stay `loopback` when Serve/Funnel is enabled (QVerisBot enforces this).
 - Serve can be forced to require a password by setting `gateway.auth.mode: "password"` or `gateway.auth.allowTailscale: false`.
 - Funnel refuses to start unless `gateway.auth.mode: "password"` is set.
 - Optional: `gateway.tailscale.resetOnExit` to undo Serve/Funnel on shutdown.
@@ -213,7 +227,7 @@ Details: [Tailscale guide](https://docs.molt.bot/gateway/tailscale) · [Web surf
 
 ## Remote Gateway (Linux is great)
 
-It’s perfectly fine to run the Gateway on a small Linux instance. Clients (macOS app, CLI, WebChat) can connect over **Tailscale Serve/Funnel** or **SSH tunnels**, and you can still pair device nodes (macOS/iOS/Android) to execute device‑local actions when needed.
+It's perfectly fine to run the Gateway on a small Linux instance. Clients (macOS app, CLI, WebChat) can connect over **Tailscale Serve/Funnel** or **SSH tunnels**, and you can still pair device nodes (macOS/iOS/Android) to execute device‑local actions when needed.
 
 - **Gateway host** runs the exec tool and channel connections by default.
 - **Device nodes** run device‑local actions (`system.run`, camera, screen recording, notifications) via `node.invoke`.
@@ -225,7 +239,7 @@ Details: [Remote access](https://docs.molt.bot/gateway/remote) · [Nodes](https:
 
 The macOS app can run in **node mode** and advertises its capabilities + permission map over the Gateway WebSocket (`node.list` / `node.describe`). Clients can then execute local actions via `node.invoke`:
 
-- `system.run` runs a local command and returns stdout/stderr/exit code; set `needsScreenRecording: true` to require screen-recording permission (otherwise you’ll get `PERMISSION_MISSING`).
+- `system.run` runs a local command and returns stdout/stderr/exit code; set `needsScreenRecording: true` to require screen-recording permission (otherwise you'll get `PERMISSION_MISSING`).
 - `system.notify` posts a user notification and fails if notifications are denied.
 - `canvas.*`, `camera.*`, `screen.record`, and `location.get` are also routed via `node.invoke` and follow TCC permission status.
 
@@ -253,7 +267,7 @@ ClawdHub is a minimal skill registry. With ClawdHub enabled, the agent can searc
 
 ## Chat commands
 
-Send these in WhatsApp/Telegram/Slack/Google Chat/Microsoft Teams/WebChat (group commands are owner-only):
+Send these in WhatsApp/Telegram/Slack/Google Chat/Microsoft Teams/WebChat/Feishu (group commands are owner-only):
 
 - `/status` — compact session status (model + tokens, cost when available)
 - `/new` or `/reset` — reset the session
@@ -315,7 +329,7 @@ Minimal `~/.clawdbot/moltbot.json` (model + defaults):
 
 ## Security model (important)
 
-- **Default:** tools run on the host for the **main** session, so the agent has full access when it’s just you.
+- **Default:** tools run on the host for the **main** session, so the agent has full access when it's just you.
 - **Group/channel safety:** set `agents.defaults.sandbox.mode: "non-main"` to run **non‑main sessions** (groups/channels) inside per‑session Docker sandboxes; bash then runs in Docker for those sessions.
 - **Sandbox defaults:** allowlist `bash`, `process`, `read`, `write`, `edit`, `sessions_list`, `sessions_history`, `sessions_send`, `sessions_spawn`; denylist `browser`, `canvas`, `nodes`, `cron`, `discord`, `gateway`.
 
@@ -375,6 +389,23 @@ Details: [Security guide](https://docs.molt.bot/gateway/security) · [Docker + s
 - Configure a Teams app + Bot Framework, then add a `msteams` config section.
 - Allowlist who can talk via `msteams.allowFrom`; group access via `msteams.groupAllowFrom` or `msteams.groupPolicy: "open"`.
 
+### [Feishu (飞书)](https://docs.molt.bot/channels/feishu)
+
+- Configure a Feishu bot application, then add a `feishu` config section.
+- Native support for Feishu group chats, better suited for Chinese enterprise users.
+- Allowlist who can talk via `feishu.allowFrom`; group access via `feishu.groupAllowFrom` or `feishu.groupPolicy`.
+
+```json5
+{
+  channels: {
+    feishu: {
+      appId: "cli_xxx",
+      appSecret: "xxx"
+    }
+  }
+}
+```
+
 ### [WebChat](https://docs.molt.bot/web/webchat)
 
 - Uses the Gateway WebSocket; no separate WebChat port/config.
@@ -392,8 +423,8 @@ Browser control (optional):
 
 ## Docs
 
-Use these when you’re past the onboarding flow and want the deeper reference.
-- [Start with the docs index for navigation and “what’s where.”](https://docs.molt.bot)
+Use these when you're past the onboarding flow and want the deeper reference.
+- [Start with the docs index for navigation and "what's where."](https://docs.molt.bot)
 - [Read the architecture overview for the gateway + protocol model.](https://docs.molt.bot/concepts/architecture)
 - [Use the full configuration reference when you need every key and example.](https://docs.molt.bot/gateway/configuration)
 - [Run the Gateway by the book with the operational runbook.](https://docs.molt.bot/gateway)
@@ -457,11 +488,22 @@ Use these when you’re past the onboarding flow and want the deeper reference.
 
 - [docs.molt.bot/gmail-pubsub](https://docs.molt.bot/automation/gmail-pubsub)
 
-## Molty
+## QVerisBot
 
-Moltbot was built for **Molty**, a space lobster AI assistant. 🦞
-by Peter Steinberger and the community.
+QVerisBot is developed by the **QVeris AI** team, based on Moltbot (formerly Clawdbot).
 
+### Why QVerisBot?
+
+- **QVeris Universal Toolbox** — Not just a chatbot, but a professional assistant that can search and invoke various external trusted tools
+- **Feishu Support** — Native integration with Feishu group chats, better suited for Chinese enterprise users
+- **Multi-functional** — From conversation to complex professional tasks, QVerisBot is your versatile AI assistant
+
+### Credits
+
+QVerisBot is built upon the excellent foundation of [Moltbot](https://github.com/moltbot/moltbot), created by Peter Steinberger and the community.
+
+- [QVeris AI](https://qveris.ai)
+- [Moltbot](https://molt.bot)
 - [clawd.me](https://clawd.me)
 - [soul.md](https://soul.md)
 - [steipete.me](https://steipete.me)
@@ -470,7 +512,7 @@ by Peter Steinberger and the community.
 ## Community
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines, maintainers, and how to submit PRs.
-AI/vibe-coded PRs welcome! 🤖
+AI/vibe-coded PRs welcome!
 
 Special thanks to [Mario Zechner](https://mariozechner.at/) for his support and for
 [pi-mono](https://github.com/badlogic/pi-mono).
