@@ -12,7 +12,8 @@ import {
   resolveDefaultFeishuAccountId,
   type ResolvedFeishuAccount,
 } from "../../../src/feishu/accounts.js";
-import { sendMessageFeishu, type SendFeishuMessageParams } from "../../../src/feishu/send.js";
+import { sendMessageFeishu, sendImageFeishu, type SendFeishuMessageParams } from "../../../src/feishu/send.js";
+import { loadWebMedia } from "../../../src/web/media.js";
 import { monitorFeishuProvider, type FeishuMessageContext } from "../../../src/feishu/monitor.js";
 import { createFeishuClient } from "../../../src/feishu/client.js";
 import { dispatchFeishuMessage } from "../../../src/feishu/message-dispatch.js";
@@ -107,26 +108,55 @@ export const feishuPlugin: ChannelPlugin<ResolvedFeishuAccount> = {
         accountId: accountId ?? undefined,
         config: cfg,
         receiveIdType,
+        autoRichText: true, // Enable markdown rendering via interactive card
       });
       if (!result.success || !result.messageId) {
         throw new Error(result.error ?? "Failed to send Feishu message");
       }
       return { channel: "feishu" as const, messageId: result.messageId };
     },
-    sendMedia: async ({ to, text, accountId, cfg }) => {
-      // Feishu media sending requires separate API - for now just send text
+    sendMedia: async ({ to, text, mediaUrl, accountId, cfg }) => {
       const receiveIdType = detectFeishuReceiveIdType(to);
-      const result = await sendMessageFeishu({
-        to,
-        text,
-        accountId: accountId ?? undefined,
-        config: cfg,
-        receiveIdType,
-      });
-      if (!result.success || !result.messageId) {
-        throw new Error(result.error ?? "Failed to send Feishu message");
+      let lastMessageId: string | undefined;
+
+      // Send text first if present
+      if (text?.trim()) {
+        const textResult = await sendMessageFeishu({
+          to,
+          text,
+          accountId: accountId ?? undefined,
+          config: cfg,
+          receiveIdType,
+          autoRichText: true,
+        });
+        if (!textResult.success) {
+          throw new Error(textResult.error ?? "Failed to send Feishu text message");
+        }
+        lastMessageId = textResult.messageId;
       }
-      return { channel: "feishu" as const, messageId: result.messageId };
+
+      // Send image if mediaUrl is provided
+      if (mediaUrl) {
+        const media = await loadWebMedia(mediaUrl);
+        if (media.buffer) {
+          const imageResult = await sendImageFeishu({
+            to,
+            image: media.buffer,
+            accountId: accountId ?? undefined,
+            config: cfg,
+            receiveIdType,
+          });
+          if (!imageResult.success) {
+            throw new Error(imageResult.error ?? "Failed to send Feishu image");
+          }
+          lastMessageId = imageResult.messageId;
+        }
+      }
+
+      if (!lastMessageId) {
+        throw new Error("No content to send");
+      }
+      return { channel: "feishu" as const, messageId: lastMessageId };
     },
   },
   gateway: {

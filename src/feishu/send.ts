@@ -71,7 +71,10 @@ function convertUnsupportedHeadings(markdown: string): string {
 }
 
 /**
- * Convert standard markdown table to Feishu table component syntax
+ * Convert standard markdown table to plain text format for Feishu
+ *
+ * Feishu markdown in interactive cards does NOT support <table> components.
+ * Convert tables to a simple text format that displays cleanly.
  *
  * Input:
  *   | Name | Age |
@@ -80,53 +83,75 @@ function convertUnsupportedHeadings(markdown: string): string {
  *   | Jane | 25  |
  *
  * Output:
- *   <table columns={[{dataIndex:"col0",title:"Name"},{dataIndex:"col1",title:"Age"}]} data={[{col0:"John",col1:"30"},{col0:"Jane",col1:"25"}]}/>
+ *   **Name** | **Age**
+ *   John | 30
+ *   Jane | 25
  */
 function convertMarkdownTableToFeishu(markdown: string): string {
   // Match markdown table pattern
   const tableRegex = /^\|(.+)\|\s*\n\|[-|:\s]+\|\s*\n((?:\|.+\|\s*\n?)+)/gm;
 
-  return markdown.replace(tableRegex, (match, headerRow: string, bodyRows: string) => {
+  return markdown.replace(tableRegex, (_match, headerRow: string, bodyRows: string) => {
     // Parse header columns
     const headers = headerRow
       .split("|")
       .map((h: string) => h.trim())
       .filter((h: string) => h.length > 0);
 
-    if (headers.length === 0) return match;
+    if (headers.length === 0) return _match;
 
-    // Build columns definition
-    const columns = headers.map((title: string, index: number) => ({
-      dataIndex: `col${index}`,
-      title: title,
-    }));
+    // Build header line with bold formatting
+    const headerLine = headers.map((h: string) => `**${h}**`).join(" | ");
 
     // Parse body rows
-    const rows = bodyRows
+    const dataLines = bodyRows
       .trim()
       .split("\n")
       .map((row: string) => {
         const cells = row
           .split("|")
           .map((c: string) => c.trim())
-          .filter(
-            (c: string, i: number, arr: string[]) => (i > 0 && i < arr.length - 1) || c.length > 0,
-          );
-
-        // Build row object
-        const rowObj: Record<string, string> = {};
-        cells.forEach((cell: string, index: number) => {
-          if (index < headers.length) {
-            rowObj[`col${index}`] = cell;
-          }
-        });
-        return rowObj;
+          .filter((_c: string, i: number, arr: string[]) => i > 0 && i < arr.length - 1);
+        return cells.join(" | ");
       })
-      .filter((row: Record<string, string>) => Object.keys(row).length > 0);
+      .filter((line: string) => line.length > 0);
 
-    // Build Feishu table component
-    return `<table columns={${JSON.stringify(columns)}} data={${JSON.stringify(rows)}}/>`;
+    // Return formatted table as simple text
+    return [headerLine, ...dataLines].join("\n");
   });
+}
+
+/**
+ * Normalize horizontal rules (---) for Feishu markdown
+ *
+ * Feishu requires --- to be on its own line with blank lines around it.
+ * This ensures --- is properly formatted as a horizontal rule.
+ *
+ * Input:  text\n---\nmore
+ * Output: text\n\n---\n\nmore (proper spacing for hr)
+ */
+function normalizeHorizontalRules(markdown: string): string {
+  // Protect code blocks from modification
+  const codeBlocks: string[] = [];
+  let result = markdown.replace(/```[\s\S]*?```/g, (match) => {
+    codeBlocks.push(match);
+    return `\x00CODE_BLOCK_${codeBlocks.length - 1}\x00`;
+  });
+
+  // Match --- that should be horizontal rules (on their own line, possibly with whitespace)
+  // Ensure blank lines before and after for Feishu to recognize as hr
+  result = result.replace(/\n[ \t]*---[ \t]*\n/g, "\n\n---\n\n");
+  // Handle --- at start of text
+  result = result.replace(/^[ \t]*---[ \t]*\n/g, "---\n\n");
+  // Handle --- at end of text
+  result = result.replace(/\n[ \t]*---[ \t]*$/g, "\n\n---");
+
+  // Restore code blocks
+  result = result.replace(/\x00CODE_BLOCK_(\d+)\x00/g, (_match, index) => {
+    return codeBlocks[parseInt(index, 10)];
+  });
+
+  return result;
 }
 
 /**
@@ -135,6 +160,7 @@ function convertMarkdownTableToFeishu(markdown: string): string {
  * Automatically converts standard markdown features to Feishu format:
  * - Tables: |col|col| converted to <table> component
  * - Headings: # and ## native, ### to ###### converted to **bold**
+ * - Horizontal rules: --- normalized with proper spacing
  * - Lists, code blocks, links, bold/italic: native support
  *
  * @param markdown - Markdown content to display
@@ -152,6 +178,7 @@ export function buildFeishuMarkdownCard(
   let processedMarkdown = markdown;
   processedMarkdown = convertUnsupportedHeadings(processedMarkdown); // H3-H6 → bold
   processedMarkdown = convertMarkdownTableToFeishu(processedMarkdown); // |table| → <table/>
+  processedMarkdown = normalizeHorizontalRules(processedMarkdown); // --- → proper hr
 
   const card: FeishuInteractiveCard = {
     config: {
@@ -341,7 +368,8 @@ export function hasMarkdown(text: string): boolean {
     /^\d+\.\s+/m.test(text) || // ordered list
     /```[\s\S]*?```/.test(text) || // fenced code blocks
     /^\|.+\|$/m.test(text) || // table rows (|col|col|)
-    /^[-|:]+$/m.test(text) // table separator (|---|---|)
+    /^\|[-|:\s]+\|$/m.test(text) || // table separator (|---|---|) - must have | delimiters
+    /^-{3,}$/m.test(text) // horizontal rule (--- or more dashes)
   );
 }
 
@@ -412,9 +440,10 @@ export async function sendMessageFeishu(
   try {
     let result: FeishuSendMessageResult;
 
-    // Determine if we should use interactive card for rich markdown
+    // Use interactive card when autoRichText is enabled
     // Interactive cards support full markdown: headings, lists, code blocks, images, etc.
-    const useInteractiveCard = params.autoRichText && hasMarkdown(params.text);
+    // Always use interactive card when autoRichText is true for consistent rendering
+    const useInteractiveCard = params.autoRichText === true;
 
     if (params.replyToMessageId) {
       // Reply to a specific message

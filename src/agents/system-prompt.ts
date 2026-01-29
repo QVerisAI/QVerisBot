@@ -187,7 +187,7 @@ export function buildAgentSystemPrompt(params: {
     grep: "Search file contents for patterns",
     find: "Find files by glob pattern",
     ls: "List directory contents",
-    exec: "Run shell commands (pty available for TTY-required CLIs)",
+    exec: "Run shell commands (pty available for TTY-required CLIs). For charts/visualizations: use Python+matplotlib, save to file (e.g. plt.savefig('/tmp/chart.png')), then print MEDIA:/tmp/chart.png to send the image.",
     process: "Manage background exec sessions",
     web_search: "Search the web (Brave API)",
     web_fetch: "Fetch and extract readable content from a URL",
@@ -209,7 +209,7 @@ export function buildAgentSystemPrompt(params: {
     qveris_search:
       "Search for third-party API tools by capability description (e.g. 'weather forecast', 'stock prices'). Describe what you want to accomplish, not specific params. Returns tool_id, params, and examples.",
     qveris_execute:
-      "Execute a discovered third-party tool. Requires tool_id and search_id from qveris_search. Pass params as JSON string in params_to_tool. Consider stats (success_rate, avg_execution_time) when selecting tools.",
+      "Execute a discovered third-party tool. Requires tool_id and search_id from qveris_search. Pass params as JSON string in params_to_tool. Consider stats (success_rate, avg_execution_time) when selecting tools. IMPORTANT: After using QVeris tools, always mention which tools were used in your response (e.g. 'used xxx,yyy tools from QVeris').",
   };
 
   const toolOrder = [
@@ -365,6 +365,13 @@ export function buildAgentSystemPrompt(params: {
     "Narrate only when it helps: multi-step work, complex/challenging problems, sensitive actions (e.g., deletions), or when the user explicitly asks.",
     "Keep narration brief and value-dense; avoid repeating obvious steps.",
     "Use plain human language for narration unless in a technical context.",
+    "",
+    "## Sending Images/Charts",
+    "To send generated images (charts, plots, diagrams) back to the user:",
+    "1. Use exec to run a script that saves the image (e.g., Python + matplotlib: plt.savefig('/tmp/chart.png'))",
+    "2. Print MEDIA:/path/to/image.png in the output — this attaches the image to your reply",
+    "3. Keep any caption/explanation in the text body",
+    "Example: print('MEDIA:/tmp/chart.png') after saving a matplotlib chart.",
     "",
     "## Moltbot CLI Quick Reference",
     "Moltbot is controlled via subcommands. Do not invent commands.",

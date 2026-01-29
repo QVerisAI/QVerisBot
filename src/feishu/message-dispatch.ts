@@ -22,7 +22,8 @@ import { danger } from "../globals.js";
 import { recordChannelActivity } from "../infra/channel-activity.js";
 import { createDedupeCache } from "../infra/dedupe.js";
 import { formatUncaughtError } from "../infra/errors.js";
-import { sendMessageFeishu } from "./send.js";
+import { loadWebMedia } from "../web/media.js";
+import { sendMessageFeishu, sendImageFeishu } from "./send.js";
 
 // Message deduplication cache to prevent processing duplicate messages
 const feishuMessageDedupe = createDedupeCache({
@@ -259,17 +260,38 @@ export async function dispatchFeishuMessage(params: DispatchFeishuMessageParams)
             return;
           }
 
+          // Collect media URLs from payload
+          const mediaUrls = payload.mediaUrls?.length
+            ? payload.mediaUrls
+            : payload.mediaUrl
+              ? [payload.mediaUrl]
+              : [];
+          const hasMedia = mediaUrls.length > 0;
+
           log(
-            `feishu: deliver callback called - hasText=${!!payload.text}, textLength=${payload.text?.length ?? 0}`,
+            `feishu: deliver callback called - hasText=${!!payload.text}, textLength=${payload.text?.length ?? 0}, mediaCount=${mediaUrls.length}`,
           );
+
           // Send response back to Feishu; in groups, @mention the user who asked
           if (payload.text) {
-            let replyText = payload.text;
-            if (ctx.chatType === "group" && ctx.senderId) {
-              // Feishu text/interactive: <at id="open_id"></at> mentions the user
-              replyText = `<at id="${ctx.senderId}"></at> ${replyText}`;
-            }
+            const replyText = payload.text;
+            const shouldMention = ctx.chatType === "group" && ctx.senderId;
+
             try {
+              // In groups, send a separate @ mention first (text message)
+              // because interactive cards don't support <at> tags in markdown
+              if (shouldMention) {
+                log(`feishu: sending @ mention to ${ctx.senderId}...`);
+                await sendMessageFeishu({
+                  to: ctx.chatId,
+                  text: `<at user_id="${ctx.senderId}">@</at>`,
+                  accountId: account.accountId,
+                  config: cfg,
+                  receiveIdType: "chat_id",
+                  autoRichText: false, // Plain text for @ mention
+                });
+              }
+
               log(`feishu: sending reply to ${ctx.chatId}...`);
               await sendMessageFeishu({
                 to: ctx.chatId,
@@ -284,6 +306,37 @@ export async function dispatchFeishuMessage(params: DispatchFeishuMessageParams)
               runtime?.error?.(
                 danger(`feishu: failed to send reply: ${formatUncaughtError(sendErr)}`),
               );
+            }
+          }
+
+          // Send media (images) if present
+          if (hasMedia) {
+            for (const mediaUrl of mediaUrls) {
+              try {
+                log(`feishu: loading media from ${mediaUrl}...`);
+                const media = await loadWebMedia(mediaUrl);
+                if (media.buffer) {
+                  const sizeKb = Math.round(media.buffer.length / 1024);
+                  log(
+                    `feishu: loaded image - size=${sizeKb}KB, contentType=${media.contentType ?? "unknown"}`,
+                  );
+                  log(`feishu: sending image to ${ctx.chatId}...`);
+                  await sendImageFeishu({
+                    to: ctx.chatId,
+                    image: media.buffer,
+                    accountId: account.accountId,
+                    config: cfg,
+                    receiveIdType: "chat_id",
+                  });
+                  log(`feishu: image sent successfully`);
+                } else {
+                  log(`feishu: media load returned no buffer for ${mediaUrl}`);
+                }
+              } catch (mediaErr) {
+                runtime?.error?.(
+                  danger(`feishu: failed to send media: ${formatUncaughtError(mediaErr)}`),
+                );
+              }
             }
           }
         },
