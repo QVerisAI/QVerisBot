@@ -1,7 +1,7 @@
 # QVerisBot — Personal AI Assistant with Universal Toolbox
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/moltbot/moltbot/main/docs/whatsapp-clawd.jpg" alt="QVerisBot" width="400">
+  <img src="https://raw.githubusercontent.com/moltbot/moltbot/main/docs/feishu-qveris.jpg" alt="QVerisBot" width="400">
 </p>
 
 <p align="center">
