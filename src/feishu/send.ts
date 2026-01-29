@@ -17,15 +17,18 @@ import {
 /**
  * Feishu Interactive Card structure for rich markdown messages
  *
- * Feishu supports full markdown in interactive cards (msg_type: "interactive"):
+ * Feishu supports markdown in interactive cards (msg_type: "interactive"):
  * - Basic: **bold**, *italic*, ~~strikethrough~~, [link](url)
- * - Headings: # H1, ## H2 (only H1/H2 supported)
- * - Lists: - item (unordered), 1. item (ordered)
+ * - Headings: # H1, ## H2 (H3-H6 auto-converted to bold text)
+ * - Lists: - item (unordered), 1. item (ordered) - no nesting
  * - Code: ```lang code``` (requires Feishu 7.6+)
  * - Images: ![alt](url) or img_key
  * - Horizontal rule: ---
- * - Colors: <font color='red'>text</font>
+ * - Colors: <font color='red'>text</font> (green, red, grey)
  * - @mention: <at id='all'></at>, <at id='{user_id}'></at>
+ * - Tables: <table columns={[...]} data={[...]}/> (NOT standard markdown |col|col|)
+ *
+ * Note: Standard markdown tables (|col|col|) are auto-converted to Feishu format.
  *
  * See: https://www.feishu.cn/content/7gprunv5
  */
@@ -51,7 +54,88 @@ export type FeishuInteractiveCard = {
 };
 
 /**
+ * Convert H3-H6 headings to bold text (Feishu only supports H1/H2)
+ *
+ * Input:  ### Title
+ * Output: **Title**
+ *
+ * Input:  #### Subtitle
+ * Output: **Subtitle**
+ */
+function convertUnsupportedHeadings(markdown: string): string {
+  // Match H3-H6 headings (### to ######) at start of line
+  // Convert to bold text since Feishu doesn't support these levels
+  return markdown.replace(/^(#{3,6})\s+(.+)$/gm, (_match, _hashes, title: string) => {
+    return `**${title.trim()}**`;
+  });
+}
+
+/**
+ * Convert standard markdown table to Feishu table component syntax
+ *
+ * Input:
+ *   | Name | Age |
+ *   |------|-----|
+ *   | John | 30  |
+ *   | Jane | 25  |
+ *
+ * Output:
+ *   <table columns={[{dataIndex:"col0",title:"Name"},{dataIndex:"col1",title:"Age"}]} data={[{col0:"John",col1:"30"},{col0:"Jane",col1:"25"}]}/>
+ */
+function convertMarkdownTableToFeishu(markdown: string): string {
+  // Match markdown table pattern
+  const tableRegex = /^\|(.+)\|\s*\n\|[-|:\s]+\|\s*\n((?:\|.+\|\s*\n?)+)/gm;
+
+  return markdown.replace(tableRegex, (match, headerRow: string, bodyRows: string) => {
+    // Parse header columns
+    const headers = headerRow
+      .split("|")
+      .map((h: string) => h.trim())
+      .filter((h: string) => h.length > 0);
+
+    if (headers.length === 0) return match;
+
+    // Build columns definition
+    const columns = headers.map((title: string, index: number) => ({
+      dataIndex: `col${index}`,
+      title: title,
+    }));
+
+    // Parse body rows
+    const rows = bodyRows
+      .trim()
+      .split("\n")
+      .map((row: string) => {
+        const cells = row
+          .split("|")
+          .map((c: string) => c.trim())
+          .filter(
+            (c: string, i: number, arr: string[]) => (i > 0 && i < arr.length - 1) || c.length > 0,
+          );
+
+        // Build row object
+        const rowObj: Record<string, string> = {};
+        cells.forEach((cell: string, index: number) => {
+          if (index < headers.length) {
+            rowObj[`col${index}`] = cell;
+          }
+        });
+        return rowObj;
+      })
+      .filter((row: Record<string, string>) => Object.keys(row).length > 0);
+
+    // Build Feishu table component
+    return `<table columns={${JSON.stringify(columns)}} data={${JSON.stringify(rows)}}/>`;
+  });
+}
+
+/**
  * Build a Feishu interactive card with markdown content
+ *
+ * Automatically converts standard markdown features to Feishu format:
+ * - Tables: |col|col| converted to <table> component
+ * - Headings: # and ## native, ### to ###### converted to **bold**
+ * - Lists, code blocks, links, bold/italic: native support
  *
  * @param markdown - Markdown content to display
  * @param options - Optional card configuration
@@ -64,6 +148,11 @@ export function buildFeishuMarkdownCard(
     wideScreen?: boolean;
   },
 ): FeishuInteractiveCard {
+  // Convert unsupported markdown features to Feishu-compatible format
+  let processedMarkdown = markdown;
+  processedMarkdown = convertUnsupportedHeadings(processedMarkdown); // H3-H6 → bold
+  processedMarkdown = convertMarkdownTableToFeishu(processedMarkdown); // |table| → <table/>
+
   const card: FeishuInteractiveCard = {
     config: {
       wide_screen_mode: options?.wideScreen ?? true,
@@ -71,7 +160,7 @@ export function buildFeishuMarkdownCard(
     elements: [
       {
         tag: "markdown",
-        content: markdown,
+        content: processedMarkdown,
       },
     ],
   };
@@ -250,7 +339,9 @@ export function hasMarkdown(text: string): boolean {
     /^#{1,6}\s+/m.test(text) || // headings (# to ######)
     /^[-*]\s+/m.test(text) || // unordered list
     /^\d+\.\s+/m.test(text) || // ordered list
-    /```[\s\S]*?```/.test(text) // fenced code blocks
+    /```[\s\S]*?```/.test(text) || // fenced code blocks
+    /^\|.+\|$/m.test(text) || // table rows (|col|col|)
+    /^[-|:]+$/m.test(text) // table separator (|---|---|)
   );
 }
 
