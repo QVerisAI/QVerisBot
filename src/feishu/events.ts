@@ -162,6 +162,26 @@ export type FeishuMessageReactionCreatedEvent = FeishuEventBase & {
 };
 
 /**
+ * Message recalled event (im.message.recalled_v1)
+ * Triggered when a user recalls (withdraws) a message
+ */
+export type FeishuMessageRecalledEvent = FeishuEventBase & {
+  header: FeishuEventBase["header"] & {
+    event_type: "im.message.recalled_v1";
+  };
+  event: {
+    /** The ID of the recalled message */
+    message_id: string;
+    /** The chat ID where the message was recalled */
+    chat_id: string;
+    /** Time when the message was recalled (unix timestamp in ms) */
+    recall_time: string;
+    /** Type of recall: user_recall or admin_recall */
+    recall_type?: string;
+  };
+};
+
+/**
  * URL verification challenge (webhook setup)
  */
 export type FeishuUrlVerificationEvent = {
@@ -178,7 +198,8 @@ export type FeishuEvent =
   | FeishuMessageReadEvent
   | FeishuChatMemberAddedEvent
   | FeishuBotAddedEvent
-  | FeishuMessageReactionCreatedEvent;
+  | FeishuMessageReactionCreatedEvent
+  | FeishuMessageRecalledEvent;
 
 /**
  * Raw event payload (may be encrypted)
@@ -275,6 +296,15 @@ export function isReactionCreatedEvent(
  */
 export function isBotAddedEvent(event: FeishuRawEventPayload): event is FeishuBotAddedEvent {
   return "header" in event && event.header?.event_type === "im.chat.member.bot.added_v1";
+}
+
+/**
+ * Check if event is a message recalled event
+ */
+export function isMessageRecalledEvent(
+  event: FeishuRawEventPayload,
+): event is FeishuMessageRecalledEvent {
+  return "header" in event && event.header?.event_type === "im.message.recalled_v1";
 }
 
 /**

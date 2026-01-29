@@ -42,8 +42,17 @@ export type FeishuAccountConfig = {
   /** Encrypt key for event decryption (optional). */
   encryptKey?: string;
 
-  /** Chat ID to send a startup message to when gateway starts. */
-  startupChatId?: string;
+  /**
+   * Chat IDs to send a startup message to when gateway starts.
+   * Supports one or multiple group chat IDs (array or legacy single string).
+   */
+  startupChatId?: string | string[];
+
+  /**
+   * When true, only allow messages from groups listed in startupChatId;
+   * private chats (DMs) are not allowed. Ignored if startupChatId is empty.
+   */
+  allowOnlyStartupChats?: boolean;
 
   /**
    * Event subscription mode:

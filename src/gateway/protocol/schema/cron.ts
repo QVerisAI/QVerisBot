@@ -101,10 +101,7 @@ export const CronOriginSchema = Type.Object(
 );
 
 /** Delivery routing mode for cron job replies */
-export const CronDeliveryModeSchema = Type.Union([
-  Type.Literal("origin"),
-  Type.Literal("current"),
-]);
+export const CronDeliveryModeSchema = Type.Union([Type.Literal("origin"), Type.Literal("current")]);
 
 export const CronJobStateSchema = Type.Object(
   {

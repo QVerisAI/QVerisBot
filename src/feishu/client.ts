@@ -298,6 +298,125 @@ export class FeishuClient {
   }
 
   /**
+   * Send an interactive card message with full markdown support
+   *
+   * Interactive cards support rich markdown formatting:
+   * - Basic: **bold**, *italic*, ~~strikethrough~~, [link](url)
+   * - Headings: # H1, ## H2
+   * - Lists: - item, 1. item
+   * - Code blocks: ```lang code```
+   * - Images: ![alt](url)
+   * - Colors: <font color='red'>text</font>
+   * - @mention: <at id='all'></at>
+   *
+   * @param receiveId - Target chat/user ID
+   * @param card - Interactive card JSON structure
+   * @param receiveIdType - ID type (chat_id, open_id, etc.)
+   */
+  async sendInteractiveMessage(
+    receiveId: string,
+    card: unknown,
+    receiveIdType: FeishuSendMessageParams["receive_id_type"] = "chat_id",
+  ): Promise<FeishuSendMessageResult> {
+    return this.sendMessage({
+      receive_id: receiveId,
+      receive_id_type: receiveIdType,
+      msg_type: "interactive",
+      content: JSON.stringify(card),
+    });
+  }
+
+  /**
+   * Upload an image to Feishu
+   * API: POST /im/v1/images
+   * @param image - Image data as Buffer or Uint8Array
+   * @param imageType - Image type: "message" (for chat) or "avatar" (for profile)
+   * @returns image_key to use when sending image messages
+   */
+  async uploadImage(
+    image: Buffer | Uint8Array,
+    imageType: "message" | "avatar" = "message",
+  ): Promise<string> {
+    const token = await getTenantAccessToken(this.credentials);
+
+    // Create form data for multipart upload
+    // Convert to ArrayBuffer for Blob compatibility
+    const arrayBuffer = image.buffer.slice(
+      image.byteOffset,
+      image.byteOffset + image.byteLength,
+    ) as ArrayBuffer;
+    const formData = new FormData();
+    formData.append("image_type", imageType);
+    formData.append("image", new Blob([arrayBuffer]), "image.png");
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
+
+    try {
+      const response = await fetch(`${FEISHU_API_BASE}/im/v1/images`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to upload image: ${response.status} ${response.statusText}`);
+      }
+
+      const result = (await response.json()) as FeishuApiResponse<{ image_key: string }>;
+
+      if (result.code !== 0) {
+        throw new Error(`Failed to upload image: ${result.code} ${result.msg}`);
+      }
+
+      if (!result.data?.image_key) {
+        throw new Error("No image_key in upload response");
+      }
+
+      return result.data.image_key;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  /**
+   * Send an image message
+   * @param receiveId - Target chat/user ID
+   * @param imageKey - Image key from uploadImage()
+   * @param receiveIdType - ID type (chat_id, open_id, etc.)
+   */
+  async sendImageMessage(
+    receiveId: string,
+    imageKey: string,
+    receiveIdType: FeishuSendMessageParams["receive_id_type"] = "chat_id",
+  ): Promise<FeishuSendMessageResult> {
+    return this.sendMessage({
+      receive_id: receiveId,
+      receive_id_type: receiveIdType,
+      msg_type: "image",
+      content: JSON.stringify({ image_key: imageKey }),
+    });
+  }
+
+  /**
+   * Upload and send an image in one call
+   * @param receiveId - Target chat/user ID
+   * @param image - Image data as Buffer or Uint8Array
+   * @param receiveIdType - ID type (chat_id, open_id, etc.)
+   */
+  async uploadAndSendImage(
+    receiveId: string,
+    image: Buffer | Uint8Array,
+    receiveIdType: FeishuSendMessageParams["receive_id_type"] = "chat_id",
+  ): Promise<FeishuSendMessageResult> {
+    const imageKey = await this.uploadImage(image, "message");
+    return this.sendImageMessage(receiveId, imageKey, receiveIdType);
+  }
+
+  /**
    * Reply to a message
    */
   async replyMessage(
@@ -410,6 +529,52 @@ export class FeishuClient {
     if (result.code !== 0) {
       throw new Error(`Failed to delete message: ${result.code} ${result.msg}`);
     }
+  }
+
+  /**
+   * Mark a message as read by the bot
+   *
+   * NOTE: Feishu's API does not support bots marking messages as read.
+   * The message_read event exists for receiving notifications when users read messages,
+   * but there is no corresponding API for bots to mark messages as read.
+   * This method is a no-op kept for interface compatibility.
+   */
+  async markMessageRead(_messageId: string): Promise<void> {
+    // No-op: Feishu doesn't have an API for bots to mark messages as read
+    // Bots receive messages via webhooks and don't have read status like human users
+  }
+
+  /**
+   * Get message read information
+   * Returns users who have read a specific message
+   */
+  async getMessageReadUsers(
+    messageId: string,
+    opts?: { pageSize?: number; pageToken?: string },
+  ): Promise<{
+    items: Array<{
+      user_id_type: string;
+      user_id: string;
+      timestamp: string;
+    }>;
+    has_more: boolean;
+    page_token?: string;
+  }> {
+    const params: Record<string, string> = { user_id_type: "open_id" };
+    if (opts?.pageSize) params.page_size = String(opts.pageSize);
+    if (opts?.pageToken) params.page_token = opts.pageToken;
+
+    const result = await this.request<{
+      items: Array<{ user_id_type: string; user_id: string; timestamp: string }>;
+      has_more: boolean;
+      page_token?: string;
+    }>("GET", `/im/v1/messages/${messageId}/read_users`, { params });
+
+    if (result.code !== 0) {
+      throw new Error(`Failed to get message read users: ${result.code} ${result.msg}`);
+    }
+
+    return result.data ?? { items: [], has_more: false };
   }
 
   /**

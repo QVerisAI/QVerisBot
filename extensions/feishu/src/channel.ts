@@ -6,6 +6,7 @@ import {
 
 // Import feishu functions directly from source
 import {
+  getStartupChatIds,
   listFeishuAccountIds,
   resolveFeishuAccount,
   resolveDefaultFeishuAccountId,
@@ -157,19 +158,19 @@ export const feishuPlugin: ChannelPlugin<ResolvedFeishuAccount> = {
         onMessage,
       });
 
-      // Send startup message if configured
-      const startupChatId = account.config.startupChatId;
-      if (startupChatId) {
+      // Send startup message to all configured startup chat IDs
+      const startupChatIds = getStartupChatIds(account.config);
+      const timestamp = new Date().toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" });
+      for (const chatId of startupChatIds) {
         try {
-          const timestamp = new Date().toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" });
           await client.sendTextMessage(
-            startupChatId,
+            chatId,
             `🚀 Clawdbot 飞书网关已启动 (${timestamp})`,
             "chat_id",
           );
-          ctx.log?.info(`[${account.accountId}] sent startup message to ${startupChatId}`);
+          ctx.log?.info(`[${account.accountId}] sent startup message to ${chatId}`);
         } catch (err) {
-          ctx.log?.warn(`[${account.accountId}] failed to send startup message: ${err}`);
+          ctx.log?.warn(`[${account.accountId}] failed to send startup message to ${chatId}: ${err}`);
         }
       }
 

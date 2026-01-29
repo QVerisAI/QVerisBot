@@ -11,6 +11,18 @@ const debugAccounts = (...args: unknown[]) => {
   }
 };
 
+/** Normalize startupChatId config (string or string[]) to a non-empty string array. */
+export function getStartupChatIds(config: FeishuAccountConfig): string[] {
+  const raw = config.startupChatId;
+  if (Array.isArray(raw)) {
+    return raw.map((s) => String(s).trim()).filter(Boolean);
+  }
+  if (raw != null && String(raw).trim()) {
+    return [String(raw).trim()];
+  }
+  return [];
+}
+
 export type ResolvedFeishuAccount = {
   accountId: string;
   enabled: boolean;

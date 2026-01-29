@@ -15,19 +15,32 @@ import { computeBackoff, sleepWithAbort } from "../infra/backoff.js";
 import { formatErrorMessage } from "../infra/errors.js";
 import { formatDurationMs } from "../infra/format-duration.js";
 import type { RuntimeEnv } from "../runtime.js";
-import { resolveFeishuAccount, type ResolvedFeishuAccount } from "./accounts.js";
+import { getStartupChatIds, resolveFeishuAccount, type ResolvedFeishuAccount } from "./accounts.js";
 import { createFeishuClient, type FeishuClient } from "./client.js";
 import {
   parseFeishuEvent,
   isUrlVerificationEvent,
   isMessageReceiveEvent,
   isBotAddedEvent,
+  isMessageRecalledEvent,
   parseMessageContent,
   extractMentionedText,
   type FeishuMessageReceiveEvent,
   type FeishuRawEventPayload,
 } from "./events.js";
 import { resolveFeishuEncryptKey, resolveFeishuVerificationToken } from "./token.js";
+
+/** Callback context for message recall events */
+export type FeishuMessageRecallContext = {
+  /** The ID of the recalled message */
+  messageId: string;
+  /** The chat ID where the message was recalled */
+  chatId: string;
+  /** Whether the message was still being processed when recalled */
+  wasProcessing: boolean;
+  /** Current processing status if available */
+  processingStatus?: string;
+};
 
 export type MonitorFeishuOpts = {
   accountId?: string;
@@ -42,6 +55,8 @@ export type MonitorFeishuOpts = {
   webhookPath?: string;
   /** Message handler callback */
   onMessage?: (ctx: FeishuMessageContext) => void | Promise<void>;
+  /** Message recall handler callback */
+  onMessageRecalled?: (ctx: FeishuMessageRecallContext) => void | Promise<void>;
 };
 
 export type FeishuMessageContext = {
@@ -63,7 +78,79 @@ export type FeishuMessageContext = {
   runtime?: RuntimeEnv;
   /** Reply to this message */
   reply: (text: string) => Promise<void>;
+  /** Abort signal for this message processing (triggered on recall) */
+  abortSignal?: AbortSignal;
+  /** Mark this message as read */
+  markAsRead: () => Promise<void>;
 };
+
+/**
+ * Track in-progress message processing for recall handling
+ * Maps messageId to { abortController, processingStatus }
+ */
+type MessageProcessingState = {
+  abortController: AbortController;
+  processingStatus: string;
+  chatId: string;
+  startedAt: number;
+};
+
+const inProgressMessages = new Map<string, MessageProcessingState>();
+
+/**
+ * Register a message as being processed
+ */
+export function registerMessageProcessing(
+  messageId: string,
+  chatId: string,
+): { abortController: AbortController; abortSignal: AbortSignal } {
+  const abortController = new AbortController();
+  inProgressMessages.set(messageId, {
+    abortController,
+    processingStatus: "processing",
+    chatId,
+    startedAt: Date.now(),
+  });
+  return { abortController, abortSignal: abortController.signal };
+}
+
+/**
+ * Update processing status for a message
+ */
+export function updateMessageProcessingStatus(messageId: string, status: string): void {
+  const state = inProgressMessages.get(messageId);
+  if (state) {
+    state.processingStatus = status;
+  }
+}
+
+/**
+ * Unregister a message from processing (call when done)
+ */
+export function unregisterMessageProcessing(messageId: string): void {
+  inProgressMessages.delete(messageId);
+}
+
+/**
+ * Abort processing for a recalled message
+ * Returns the processing state if the message was being processed
+ */
+export function abortMessageProcessing(messageId: string): {
+  wasProcessing: boolean;
+  processingStatus?: string;
+  chatId?: string;
+} {
+  const state = inProgressMessages.get(messageId);
+  if (!state) {
+    return { wasProcessing: false };
+  }
+
+  state.abortController.abort();
+  const { processingStatus, chatId } = state;
+  inProgressMessages.delete(messageId);
+
+  return { wasProcessing: true, processingStatus, chatId };
+}
 
 const FEISHU_RESTART_POLICY = {
   initialMs: 2000,
@@ -99,6 +186,7 @@ function createMessageContext(
   account: ResolvedFeishuAccount,
   cfg: MoltbotConfig,
   runtime?: RuntimeEnv,
+  abortSignal?: AbortSignal,
 ): FeishuMessageContext {
   const msg = event.event.message;
   const sender = event.event.sender;
@@ -123,8 +211,17 @@ function createMessageContext(
     account,
     cfg,
     runtime,
+    abortSignal,
     reply: async (text: string) => {
       await client.replyMessage(msg.message_id, "text", JSON.stringify({ text }));
+    },
+    markAsRead: async () => {
+      try {
+        await client.markMessageRead(msg.message_id);
+      } catch (err) {
+        // Mark as read is best-effort, don't fail the message processing
+        runtime?.log?.(`feishu: failed to mark message as read: ${formatErrorMessage(err)}`);
+      }
     },
   };
 
@@ -231,7 +328,21 @@ async function handleFeishuEvent(
 
   if (isMessageReceiveEvent(event)) {
     log(`feishu: handling message receive event`);
-    const ctx = createMessageContext(event, opts.client, opts.account, cfg, opts.runtime);
+
+    const messageId = event.event.message.message_id;
+    const chatId = event.event.message.chat_id;
+
+    // Register message processing for recall handling
+    const { abortSignal } = registerMessageProcessing(messageId, chatId);
+
+    const ctx = createMessageContext(
+      event,
+      opts.client,
+      opts.account,
+      cfg,
+      opts.runtime,
+      abortSignal,
+    );
     log(
       `feishu: message context created - chatId=${ctx.chatId}, senderId=${ctx.senderId}, senderType=${ctx.senderType}, text="${ctx.text.substring(0, 100)}"`,
     );
@@ -239,20 +350,78 @@ async function handleFeishuEvent(
     // Skip bot's own messages
     if (ctx.senderType === "bot") {
       log(`feishu: skipping bot's own message`);
+      unregisterMessageProcessing(messageId);
       return;
     }
+
+    // Mark message as read (best-effort, non-blocking)
+    ctx.markAsRead().catch(() => {
+      // Silently ignore mark-as-read failures
+    });
 
     // Call message handler
     if (opts.onMessage) {
       log(`feishu: calling onMessage handler`);
       try {
+        updateMessageProcessingStatus(messageId, "calling agent");
         await opts.onMessage(ctx);
         log(`feishu: onMessage handler completed`);
       } catch (err) {
-        opts.runtime?.error?.(`feishu: message handler error: ${formatErrorMessage(err)}`);
+        // Check if this was an abort due to recall
+        if (abortSignal.aborted) {
+          log(`feishu: message processing aborted (message was recalled)`);
+        } else {
+          opts.runtime?.error?.(`feishu: message handler error: ${formatErrorMessage(err)}`);
+        }
+      } finally {
+        unregisterMessageProcessing(messageId);
       }
     } else {
       log(`feishu: no onMessage handler registered`);
+      unregisterMessageProcessing(messageId);
+    }
+  } else if (isMessageRecalledEvent(event)) {
+    // Handle message recall event
+    const messageId = event.event.message_id;
+    const chatId = event.event.chat_id;
+    log(`feishu: message recalled - messageId=${messageId}, chatId=${chatId}`);
+
+    // Abort processing if the message was being processed
+    const {
+      wasProcessing,
+      processingStatus,
+      chatId: processingChatId,
+    } = abortMessageProcessing(messageId);
+
+    // Call recall handler if registered
+    if (opts.onMessageRecalled) {
+      try {
+        await opts.onMessageRecalled({
+          messageId,
+          chatId: processingChatId ?? chatId,
+          wasProcessing,
+          processingStatus,
+        });
+      } catch (err) {
+        opts.runtime?.error?.(`feishu: recall handler error: ${formatErrorMessage(err)}`);
+      }
+    }
+
+    // Send notification to chat if message was being processed
+    if (wasProcessing) {
+      try {
+        const statusText = processingStatus ? ` (状态: ${processingStatus})` : "";
+        await opts.client.sendTextMessage(
+          chatId,
+          `⚠️ 消息已被撤回，正在停止处理${statusText}`,
+          "chat_id",
+        );
+        log(`feishu: sent recall notification to chat ${chatId}`);
+      } catch (err) {
+        opts.runtime?.error?.(
+          `feishu: failed to send recall notification: ${formatErrorMessage(err)}`,
+        );
+      }
     }
   } else if (isBotAddedEvent(event)) {
     opts.runtime?.log?.(`feishu: bot added to chat ${event.event.chat_id}`);
@@ -378,6 +547,17 @@ async function startWebSocketMode(
         error(`feishu: WebSocket message handler error: ${formatErrorMessage(err)}`);
       }
     },
+    // Handle message recall events
+    "im.message.recalled_v1": async (data: { message_id: string; chat_id: string }) => {
+      try {
+        log(`feishu: message recalled - messageId=${data.message_id}, chatId=${data.chat_id}`);
+        // Convert to our internal event format and handle
+        const event = convertSdkRecalledEvent(data);
+        await handleFeishuEvent(event, opts);
+      } catch (err) {
+        error(`feishu: WebSocket recall handler error: ${formatErrorMessage(err)}`);
+      }
+    },
     // Handle bot added to chat events
     "im.chat.member.bot.added_v1": async (data: SdkBotAddedEventData) => {
       log(`feishu: bot added to chat ${data.chat_id}`);
@@ -445,6 +625,31 @@ function convertSdkMessageEvent(sdkData: SdkMessageEventData): FeishuMessageRece
 }
 
 /**
+ * Convert SDK message recalled event format to our internal format
+ */
+function convertSdkRecalledEvent(sdkData: {
+  message_id: string;
+  chat_id: string;
+}): FeishuRawEventPayload {
+  return {
+    schema: "2.0",
+    header: {
+      event_id: `ws_recall_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+      event_type: "im.message.recalled_v1",
+      create_time: String(Date.now()),
+      token: "",
+      app_id: "",
+      tenant_key: "",
+    },
+    event: {
+      message_id: sdkData.message_id,
+      chat_id: sdkData.chat_id,
+      recall_time: String(Date.now()),
+    },
+  } as FeishuRawEventPayload;
+}
+
+/**
  * Main entry point for Feishu event monitoring
  */
 export async function monitorFeishuProvider(opts: MonitorFeishuOpts = {}): Promise<void> {
@@ -488,9 +693,9 @@ export async function monitorFeishuProvider(opts: MonitorFeishuOpts = {}): Promi
     throw new Error(`Feishu authentication failed: ${formatErrorMessage(err)}`);
   }
 
-  // Send startup message if startupChatId is configured
-  const startupChatId = account.config.startupChatId?.trim();
-  if (startupChatId) {
+  // Send startup message to all configured startup chat IDs
+  const startupChatIds = getStartupChatIds(account.config);
+  if (startupChatIds.length > 0) {
     const localIp = getLocalIPv4();
     const hostname = os.hostname();
     const version = process.env.CLAWDBOT_VERSION ?? process.env.npm_package_version ?? "unknown";
@@ -507,11 +712,13 @@ export async function monitorFeishuProvider(opts: MonitorFeishuOpts = {}): Promi
       `启动时间: ${timestamp}`,
     ].join("\n");
 
-    try {
-      await client.sendTextMessage(startupChatId, startupMessage);
-      log(`feishu: sent startup message to chat ${startupChatId}`);
-    } catch (err) {
-      log(`feishu: failed to send startup message: ${formatErrorMessage(err)}`);
+    for (const chatId of startupChatIds) {
+      try {
+        await client.sendTextMessage(chatId, startupMessage);
+        log(`feishu: sent startup message to chat ${chatId}`);
+      } catch (err) {
+        log(`feishu: failed to send startup message to ${chatId}: ${formatErrorMessage(err)}`);
+      }
     }
   }
 
