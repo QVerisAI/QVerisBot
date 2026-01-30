@@ -5,7 +5,7 @@
  * similar to how Telegram messages are handled.
  */
 
-import type { MoltbotConfig } from "../config/config.js";
+import type { OpenClawConfig } from "../config/config.js";
 import type { RuntimeEnv } from "../runtime.js";
 import { getStartupChatIds, type ResolvedFeishuAccount } from "./accounts.js";
 import type { FeishuMessageContext } from "./monitor.js";
@@ -33,7 +33,7 @@ const feishuMessageDedupe = createDedupeCache({
 
 export type DispatchFeishuMessageParams = {
   ctx: FeishuMessageContext;
-  cfg: MoltbotConfig;
+  cfg: OpenClawConfig;
   runtime?: RuntimeEnv;
   account: ResolvedFeishuAccount;
 };
@@ -50,7 +50,7 @@ function buildFeishuPeerId(chatId: string, threadId?: string): string {
  */
 function isFeishuSenderAllowed(
   ctx: FeishuMessageContext,
-  cfg: MoltbotConfig,
+  cfg: OpenClawConfig,
   account: ResolvedFeishuAccount,
 ): { allowed: boolean; reason?: string } {
   const isGroup = ctx.chatType === "group";
@@ -120,7 +120,7 @@ function isFeishuSenderAllowed(
  */
 function requiresFeishuMention(
   ctx: FeishuMessageContext,
-  cfg: MoltbotConfig,
+  cfg: OpenClawConfig,
   account: ResolvedFeishuAccount,
 ): boolean {
   if (ctx.chatType !== "group") return false;
