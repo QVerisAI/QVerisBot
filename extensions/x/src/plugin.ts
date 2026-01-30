@@ -1,12 +1,12 @@
 /**
- * X (Twitter) channel plugin for Moltbot.
+ * X (Twitter) channel plugin for OpenClaw.
  *
  * Main plugin export combining all adapters (outbound, actions, status, gateway).
  * This delegates to core implementation in src/x/.
  */
 
-import type { MoltbotConfig } from "clawdbot/plugin-sdk";
-import { buildChannelConfigSchema } from "clawdbot/plugin-sdk";
+import type { OpenClawConfig } from "openclaw/plugin-sdk";
+import { buildChannelConfigSchema } from "openclaw/plugin-sdk";
 import { XConfigSchema } from "./config-schema.js";
 import { getXRuntime } from "./runtime.js";
 import type { ChannelPlugin } from "../../../src/channels/plugins/types.plugin.js";
@@ -59,10 +59,10 @@ export const xPlugin: ChannelPlugin<XAccountConfig> = {
   configSchema: buildChannelConfigSchema(XConfigSchema),
 
   config: {
-    listAccountIds: (cfg: MoltbotConfig): string[] =>
+    listAccountIds: (cfg: OpenClawConfig): string[] =>
       getXRuntime().channel.x.listXAccountIds(cfg),
 
-    resolveAccount: (cfg: MoltbotConfig, accountId?: string | null): XAccountConfig => {
+    resolveAccount: (cfg: OpenClawConfig, accountId?: string | null): XAccountConfig => {
       const account = getXRuntime().channel.x.resolveXAccount(cfg, accountId ?? DEFAULT_ACCOUNT_ID);
       if (!account) {
         return {
@@ -79,7 +79,7 @@ export const xPlugin: ChannelPlugin<XAccountConfig> = {
     defaultAccountId: (): string =>
       getXRuntime().channel.x.defaultAccountId,
 
-    isConfigured: (_account: unknown, cfg: MoltbotConfig): boolean => {
+    isConfigured: (_account: unknown, cfg: OpenClawConfig): boolean => {
       const account = getXRuntime().channel.x.resolveXAccount(cfg, DEFAULT_ACCOUNT_ID);
       return getXRuntime().channel.x.isXAccountConfigured(account);
     },
@@ -103,7 +103,7 @@ export const xPlugin: ChannelPlugin<XAccountConfig> = {
 
     sendText: async (ctx) => {
       const { to, text, accountId } = ctx;
-      const cfg = (ctx as { deps?: { cfg?: MoltbotConfig } }).deps?.cfg;
+      const cfg = (ctx as { deps?: { cfg?: OpenClawConfig } }).deps?.cfg;
 
       if (!cfg) {
         return { channel: "x", ok: false, error: "No config provided" };
@@ -180,7 +180,7 @@ export const xPlugin: ChannelPlugin<XAccountConfig> = {
       probe,
     }: {
       account: XAccountConfig;
-      cfg: MoltbotConfig;
+      cfg: OpenClawConfig;
       runtime?: ChannelAccountSnapshot;
       probe?: unknown;
     }): ChannelAccountSnapshot => {
@@ -204,7 +204,7 @@ export const xPlugin: ChannelPlugin<XAccountConfig> = {
       };
     },
 
-    collectStatusIssues: (params: { cfg: MoltbotConfig; accountId: string }) => {
+    collectStatusIssues: (params: { cfg: OpenClawConfig; accountId: string }) => {
       const { cfg, accountId } = params;
       const issues: Array<{ level: string; message: string }> = [];
 

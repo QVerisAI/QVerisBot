@@ -1,5 +1,5 @@
-import type { MoltbotPluginApi } from "../../src/plugin-sdk/index.js";
-import { emptyPluginConfigSchema } from "../../src/plugin-sdk/index.js";
+import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
+import { emptyPluginConfigSchema } from "openclaw/plugin-sdk";
 
 import { feishuPlugin } from "./src/channel.js";
 
@@ -8,7 +8,7 @@ const plugin = {
   name: "Feishu",
   description: "Feishu/Lark channel plugin",
   configSchema: emptyPluginConfigSchema(),
-  register(api: MoltbotPluginApi) {
+  register(api: OpenClawPluginApi) {
     api.registerChannel({ plugin: feishuPlugin });
   },
 };

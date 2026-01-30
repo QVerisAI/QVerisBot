@@ -2,7 +2,7 @@
  * X channel CLI onboarding wizard.
  */
 
-import type { ChannelOnboardingAdapter } from "clawdbot/plugin-sdk";
+import type { ChannelOnboardingAdapter } from "openclaw/plugin-sdk";
 
 /**
  * X onboarding adapter for CLI setup.
