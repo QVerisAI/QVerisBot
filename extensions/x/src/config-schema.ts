@@ -1,0 +1,67 @@
+import { z } from "zod";
+
+/**
+ * X account configuration schema
+ */
+const XAccountSchema = z.object({
+  /** Twitter/X Consumer Key (API Key) */
+  consumerKey: z.string().min(1),
+  /** Twitter/X Consumer Secret (API Secret) */
+  consumerSecret: z.string().min(1),
+  /** Twitter/X Access Token */
+  accessToken: z.string().min(1),
+  /** Twitter/X Access Token Secret */
+  accessTokenSecret: z.string().min(1),
+  /** Enable this account */
+  enabled: z.boolean().optional(),
+  /** Polling interval in seconds (default: 60, min: 15) */
+  pollIntervalSeconds: z.number().min(15).optional(),
+  /** Allowlist of X user IDs who can trigger the bot */
+  allowFrom: z.array(z.string()).optional(),
+  /** Account display name */
+  name: z.string().optional(),
+});
+
+/**
+ * Base configuration properties shared by both single and multi-account modes
+ */
+const XConfigBaseSchema = z.object({
+  name: z.string().optional(),
+  enabled: z.boolean().optional(),
+});
+
+/**
+ * Simplified single-account configuration schema
+ *
+ * Use this for single-account setups. Properties are at the top level,
+ * creating an implicit "default" account.
+ */
+const SimplifiedSchema = z.intersection(XConfigBaseSchema, XAccountSchema);
+
+/**
+ * Multi-account configuration schema
+ *
+ * Use this for multi-account setups. Each key is an account ID.
+ */
+const MultiAccountSchema = z.intersection(
+  XConfigBaseSchema,
+  z
+    .object({
+      /** Per-account configuration (for multi-account setups) */
+      accounts: z.record(z.string(), XAccountSchema),
+    })
+    .refine((val) => Object.keys(val.accounts || {}).length > 0, {
+      message: "accounts must contain at least one entry",
+    }),
+);
+
+/**
+ * X plugin configuration schema
+ *
+ * Supports two mutually exclusive patterns:
+ * 1. Simplified single-account: credentials at top level
+ * 2. Multi-account: accounts object with named account configs
+ */
+export const XConfigSchema = z.union([SimplifiedSchema, MultiAccountSchema]);
+
+export type XConfig = z.infer<typeof XConfigSchema>;

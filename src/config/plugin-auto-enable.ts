@@ -9,6 +9,7 @@ import {
   listChannelPluginCatalogEntries,
 } from "../channels/plugins/catalog.js";
 import { normalizeProviderId } from "../agents/model-selection.js";
+import { BUNDLED_ENABLED_BY_DEFAULT } from "../plugins/config-state.js";
 import { hasAnyWhatsAppAuth } from "../web/accounts.js";
 
 type PluginEnableChange = {
@@ -369,7 +370,9 @@ export function applyPluginAutoEnable(params: {
     const allow = next.plugins?.allow;
     const allowMissing = Array.isArray(allow) && !allow.includes(entry.pluginId);
     const alreadyEnabled = next.plugins?.entries?.[entry.pluginId]?.enabled === true;
-    if (alreadyEnabled && !allowMissing) continue;
+    // Skip if plugin is bundled and enabled by default
+    const bundledDefault = BUNDLED_ENABLED_BY_DEFAULT.has(entry.pluginId);
+    if ((alreadyEnabled || bundledDefault) && !allowMissing) continue;
     next = enablePluginEntry(next, entry.pluginId);
     next = ensureAllowlisted(next, entry.pluginId);
     changes.push(formatAutoEnableChange(entry));

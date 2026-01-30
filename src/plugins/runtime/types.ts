@@ -168,6 +168,18 @@ type BuildTemplateMessageFromPayload =
   typeof import("../../line/template-messages.js").buildTemplateMessageFromPayload;
 type MonitorLineProvider = typeof import("../../line/monitor.js").monitorLineProvider;
 
+// X channel types
+type ListXAccountIds = typeof import("../../x/index.js").listXAccountIds;
+type ResolveDefaultXAccountId = typeof import("../../x/index.js").resolveDefaultXAccountId;
+type ResolveXAccount = typeof import("../../x/index.js").resolveXAccount;
+type IsXAccountConfigured = typeof import("../../x/index.js").isXAccountConfigured;
+type ProbeX = typeof import("../../x/index.js").probeX;
+type SendMessageX = typeof import("../../x/index.js").sendMessageX;
+type ChunkTextForX = typeof import("../../x/index.js").chunkTextForX;
+type MonitorXProvider = typeof import("../../x/index.js").monitorXProvider;
+type GetOrCreateXClientManager = typeof import("../../x/index.js").getOrCreateClientManager;
+type RemoveXClientManager = typeof import("../../x/index.js").removeClientManager;
+
 export type RuntimeLogger = {
   debug?: (message: string) => void;
   info: (message: string) => void;
@@ -346,6 +358,20 @@ export type PluginRuntime = {
       createQuickReplyItems: CreateQuickReplyItems;
       buildTemplateMessageFromPayload: BuildTemplateMessageFromPayload;
       monitorLineProvider: MonitorLineProvider;
+    };
+    x: {
+      listXAccountIds: ListXAccountIds;
+      resolveDefaultXAccountId: ResolveDefaultXAccountId;
+      resolveXAccount: ResolveXAccount;
+      isXAccountConfigured: IsXAccountConfigured;
+      defaultAccountId: string;
+      probeX: ProbeX;
+      sendMessageX: SendMessageX;
+      chunkTextForX: ChunkTextForX;
+      charLimit: number;
+      monitorXProvider: MonitorXProvider;
+      getOrCreateClientManager: GetOrCreateXClientManager;
+      removeClientManager: RemoveXClientManager;
     };
   };
   logging: {

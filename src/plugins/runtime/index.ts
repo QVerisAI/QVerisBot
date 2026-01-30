@@ -144,6 +144,20 @@ import {
 } from "../../line/send.js";
 import { monitorLineProvider } from "../../line/monitor.js";
 import { buildTemplateMessageFromPayload } from "../../line/template-messages.js";
+import {
+  listXAccountIds,
+  resolveXAccount,
+  isXAccountConfigured,
+  resolveDefaultXAccountId,
+  DEFAULT_ACCOUNT_ID as X_DEFAULT_ACCOUNT_ID,
+  probeX,
+  sendMessageX,
+  chunkTextForX,
+  X_CHAR_LIMIT,
+  monitorXProvider,
+  getOrCreateClientManager as getOrCreateXClientManager,
+  removeClientManager as removeXClientManager,
+} from "../../x/index.js";
 
 import type { PluginRuntime } from "./types.js";
 
@@ -334,6 +348,20 @@ export function createPluginRuntime(): PluginRuntime {
         createQuickReplyItems,
         buildTemplateMessageFromPayload,
         monitorLineProvider,
+      },
+      x: {
+        listXAccountIds,
+        resolveDefaultXAccountId,
+        resolveXAccount,
+        isXAccountConfigured,
+        defaultAccountId: X_DEFAULT_ACCOUNT_ID,
+        probeX,
+        sendMessageX,
+        chunkTextForX,
+        charLimit: X_CHAR_LIMIT,
+        monitorXProvider,
+        getOrCreateClientManager: getOrCreateXClientManager,
+        removeClientManager: removeXClientManager,
       },
     },
     logging: {

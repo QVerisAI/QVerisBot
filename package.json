@@ -76,7 +76,8 @@
     "dist/markdown/**",
     "dist/node-host/**",
     "dist/pairing/**",
-    "dist/whatsapp/**"
+    "dist/whatsapp/**",
+    "dist/x/**"
   ],
   "scripts": {
     "dev": "node scripts/run-node.mjs",
@@ -204,6 +205,7 @@
     "sqlite-vec": "0.1.7-alpha.2",
     "tar": "7.5.4",
     "tslog": "^4.10.2",
+    "twitter-api-v2": "^1.18.2",
     "undici": "^7.19.0",
     "ws": "^8.19.0",
     "yaml": "^2.8.2",

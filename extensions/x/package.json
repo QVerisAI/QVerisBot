@@ -1,0 +1,14 @@
+{
+  "name": "@moltbot/x",
+  "version": "2026.1.30",
+  "type": "module",
+  "description": "Moltbot X (Twitter) channel plugin",
+  "moltbot": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "devDependencies": {
+    "moltbot": "workspace:*"
+  }
+}
