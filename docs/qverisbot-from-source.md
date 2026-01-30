@@ -492,6 +492,7 @@ mkdir -p ~/.moltbot
 | requireMention | boolean | true | 群聊是否需要 @机器人 |
 | allowFrom | string[] | - | 允许的用户 ID 列表 |
 | groupAllowFrom | string[] | - | 允许的群组发送者列表 |
+| promptSuffix | string | - | **提示词增强后缀**（详见下方说明） |
 
 ##### startupChatId 配置说明
 
@@ -544,6 +545,62 @@ mkdir -p ~/.moltbot
   }
 }
 ```
+
+##### promptSuffix 配置说明（提示词增强）
+
+`promptSuffix` 用于在用户消息后自动附加一段文本，实现对用户请求的增强。这个功能可以：
+
+1. 为所有用户请求添加统一的上下文或指导
+2. 强制 AI 遵守特定的回复规范或格式
+3. 针对不同群组设置不同的增强规则
+
+**基本配置**（账户级别，对所有消息生效）：
+
+```json
+{
+  "channels": {
+    "feishu": {
+      "promptSuffix": "请用中文回答。回答要简洁明了，重点突出。"
+    }
+  }
+}
+```
+
+**群组级别配置**（覆盖账户级别设置）：
+
+```json
+{
+  "channels": {
+    "feishu": {
+      "promptSuffix": "默认：请用中文回答。",
+      "groups": {
+        "oc_tech_group": {
+          "promptSuffix": "这是一个技术讨论群。请提供代码示例，使用 Markdown 格式。"
+        },
+        "oc_sales_group": {
+          "promptSuffix": "这是销售团队群组。请用简洁的商务语言回复，突出要点。"
+        }
+      }
+    }
+  }
+}
+```
+
+**使用场景示例**：
+
+| 场景 | promptSuffix 配置 |
+|------|------------------|
+| 中文回复 | `"请用中文回答。"` |
+| 简洁回复 | `"请简洁回答，控制在200字以内。"` |
+| 技术群组 | `"请提供代码示例和技术细节。"` |
+| 客服场景 | `"请礼貌、专业地回复，提供详细的解决方案。"` |
+| 数据分析 | `"请用表格或列表形式呈现数据，便于阅读。"` |
+
+**注意事项**：
+
+- 控制命令（如 `/status`、`/reset`）不会附加 promptSuffix
+- 群组级别的 promptSuffix 会完全覆盖（而非追加）账户级别的设置
+- 建议保持 promptSuffix 简洁，避免过长影响对话效率
 
 #### 6.3.3 QVeris 配置
 
@@ -821,9 +878,11 @@ DEBUG=* pnpm moltbot gateway
       "startupChatId": ["oc_xxx"],
       "dmPolicy": "open",
       "groupPolicy": "open",
+      "promptSuffix": "请用中文回答。",
       "groups": {
         "oc_xxx": {
-          "requireMention": false
+          "requireMention": false,
+          "promptSuffix": "这是技术讨论群，请提供代码示例。"
         }
       }
     }
