@@ -58,6 +58,12 @@ export const xPlugin: ChannelPlugin<XAccountConfig> = {
 
   configSchema: buildChannelConfigSchema(XConfigSchema),
 
+  agentPrompt: {
+    messageToolHints: () => [
+      "X/Twitter has a 280-character limit. Use plain text without markdown formatting (no **bold**, *italic*, `code`, or other markdown syntax). Keep responses concise.",
+    ],
+  },
+
   config: {
     listAccountIds: (cfg: OpenClawConfig): string[] =>
       getXRuntime().channel.x.listXAccountIds(cfg),

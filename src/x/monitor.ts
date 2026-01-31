@@ -10,6 +10,7 @@ import type { XAccountConfig, XMention, XLogSink } from "./types.js";
 import { getOrCreateClientManager } from "./client.js";
 import { loadXPollState, updateXLastTweetId } from "./state.js";
 import { chunkTextForX, X_CHAR_LIMIT } from "./send.js";
+import { stripMarkdown } from "../line/markdown-to-line.js";
 
 export type XMonitorDeps = {
   resolveAgentRoute: (params: {
@@ -164,8 +165,11 @@ async function processXMention(params: {
         return;
       }
 
+      // Strip markdown formatting for plaintext output on X
+      const plainText = stripMarkdown(payload.text);
+
       // Chunk text if needed (X has 280 char limit)
-      const chunks = chunkTextForX(payload.text, X_CHAR_LIMIT);
+      const chunks = chunkTextForX(plainText, X_CHAR_LIMIT);
 
       // Send each chunk as a reply (thread them together)
       let lastTweetId = mention.id;
