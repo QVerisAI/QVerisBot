@@ -153,6 +153,7 @@ export const AgentDefaultsSchema = z
       })
       .strict()
       .optional(),
+    additionalSystemPrompt: z.string().optional(),
     sandbox: z
       .object({
         mode: z.union([z.literal("off"), z.literal("non-main"), z.literal("all")]).optional(),

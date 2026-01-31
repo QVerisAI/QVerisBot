@@ -205,6 +205,8 @@ export type AgentDefaultsConfig = {
     /** Default model selection for spawned sub-agents (string or {primary,fallbacks}). */
     model?: string | { primary?: string; fallbacks?: string[] };
   };
+  /** Additional text appended to the system prompt for all agents (global). */
+  additionalSystemPrompt?: string;
   /** Optional sandbox settings for non-main sessions. */
   sandbox?: {
     /** Enable sandboxing for sessions. */
