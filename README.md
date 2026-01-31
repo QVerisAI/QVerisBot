@@ -313,7 +313,7 @@ pnpm openclaw agent --message "Use QVeris to search for bitcoin price tools"
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=openclaw/openclaw&type=date&legend=top-left)](https://www.star-history.com/#openclaw/openclaw&type=date&legend=top-left)
+[![Star History Chart](https://api.star-history.com/svg?repos=QVerisAI/QVerisBot&type=date&legend=top-left)](https://www.star-history.com/#QVerisAI/QVerisBot&type=date&legend=top-left)
 
 ## Everything we built so far
 
