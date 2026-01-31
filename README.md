@@ -23,39 +23,207 @@
 
 ## QVeris Universal Toolbox — The Core of QVerisBot
 
-> **Why QVerisBot?** Stop writing API wrappers. **[QVeris](https://qveris.ai)** connects your AI assistant to 10,000+ real-world tools and APIs — think of it as an "App Store for AI tools."
+> **Why QVerisBot?** Stop writing API wrappers. **[QVeris](https://qveris.ai)** connects your AI assistant to **500+ premium data providers** and **10,000+ APIs** — think of it as an "App Store for AI tools."
 
-### Leading LLMs & Inference
+### 💰 Finance & Markets (80+ providers)
 
 <p align="center">
-  <img src="https://img.shields.io/badge/DeepSeek-V3_&_R1-0066FF" height="25"/>
-  <img src="https://img.shields.io/badge/OpenAI-GPT--4o-412991?logo=openai&logoColor=white" height="25"/>
-  <img src="https://img.shields.io/badge/Anthropic-Claude_4-d97757?logo=anthropic&logoColor=white" height="25"/>
-  <img src="https://img.shields.io/badge/Google-Gemini_2.0-8E75B2?logo=google&logoColor=white" height="25"/>
-  <img src="https://img.shields.io/badge/Meta-Llama_3-0467DF?logo=meta&logoColor=white" height="25"/>
-  <img src="https://img.shields.io/badge/SiliconFlow-Provider-FF6B35" height="25"/>
+  <img src="https://img.shields.io/badge/Binance-Exchange-F0B90B?logo=binance&logoColor=black" height="24"/>
+  <img src="https://img.shields.io/badge/Bloomberg-Terminal-000000" height="24"/>
+  <img src="https://img.shields.io/badge/Alpha_Vantage-Stocks-1E88E5" height="24"/>
+  <img src="https://img.shields.io/badge/Polygon.io-Markets-8B5CF6" height="24"/>
+  <img src="https://img.shields.io/badge/Finnhub-Finance-00C7B7" height="24"/>
+  <img src="https://img.shields.io/badge/Yahoo_Finance-Data-6001D2" height="24"/>
+</p>
+<p align="center">
+  <img src="https://img.shields.io/badge/CoinGecko-Crypto-8DC351?logo=coingecko&logoColor=white" height="24"/>
+  <img src="https://img.shields.io/badge/CoinMarketCap-Crypto-17181B" height="24"/>
+  <img src="https://img.shields.io/badge/SEC-Filings-003366" height="24"/>
+  <img src="https://img.shields.io/badge/FRED-Economic-00529B" height="24"/>
+  <img src="https://img.shields.io/badge/Tushare-A股-E4393C" height="24"/>
+  <img src="https://img.shields.io/badge/同花顺iFinD-金融终端-FF6600" height="24"/>
 </p>
 
-### Search & Knowledge Extraction
-
-| Web Search | Crawling & Data | Finance & Crypto |
-| :--- | :--- | :--- |
-| ![Google](https://img.shields.io/badge/Google_Search-4285F4?logo=google&logoColor=white) | ![Firecrawl](https://img.shields.io/badge/Firecrawl-Scraping-FF6B35) | ![AlphaVantage](https://img.shields.io/badge/Alpha_Vantage-Stocks-1E88E5) |
-| ![Bing](https://img.shields.io/badge/Bing_Search-008373?logo=microsoftbing&logoColor=white) | ![Jina](https://img.shields.io/badge/Jina_AI-Reader-00C7FF) | ![CoinGecko](https://img.shields.io/badge/CoinGecko-Crypto-8DC351?logo=coingecko&logoColor=white) |
-| ![Tavily](https://img.shields.io/badge/Tavily-AI_Search-000000) | ![Diffbot](https://img.shields.io/badge/Diffbot-Knowledge-43B02A) | ![Binance](https://img.shields.io/badge/Binance-Exchange-F0B90B?logo=binance&logoColor=black) |
-
-### Productivity & Actions
+### 🔍 Search & Web Intelligence (45+ providers)
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Notion-Workspace-000000?logo=notion&logoColor=white" height="28"/>
-  <img src="https://img.shields.io/badge/Slack-Messaging-4A154B?logo=slack&logoColor=white" height="28"/>
-  <img src="https://img.shields.io/badge/Gmail-Email-EA4335?logo=gmail&logoColor=white" height="28"/>
-  <img src="https://img.shields.io/badge/GitHub-Repos-181717?logo=github&logoColor=white" height="28"/>
-  <img src="https://img.shields.io/badge/Stripe-Payments-008CDD?logo=stripe&logoColor=white" height="28"/>
+  <img src="https://img.shields.io/badge/Brave_Search-AI_Search-FB542B?logo=brave&logoColor=white" height="24"/>
+  <img src="https://img.shields.io/badge/Tavily-AI_Search-000000" height="24"/>
+  <img src="https://img.shields.io/badge/SerpAPI-Google_Results-007ACC" height="24"/>
+  <img src="https://img.shields.io/badge/Exa.ai-Neural_Search-5A67D8" height="24"/>
+  <img src="https://img.shields.io/badge/博查AI-联网搜索-FF4500" height="24"/>
+</p>
+<p align="center">
+  <img src="https://img.shields.io/badge/Firecrawl-Scraping-FF6B35" height="24"/>
+  <img src="https://img.shields.io/badge/Diffbot-Knowledge-43B02A" height="24"/>
+  <img src="https://img.shields.io/badge/Apify-Automation-00C7B7" height="24"/>
+  <img src="https://img.shields.io/badge/ScrapingBee-Web_Data-FFB800" height="24"/>
+  <img src="https://img.shields.io/badge/Jina_AI-Reader-00C7FF" height="24"/>
+</p>
+
+### 🏢 Business Intelligence (40+ providers)
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Crunchbase-Startups-0288D1" height="24"/>
+  <img src="https://img.shields.io/badge/LinkedIn-Professional-0A66C2?logo=linkedin&logoColor=white" height="24"/>
+  <img src="https://img.shields.io/badge/Clearbit-Enrichment-3B5998" height="24"/>
+  <img src="https://img.shields.io/badge/HubSpot-CRM-FF7A59?logo=hubspot&logoColor=white" height="24"/>
+</p>
+<p align="center">
+  <img src="https://img.shields.io/badge/企查查-企业信息-1890FF" height="24"/>
+  <img src="https://img.shields.io/badge/天眼查-商业查询-FF6A00" height="24"/>
+  <img src="https://img.shields.io/badge/企名片-创投数据-6366F1" height="24"/>
+  <img src="https://img.shields.io/badge/OpenCorporates-Global-4CAF50" height="24"/>
+</p>
+
+### 🔬 Research & Science (60+ providers)
+
+<p align="center">
+  <img src="https://img.shields.io/badge/PubMed-Medical-326599" height="24"/>
+  <img src="https://img.shields.io/badge/arXiv-Papers-B31B1B" height="24"/>
+  <img src="https://img.shields.io/badge/Semantic_Scholar-AI-1857B6" height="24"/>
+  <img src="https://img.shields.io/badge/CrossRef-DOI-F36E21" height="24"/>
+  <img src="https://img.shields.io/badge/OpenAlex-Research-5C6BC0" height="24"/>
+</p>
+<p align="center">
+  <img src="https://img.shields.io/badge/NASA-Space-0B3D91?logo=nasa&logoColor=white" height="24"/>
+  <img src="https://img.shields.io/badge/ClinicalTrials-Medical-00A1E0" height="24"/>
+  <img src="https://img.shields.io/badge/OpenFDA-Drug_Data-0055AA" height="24"/>
+  <img src="https://img.shields.io/badge/WHO_GHO-Health-009FDA" height="24"/>
+  <img src="https://img.shields.io/badge/GBIF-Biodiversity-4E9A06" height="24"/>
+</p>
+
+### 🗺️ Geospatial & Maps (25+ providers)
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Google_Maps-Navigation-4285F4?logo=googlemaps&logoColor=white" height="24"/>
+  <img src="https://img.shields.io/badge/Mapbox-Maps-000000?logo=mapbox&logoColor=white" height="24"/>
+  <img src="https://img.shields.io/badge/HERE-Location-00AFAA" height="24"/>
+  <img src="https://img.shields.io/badge/TomTom-Navigation-FF0000" height="24"/>
+  <img src="https://img.shields.io/badge/ArcGIS-GIS-2C7AC3" height="24"/>
+</p>
+<p align="center">
+  <img src="https://img.shields.io/badge/高德地图-定位服务-1E88E5" height="24"/>
+  <img src="https://img.shields.io/badge/百度地图-导航-3385FF" height="24"/>
+  <img src="https://img.shields.io/badge/OpenStreetMap-Open-7EBC6F" height="24"/>
+  <img src="https://img.shields.io/badge/Planet_Labs-Satellite-009688" height="24"/>
+  <img src="https://img.shields.io/badge/Copernicus-Earth-003399" height="24"/>
+</p>
+
+### 📊 Government & Statistics (50+ providers)
+
+<p align="center">
+  <img src="https://img.shields.io/badge/World_Bank-Global-002244" height="24"/>
+  <img src="https://img.shields.io/badge/IMF-Economy-004C97" height="24"/>
+  <img src="https://img.shields.io/badge/UN_Data-Statistics-009EDB" height="24"/>
+  <img src="https://img.shields.io/badge/Eurostat-EU-003399" height="24"/>
+  <img src="https://img.shields.io/badge/OECD-Economic-0062AC" height="24"/>
+</p>
+<p align="center">
+  <img src="https://img.shields.io/badge/US_Census-Population-003865" height="24"/>
+  <img src="https://img.shields.io/badge/BLS-Labor-00529B" height="24"/>
+  <img src="https://img.shields.io/badge/中国国家统计局-数据-D32F2F" height="24"/>
+  <img src="https://img.shields.io/badge/USPTO-Patents-002B49" height="24"/>
+  <img src="https://img.shields.io/badge/Data.gov-Open-112E51" height="24"/>
+</p>
+
+### ⛓️ Blockchain & Web3 (35+ providers)
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Etherscan-Ethereum-3C3C3D?logo=ethereum&logoColor=white" height="24"/>
+  <img src="https://img.shields.io/badge/Alchemy-Web3-0052FF" height="24"/>
+  <img src="https://img.shields.io/badge/Helius-Solana-9945FF" height="24"/>
+  <img src="https://img.shields.io/badge/Solscan-Explorer-00FFA3" height="24"/>
+</p>
+<p align="center">
+  <img src="https://img.shields.io/badge/CryptoPanic-News-F7931A" height="24"/>
+  <img src="https://img.shields.io/badge/TheBlockBeats-区块链-1A1A1A" height="24"/>
+  <img src="https://img.shields.io/badge/Deribit-Derivatives-FF6600" height="24"/>
+  <img src="https://img.shields.io/badge/Kalshi-Prediction-6366F1" height="24"/>
+</p>
+
+### 🤖 AI & Media Processing (55+ providers)
+
+<p align="center">
+  <img src="https://img.shields.io/badge/OpenAI-GPT-412991?logo=openai&logoColor=white" height="24"/>
+  <img src="https://img.shields.io/badge/Anthropic-Claude-D97757" height="24"/>
+  <img src="https://img.shields.io/badge/Google-Gemini-8E75B2?logo=google&logoColor=white" height="24"/>
+  <img src="https://img.shields.io/badge/DeepSeek-V3-0066FF" height="24"/>
+  <img src="https://img.shields.io/badge/Groq-Fast-F55036" height="24"/>
+</p>
+<p align="center">
+  <img src="https://img.shields.io/badge/ElevenLabs-Voice-000000" height="24"/>
+  <img src="https://img.shields.io/badge/Deepgram-Speech-13EF93" height="24"/>
+  <img src="https://img.shields.io/badge/AssemblyAI-Transcription-0055FF" height="24"/>
+  <img src="https://img.shields.io/badge/Stability_AI-Images-9B4DCA" height="24"/>
+  <img src="https://img.shields.io/badge/Replicate-Models-000000" height="24"/>
+</p>
+
+### 🛠️ Productivity & SaaS (65+ providers)
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Notion-Workspace-000000?logo=notion&logoColor=white" height="24"/>
+  <img src="https://img.shields.io/badge/Slack-Messaging-4A154B?logo=slack&logoColor=white" height="24"/>
+  <img src="https://img.shields.io/badge/GitHub-Code-181717?logo=github&logoColor=white" height="24"/>
+  <img src="https://img.shields.io/badge/Airtable-Database-18BFFF?logo=airtable&logoColor=white" height="24"/>
+  <img src="https://img.shields.io/badge/Figma-Design-F24E1E?logo=figma&logoColor=white" height="24"/>
+</p>
+<p align="center">
+  <img src="https://img.shields.io/badge/Stripe-Payments-008CDD?logo=stripe&logoColor=white" height="24"/>
+  <img src="https://img.shields.io/badge/SendGrid-Email-1A82E2" height="24"/>
+  <img src="https://img.shields.io/badge/Asana-Tasks-F06A6A" height="24"/>
+  <img src="https://img.shields.io/badge/ClickUp-Projects-7B68EE" height="24"/>
+  <img src="https://img.shields.io/badge/Cal.com-Scheduling-292929" height="24"/>
+</p>
+
+### 📰 News & Social Media (40+ providers)
+
+<p align="center">
+  <img src="https://img.shields.io/badge/NewsAPI-Headlines-FF5733" height="24"/>
+  <img src="https://img.shields.io/badge/Guardian-News-052962" height="24"/>
+  <img src="https://img.shields.io/badge/NYTimes-News-000000" height="24"/>
+  <img src="https://img.shields.io/badge/GDELT-Events-4CAF50" height="24"/>
+  <img src="https://img.shields.io/badge/HackerNews-Tech-FF6600" height="24"/>
+</p>
+<p align="center">
+  <img src="https://img.shields.io/badge/Twitter/X-Social-000000?logo=x&logoColor=white" height="24"/>
+  <img src="https://img.shields.io/badge/Reddit-Community-FF4500?logo=reddit&logoColor=white" height="24"/>
+  <img src="https://img.shields.io/badge/YouTube-Video-FF0000?logo=youtube&logoColor=white" height="24"/>
+  <img src="https://img.shields.io/badge/Instagram-Social-E4405F?logo=instagram&logoColor=white" height="24"/>
+</p>
+
+### 🌤️ Weather & Environment (25+ providers)
+
+<p align="center">
+  <img src="https://img.shields.io/badge/OpenWeather-Forecast-EB6E4B" height="24"/>
+  <img src="https://img.shields.io/badge/AccuWeather-Forecast-F36E22" height="24"/>
+  <img src="https://img.shields.io/badge/Visual_Crossing-Weather-1E88E5" height="24"/>
+  <img src="https://img.shields.io/badge/NWS-US_Weather-003087" height="24"/>
+</p>
+<p align="center">
+  <img src="https://img.shields.io/badge/EPA-Environment-0071BC" height="24"/>
+  <img src="https://img.shields.io/badge/AirNow-Air_Quality-00A3E0" height="24"/>
+  <img src="https://img.shields.io/badge/OpenAQ-Air_Data-198CFF" height="24"/>
+  <img src="https://img.shields.io/badge/USGS-Earthquake-006400" height="24"/>
+</p>
+
+### ✈️ Travel & Local (30+ providers)
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Amadeus-Flights-005EB8" height="24"/>
+  <img src="https://img.shields.io/badge/Skyscanner-Travel-0770E3" height="24"/>
+  <img src="https://img.shields.io/badge/FlightAware-Aviation-003366" height="24"/>
+  <img src="https://img.shields.io/badge/TripAdvisor-Reviews-34E0A1" height="24"/>
+</p>
+<p align="center">
+  <img src="https://img.shields.io/badge/Yelp-Local-D32323?logo=yelp&logoColor=white" height="24"/>
+  <img src="https://img.shields.io/badge/Foursquare-Places-F94877" height="24"/>
+  <img src="https://img.shields.io/badge/携程-旅行-2577E3" height="24"/>
+  <img src="https://img.shields.io/badge/Booking-Hotels-003580" height="24"/>
 </p>
 
 > [!TIP]
-> This is just the tip of the iceberg. QVeris supports **10,000+ specific tools** across finance, research, healthcare, sports, and more.
+> This is just the tip of the iceberg. QVeris integrates **500+ data providers** across finance, research, government, blockchain, and more. [Explore all integrations →](https://qveris.ai/integrations)
 
 ### What can you build with QVeris?
 
