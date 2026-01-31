@@ -23,7 +23,21 @@
 
 ## QVeris Universal Toolbox — The Core of QVerisBot
 
-> **Why QVerisBot?** Stop writing API wrappers. **[QVeris](https://qveris.ai)** connects your AI assistant to **500+ premium data providers** and **10,000+ APIs** — think of it as an "App Store for AI tools."
+<p align="center">
+  <strong>🚀 Why QVerisBot?</strong><br/>
+  <em>Stop writing API wrappers.</em>
+</p>
+
+<p align="center">
+  <a href="https://qveris.ai"><img src="https://img.shields.io/badge/Data_Providers-500+-00C853?style=for-the-badge&logo=database&logoColor=white" height="32"/></a>
+  &nbsp;&nbsp;
+  <a href="https://qveris.ai"><img src="https://img.shields.io/badge/APIs_&_Tools-10,000+-2196F3?style=for-the-badge&logo=api&logoColor=white" height="32"/></a>
+</p>
+
+<p align="center">
+  <strong><a href="https://qveris.ai">QVeris</a></strong> connects your AI assistant to the world's data and services<br/>
+  <em>Think of it as an "App Store for AI tools"</em>
+</p>
 
 ### 💰 Finance & Markets (80+ providers)
 
