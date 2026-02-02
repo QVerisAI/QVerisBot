@@ -19,6 +19,29 @@ export type FeishuActionConfig = {
 };
 
 /**
+ * Configuration for Feishu document/wiki/drive tools.
+ * Controls which tools are enabled for this Feishu account.
+ */
+export type FeishuToolsConfig = {
+  /** Enable feishu_doc tool for document operations. Default: true. */
+  doc?: boolean;
+  /** Enable feishu_wiki tool for knowledge base operations. Default: true. */
+  wiki?: boolean;
+  /** Enable feishu_drive tool for drive operations. Default: true. */
+  drive?: boolean;
+  /** Enable feishu_perm tool for permission management. Default: false (sensitive). */
+  perm?: boolean;
+};
+
+/**
+ * Render mode for Feishu bot replies:
+ * - "auto": Automatically detect - use card for rich markdown, plain text otherwise
+ * - "raw": Always send as plain text (tables converted to ASCII)
+ * - "card": Always use interactive cards with full markdown rendering
+ */
+export type FeishuRenderMode = "auto" | "raw" | "card";
+
+/**
  * Event subscription mode for Feishu:
  * - "webhook": Use HTTP webhook to receive events (requires public URL)
  * - "websocket": Use WebSocket long connection (no public URL required)
@@ -154,6 +177,20 @@ export type FeishuAccountConfig = {
 
   /** Heartbeat visibility settings for this channel. */
   heartbeat?: ChannelHeartbeatVisibilityConfig;
+
+  /**
+   * Configuration for Feishu document/wiki/drive tools.
+   * Controls which tools are enabled for this account.
+   */
+  tools?: FeishuToolsConfig;
+
+  /**
+   * Render mode for bot replies:
+   * - "auto" (default): Use card for rich markdown, plain text otherwise
+   * - "raw": Always plain text (tables converted to ASCII)
+   * - "card": Always use interactive cards with full markdown
+   */
+  renderMode?: FeishuRenderMode;
 };
 
 export type FeishuGroupConfig = {

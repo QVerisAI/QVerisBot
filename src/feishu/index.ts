@@ -20,6 +20,8 @@ export {
   markdownToFeishuPost,
   buildFeishuMarkdownCard,
   hasMarkdown,
+  hasRichMarkdown,
+  resolveUseInteractiveCard,
   type FeishuInteractiveCard,
 } from "./send.js";
 export {
@@ -36,3 +38,27 @@ export type {
 } from "./monitor.js";
 export type { FeishuBotOptions } from "./bot.js";
 export type { FeishuMessageRecalledEvent } from "./events.js";
+
+// @mention support
+export {
+  extractMentionTargets,
+  isMentionForwardRequest,
+  extractMessageBody,
+  formatMentionForText,
+  formatMentionAllForText,
+  formatMentionForCard,
+  formatMentionAllForCard,
+  buildMentionedMessage,
+  buildMentionedCardContent,
+  type MentionTarget,
+  type FeishuMention,
+} from "./mention.js";
+
+// Feishu tools (document, wiki, drive, permission)
+export {
+  createFeishuTools,
+  createFeishuDocTool,
+  createFeishuWikiTool,
+  createFeishuDriveTool,
+  createFeishuPermTool,
+} from "./tools/index.js";

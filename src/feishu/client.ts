@@ -112,6 +112,146 @@ export type FeishuUser = {
   };
 };
 
+// ============ Document API Types ============
+
+export type FeishuDocumentMeta = {
+  document_id: string;
+  revision_id: number;
+  title: string;
+  create_time?: string;
+  update_time?: string;
+};
+
+export type FeishuBlock = {
+  block_id: string;
+  block_type: number;
+  parent_id?: string;
+  children?: string[];
+  page?: { style?: unknown };
+  text?: { style?: unknown; elements?: unknown[] };
+  heading1?: { style?: unknown; elements?: unknown[] };
+  heading2?: { style?: unknown; elements?: unknown[] };
+  heading3?: { style?: unknown; elements?: unknown[] };
+  bullet?: { style?: unknown; elements?: unknown[] };
+  ordered?: { style?: unknown; elements?: unknown[] };
+  code?: { style?: unknown; elements?: unknown[] };
+  quote?: { style?: unknown; elements?: unknown[] };
+  divider?: unknown;
+  image?: { token?: string; width?: number; height?: number };
+  table?: { property?: unknown; cells?: unknown[] };
+  [key: string]: unknown;
+};
+
+// ============ Wiki API Types ============
+
+export type FeishuWikiSpace = {
+  space_id: string;
+  name: string;
+  description?: string;
+  visibility?: string;
+};
+
+export type FeishuWikiNode = {
+  node_token: string;
+  space_id?: string;
+  obj_token?: string;
+  obj_type?: string;
+  title?: string;
+  parent_node_token?: string;
+  has_child?: boolean;
+  creator?: string;
+  node_create_time?: string;
+};
+
+export type FeishuWikiObjType =
+  | "doc"
+  | "sheet"
+  | "mindnote"
+  | "bitable"
+  | "file"
+  | "docx"
+  | "slides";
+
+// ============ Drive API Types ============
+
+export type FeishuDriveFile = {
+  token: string;
+  name: string;
+  type: string;
+  parent_token?: string;
+  url?: string;
+  shortcut_info?: unknown;
+  created_time?: string;
+  modified_time?: string;
+  owner_id?: string;
+};
+
+export type FeishuDriveFileMeta = {
+  doc_token: string;
+  doc_type: string;
+  title?: string;
+  owner_id?: string;
+  create_time?: string;
+  latest_modify_user?: string;
+  latest_modify_time?: string;
+};
+
+export type FeishuDriveFileType =
+  | "doc"
+  | "sheet"
+  | "file"
+  | "wiki"
+  | "bitable"
+  | "docx"
+  | "mindnote"
+  | "minutes"
+  | "slides"
+  | "folder";
+
+// ============ Permission API Types ============
+
+export type FeishuPermTokenType =
+  | "doc"
+  | "sheet"
+  | "file"
+  | "wiki"
+  | "bitable"
+  | "docx"
+  | "mindnote"
+  | "minutes"
+  | "slides";
+
+export type FeishuPermCreateTokenType =
+  | "doc"
+  | "sheet"
+  | "file"
+  | "wiki"
+  | "bitable"
+  | "docx"
+  | "folder"
+  | "mindnote"
+  | "minutes"
+  | "slides";
+
+export type FeishuPermMemberType =
+  | "email"
+  | "openid"
+  | "unionid"
+  | "openchat"
+  | "opendepartmentid"
+  | "userid"
+  | "groupid"
+  | "wikispaceid";
+
+export type FeishuPermLevel = "view" | "edit" | "full_access";
+
+export type FeishuPermMember = {
+  member_type: string;
+  member_id: string;
+  perm: string;
+  name?: string;
+};
+
 // Token cache for tenant access tokens
 const tokenCache = new Map<string, { token: string; expiresAt: number }>();
 
@@ -804,6 +944,487 @@ export class FeishuClient {
     }
 
     return result.bot;
+  }
+
+  // ============ Document API (docx/v1) ============
+
+  /**
+   * Get document metadata
+   * API: GET /docx/v1/documents/:document_id
+   */
+  async getDocument(documentId: string): Promise<FeishuDocumentMeta> {
+    const result = await this.request<{ document: FeishuDocumentMeta }>(
+      "GET",
+      `/docx/v1/documents/${encodeURIComponent(documentId)}`,
+    );
+    if (result.code !== 0) {
+      throw new Error(`Failed to get document: ${result.code} ${result.msg}`);
+    }
+    if (!result.data?.document) {
+      throw new Error("No document in response");
+    }
+    return result.data.document;
+  }
+
+  /**
+   * Get document raw content (plain text)
+   * API: GET /docx/v1/documents/:document_id/raw_content
+   */
+  async getDocumentRawContent(documentId: string): Promise<string> {
+    const result = await this.request<{ content: string }>(
+      "GET",
+      `/docx/v1/documents/${encodeURIComponent(documentId)}/raw_content`,
+    );
+    if (result.code !== 0) {
+      throw new Error(`Failed to get document raw content: ${result.code} ${result.msg}`);
+    }
+    return result.data?.content ?? "";
+  }
+
+  /**
+   * Create a new document
+   * API: POST /docx/v1/documents
+   */
+  async createDocument(opts?: {
+    folderToken?: string;
+    title?: string;
+  }): Promise<{ document_id: string; revision_id: number; title: string }> {
+    const result = await this.request<{
+      document: { document_id: string; revision_id: number; title: string };
+    }>("POST", "/docx/v1/documents", {
+      body: {
+        folder_token: opts?.folderToken,
+        title: opts?.title,
+      },
+    });
+    if (result.code !== 0) {
+      throw new Error(`Failed to create document: ${result.code} ${result.msg}`);
+    }
+    if (!result.data?.document) {
+      throw new Error("No document in create response");
+    }
+    return result.data.document;
+  }
+
+  /**
+   * Get document blocks
+   * API: GET /docx/v1/documents/:document_id/blocks
+   */
+  async getDocumentBlocks(
+    documentId: string,
+    opts?: { pageToken?: string; pageSize?: number },
+  ): Promise<{ items: FeishuBlock[]; has_more: boolean; page_token?: string }> {
+    const params: Record<string, string> = {};
+    if (opts?.pageToken) params.page_token = opts.pageToken;
+    if (opts?.pageSize) params.page_size = String(opts.pageSize);
+
+    const result = await this.request<{
+      items: FeishuBlock[];
+      has_more: boolean;
+      page_token?: string;
+    }>("GET", `/docx/v1/documents/${encodeURIComponent(documentId)}/blocks`, { params });
+    if (result.code !== 0) {
+      throw new Error(`Failed to get document blocks: ${result.code} ${result.msg}`);
+    }
+    return result.data ?? { items: [], has_more: false };
+  }
+
+  /**
+   * Create document blocks (append content)
+   * API: POST /docx/v1/documents/:document_id/blocks/:block_id/children
+   */
+  async createDocumentBlocks(
+    documentId: string,
+    blockId: string,
+    children: FeishuBlock[],
+    index?: number,
+  ): Promise<{ children: FeishuBlock[] }> {
+    const result = await this.request<{ children: FeishuBlock[] }>(
+      "POST",
+      `/docx/v1/documents/${encodeURIComponent(documentId)}/blocks/${encodeURIComponent(blockId)}/children`,
+      {
+        params: { document_revision_id: "-1" },
+        body: {
+          children,
+          ...(index !== undefined && { index }),
+        },
+      },
+    );
+    if (result.code !== 0) {
+      throw new Error(`Failed to create document blocks: ${result.code} ${result.msg}`);
+    }
+    return result.data ?? { children: [] };
+  }
+
+  /**
+   * Delete a document block
+   * API: DELETE /docx/v1/documents/:document_id/blocks/:block_id
+   */
+  async deleteDocumentBlock(documentId: string, blockId: string): Promise<void> {
+    const result = await this.request<void>(
+      "DELETE",
+      `/docx/v1/documents/${encodeURIComponent(documentId)}/blocks/${encodeURIComponent(blockId)}`,
+      { params: { document_revision_id: "-1" } },
+    );
+    if (result.code !== 0) {
+      throw new Error(`Failed to delete document block: ${result.code} ${result.msg}`);
+    }
+  }
+
+  /**
+   * Convert markdown to Feishu blocks using the blocks API
+   * API: POST /docx/v1/documents/:document_id/blocks/batch_create_by_markdown
+   * Note: This requires docx:document.block:convert permission
+   */
+  async markdownToBlocks(
+    documentId: string,
+    blockId: string,
+    markdown: string,
+  ): Promise<{ children: FeishuBlock[] }> {
+    const result = await this.request<{ children: FeishuBlock[] }>(
+      "POST",
+      `/docx/v1/documents/${encodeURIComponent(documentId)}/blocks/${encodeURIComponent(blockId)}/children/batch_create_by_markdown`,
+      {
+        params: { document_revision_id: "-1" },
+        body: { markdown },
+      },
+    );
+    if (result.code !== 0) {
+      throw new Error(`Failed to convert markdown to blocks: ${result.code} ${result.msg}`);
+    }
+    return result.data ?? { children: [] };
+  }
+
+  // ============ Wiki API (wiki/v2) ============
+
+  /**
+   * List wiki spaces accessible to the bot
+   * API: GET /wiki/v2/spaces
+   */
+  async listWikiSpaces(opts?: {
+    pageToken?: string;
+    pageSize?: number;
+  }): Promise<{ items: FeishuWikiSpace[]; has_more: boolean; page_token?: string }> {
+    const params: Record<string, string> = {};
+    if (opts?.pageToken) params.page_token = opts.pageToken;
+    if (opts?.pageSize) params.page_size = String(opts.pageSize);
+
+    const result = await this.request<{
+      items: FeishuWikiSpace[];
+      has_more: boolean;
+      page_token?: string;
+    }>("GET", "/wiki/v2/spaces", { params });
+    if (result.code !== 0) {
+      throw new Error(`Failed to list wiki spaces: ${result.code} ${result.msg}`);
+    }
+    return result.data ?? { items: [], has_more: false };
+  }
+
+  /**
+   * List nodes in a wiki space
+   * API: GET /wiki/v2/spaces/:space_id/nodes
+   */
+  async listWikiNodes(
+    spaceId: string,
+    opts?: { parentNodeToken?: string; pageToken?: string; pageSize?: number },
+  ): Promise<{ items: FeishuWikiNode[]; has_more: boolean; page_token?: string }> {
+    const params: Record<string, string> = {};
+    if (opts?.parentNodeToken) params.parent_node_token = opts.parentNodeToken;
+    if (opts?.pageToken) params.page_token = opts.pageToken;
+    if (opts?.pageSize) params.page_size = String(opts.pageSize);
+
+    const result = await this.request<{
+      items: FeishuWikiNode[];
+      has_more: boolean;
+      page_token?: string;
+    }>("GET", `/wiki/v2/spaces/${encodeURIComponent(spaceId)}/nodes`, { params });
+    if (result.code !== 0) {
+      throw new Error(`Failed to list wiki nodes: ${result.code} ${result.msg}`);
+    }
+    return result.data ?? { items: [], has_more: false };
+  }
+
+  /**
+   * Get a wiki node by token
+   * API: GET /wiki/v2/spaces/get_node?token=xxx
+   */
+  async getWikiNode(token: string): Promise<FeishuWikiNode> {
+    const result = await this.request<{ node: FeishuWikiNode }>("GET", "/wiki/v2/spaces/get_node", {
+      params: { token },
+    });
+    if (result.code !== 0) {
+      throw new Error(`Failed to get wiki node: ${result.code} ${result.msg}`);
+    }
+    if (!result.data?.node) {
+      throw new Error("No node in response");
+    }
+    return result.data.node;
+  }
+
+  /**
+   * Create a wiki node
+   * API: POST /wiki/v2/spaces/:space_id/nodes
+   */
+  async createWikiNode(
+    spaceId: string,
+    opts: {
+      title: string;
+      objType?: FeishuWikiObjType;
+      parentNodeToken?: string;
+    },
+  ): Promise<FeishuWikiNode> {
+    const result = await this.request<{ node: FeishuWikiNode }>(
+      "POST",
+      `/wiki/v2/spaces/${encodeURIComponent(spaceId)}/nodes`,
+      {
+        body: {
+          obj_type: opts.objType ?? "docx",
+          node_type: "origin",
+          title: opts.title,
+          parent_node_token: opts.parentNodeToken,
+        },
+      },
+    );
+    if (result.code !== 0) {
+      throw new Error(`Failed to create wiki node: ${result.code} ${result.msg}`);
+    }
+    if (!result.data?.node) {
+      throw new Error("No node in create response");
+    }
+    return result.data.node;
+  }
+
+  /**
+   * Move a wiki node
+   * API: POST /wiki/v2/spaces/:space_id/nodes/:node_token/move
+   */
+  async moveWikiNode(
+    spaceId: string,
+    nodeToken: string,
+    opts?: { targetSpaceId?: string; targetParentToken?: string },
+  ): Promise<FeishuWikiNode> {
+    const result = await this.request<{ node: FeishuWikiNode }>(
+      "POST",
+      `/wiki/v2/spaces/${encodeURIComponent(spaceId)}/nodes/${encodeURIComponent(nodeToken)}/move`,
+      {
+        body: {
+          target_space_id: opts?.targetSpaceId ?? spaceId,
+          target_parent_token: opts?.targetParentToken,
+        },
+      },
+    );
+    if (result.code !== 0) {
+      throw new Error(`Failed to move wiki node: ${result.code} ${result.msg}`);
+    }
+    if (!result.data?.node) {
+      throw new Error("No node in move response");
+    }
+    return result.data.node;
+  }
+
+  /**
+   * Rename a wiki node (update title)
+   * API: POST /wiki/v2/spaces/:space_id/nodes/:node_token/update_title
+   */
+  async renameWikiNode(spaceId: string, nodeToken: string, title: string): Promise<void> {
+    const result = await this.request<void>(
+      "POST",
+      `/wiki/v2/spaces/${encodeURIComponent(spaceId)}/nodes/${encodeURIComponent(nodeToken)}/update_title`,
+      { body: { title } },
+    );
+    if (result.code !== 0) {
+      throw new Error(`Failed to rename wiki node: ${result.code} ${result.msg}`);
+    }
+  }
+
+  // ============ Drive API (drive/v1) ============
+
+  /**
+   * List files in a folder
+   * API: GET /drive/v1/files
+   */
+  async listDriveFiles(opts?: {
+    folderToken?: string;
+    pageToken?: string;
+    pageSize?: number;
+    orderBy?: string;
+  }): Promise<{ files: FeishuDriveFile[]; has_more: boolean; next_page_token?: string }> {
+    const params: Record<string, string> = {};
+    if (opts?.folderToken) params.folder_token = opts.folderToken;
+    if (opts?.pageToken) params.page_token = opts.pageToken;
+    if (opts?.pageSize) params.page_size = String(opts.pageSize);
+    if (opts?.orderBy) params.order_by = opts.orderBy;
+
+    const result = await this.request<{
+      files: FeishuDriveFile[];
+      has_more: boolean;
+      next_page_token?: string;
+    }>("GET", "/drive/v1/files", { params });
+    if (result.code !== 0) {
+      throw new Error(`Failed to list drive files: ${result.code} ${result.msg}`);
+    }
+    return result.data ?? { files: [], has_more: false };
+  }
+
+  /**
+   * Get file metadata
+   * API: GET /drive/v1/metas/batch_query (single file wrapper)
+   */
+  async getDriveFileMeta(
+    fileToken: string,
+    type: FeishuDriveFileType,
+  ): Promise<FeishuDriveFileMeta> {
+    const result = await this.request<{ metas: FeishuDriveFileMeta[] }>(
+      "POST",
+      "/drive/v1/metas/batch_query",
+      {
+        body: {
+          request_docs: [{ doc_token: fileToken, doc_type: type }],
+        },
+      },
+    );
+    if (result.code !== 0) {
+      throw new Error(`Failed to get file meta: ${result.code} ${result.msg}`);
+    }
+    const meta = result.data?.metas?.[0];
+    if (!meta) {
+      throw new Error("No meta in response");
+    }
+    return meta;
+  }
+
+  /**
+   * Create a folder
+   * API: POST /drive/v1/files/create_folder
+   */
+  async createDriveFolder(
+    name: string,
+    folderToken: string,
+  ): Promise<{ token: string; url: string }> {
+    const result = await this.request<{ token: string; url: string }>(
+      "POST",
+      "/drive/v1/files/create_folder",
+      { body: { name, folder_token: folderToken } },
+    );
+    if (result.code !== 0) {
+      throw new Error(`Failed to create folder: ${result.code} ${result.msg}`);
+    }
+    if (!result.data?.token) {
+      throw new Error("No token in create folder response");
+    }
+    return result.data;
+  }
+
+  /**
+   * Move a file/folder
+   * API: POST /drive/v1/files/:file_token/move
+   */
+  async moveDriveFile(
+    fileToken: string,
+    type: FeishuDriveFileType,
+    folderToken: string,
+  ): Promise<void> {
+    const result = await this.request<void>(
+      "POST",
+      `/drive/v1/files/${encodeURIComponent(fileToken)}/move`,
+      {
+        params: { type },
+        body: { folder_token: folderToken },
+      },
+    );
+    if (result.code !== 0) {
+      throw new Error(`Failed to move file: ${result.code} ${result.msg}`);
+    }
+  }
+
+  /**
+   * Delete a file/folder
+   * API: DELETE /drive/v1/files/:file_token
+   */
+  async deleteDriveFile(fileToken: string, type: FeishuDriveFileType): Promise<void> {
+    const result = await this.request<void>(
+      "DELETE",
+      `/drive/v1/files/${encodeURIComponent(fileToken)}`,
+      { params: { type } },
+    );
+    if (result.code !== 0) {
+      throw new Error(`Failed to delete file: ${result.code} ${result.msg}`);
+    }
+  }
+
+  // ============ Permission API (drive/v1/permissions) ============
+
+  /**
+   * List permission members of a file/document
+   * API: GET /drive/v1/permissions/:token/members
+   */
+  async listPermissionMembers(
+    token: string,
+    type: FeishuPermTokenType,
+  ): Promise<FeishuPermMember[]> {
+    const result = await this.request<{ items: FeishuPermMember[] }>(
+      "GET",
+      `/drive/v1/permissions/${encodeURIComponent(token)}/members`,
+      { params: { type } },
+    );
+    if (result.code !== 0) {
+      throw new Error(`Failed to list permission members: ${result.code} ${result.msg}`);
+    }
+    return result.data?.items ?? [];
+  }
+
+  /**
+   * Add a permission member
+   * API: POST /drive/v1/permissions/:token/members
+   */
+  async addPermissionMember(
+    token: string,
+    type: FeishuPermCreateTokenType,
+    opts: {
+      memberType: FeishuPermMemberType;
+      memberId: string;
+      perm: FeishuPermLevel;
+    },
+  ): Promise<FeishuPermMember> {
+    const result = await this.request<{ member: FeishuPermMember }>(
+      "POST",
+      `/drive/v1/permissions/${encodeURIComponent(token)}/members`,
+      {
+        params: { type, need_notification: "false" },
+        body: {
+          member_type: opts.memberType,
+          member_id: opts.memberId,
+          perm: opts.perm,
+        },
+      },
+    );
+    if (result.code !== 0) {
+      throw new Error(`Failed to add permission member: ${result.code} ${result.msg}`);
+    }
+    if (!result.data?.member) {
+      throw new Error("No member in add response");
+    }
+    return result.data.member;
+  }
+
+  /**
+   * Remove a permission member
+   * API: DELETE /drive/v1/permissions/:token/members/:member_id
+   */
+  async removePermissionMember(
+    token: string,
+    type: FeishuPermCreateTokenType,
+    memberType: FeishuPermMemberType,
+    memberId: string,
+  ): Promise<void> {
+    const result = await this.request<void>(
+      "DELETE",
+      `/drive/v1/permissions/${encodeURIComponent(token)}/members/${encodeURIComponent(memberId)}`,
+      { params: { type, member_type: memberType } },
+    );
+    if (result.code !== 0) {
+      throw new Error(`Failed to remove permission member: ${result.code} ${result.msg}`);
+    }
   }
 }
 

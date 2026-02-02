@@ -3,9 +3,10 @@
  */
 
 import type { OpenClawConfig } from "../config/config.js";
+import type { RuntimeEnv } from "../runtime.js";
 import { loadConfig } from "../config/config.js";
 import { formatErrorMessage } from "../infra/errors.js";
-import type { RuntimeEnv } from "../runtime.js";
+import { extensionForMime } from "../media/mime.js";
 import { resolveFeishuAccount } from "./accounts.js";
 import {
   createFeishuClient,
@@ -13,7 +14,6 @@ import {
   type FeishuPostContent,
   type FeishuPostElement,
 } from "./client.js";
-import { extensionForMime } from "../media/mime.js";
 
 /**
  * Feishu Interactive Card structure for rich markdown messages
@@ -375,6 +375,52 @@ export function hasMarkdown(text: string): boolean {
   );
 }
 
+/**
+ * Check if text contains rich markdown that specifically needs card rendering.
+ * Used by "auto" renderMode to decide between plain text and card.
+ * More restrictive than hasMarkdown - only triggers for code blocks, tables, headings.
+ */
+export function hasRichMarkdown(text: string): boolean {
+  return (
+    /```[\s\S]*?```/.test(text) || // fenced code blocks
+    /^\|.+\|$/m.test(text) || // table rows
+    /^#{1,2}\s+/m.test(text) // H1/H2 headings
+  );
+}
+
+/**
+ * Resolve render mode based on configuration and text content.
+ *
+ * @param config - OpenClaw config
+ * @param text - Message text to check for markdown
+ * @param autoRichText - Optional override to force card rendering
+ * @returns Whether to use interactive card (true) or plain text (false)
+ */
+export function resolveUseInteractiveCard(
+  config: OpenClawConfig | undefined,
+  text: string,
+  autoRichText?: boolean,
+): boolean {
+  // Explicit autoRichText parameter takes precedence
+  if (autoRichText === true) return true;
+
+  // Check renderMode configuration
+  const renderMode = config?.channels?.feishu?.renderMode ?? "auto";
+
+  switch (renderMode) {
+    case "raw":
+      // Always plain text
+      return false;
+    case "card":
+      // Always use card
+      return true;
+    case "auto":
+    default:
+      // Auto-detect: use card for rich markdown (code blocks, tables, headings)
+      return hasRichMarkdown(text);
+  }
+}
+
 export type SendFeishuMessageParams = {
   to: string;
   text: string;
@@ -442,10 +488,11 @@ export async function sendMessageFeishu(
   try {
     let result: FeishuSendMessageResult;
 
-    // Use interactive card when autoRichText is enabled
-    // Interactive cards support full markdown: headings, lists, code blocks, images, etc.
-    // Always use interactive card when autoRichText is true for consistent rendering
-    const useInteractiveCard = params.autoRichText === true;
+    // Resolve whether to use interactive card based on renderMode config and content
+    // renderMode: "auto" (default) = use card for rich markdown (code blocks, tables)
+    // renderMode: "raw" = always plain text
+    // renderMode: "card" = always use interactive card
+    const useInteractiveCard = resolveUseInteractiveCard(cfg, params.text, params.autoRichText);
 
     if (params.replyToMessageId) {
       // Reply to a specific message
