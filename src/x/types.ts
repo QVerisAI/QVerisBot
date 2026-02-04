@@ -124,3 +124,14 @@ export interface XUserInfo {
   username: string;
   name: string;
 }
+
+/**
+ * X tweet from user timeline
+ */
+export interface XTweet {
+  id: string;
+  text: string;
+  authorId?: string;
+  createdAt?: Date;
+  conversationId?: string;
+}

@@ -42,4 +42,5 @@ export type {
   XDmResult,
   XLikeResult,
   XUserInfo,
+  XTweet,
 } from "./types.js";

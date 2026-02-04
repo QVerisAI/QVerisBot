@@ -14,6 +14,7 @@ import type {
   XUserInfo,
   XLogSink,
   XSendResult,
+  XTweet,
 } from "./types.js";
 import { resolveXAccount, isXAccountConfigured, DEFAULT_ACCOUNT_ID } from "./accounts.js";
 import { getOrCreateClientManager } from "./client.js";
@@ -95,6 +96,14 @@ export interface XService {
    * @returns Author user ID or null if not found
    */
   getTweetAuthor(tweetId: string): Promise<string | null>;
+
+  /**
+   * Get tweets from a user by user ID.
+   * @param userId - User ID
+   * @param maxResults - Maximum number of tweets to return (default: 5)
+   * @returns Array of tweets
+   */
+  getUserTweets(userId: string, maxResults?: number): Promise<XTweet[]>;
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Direct messages
@@ -283,6 +292,10 @@ export function createXService(cfg: OpenClawConfig, options?: XServiceOptions): 
 
     async getTweetAuthor(tweetId: string): Promise<string | null> {
       return clientManager.getTweetAuthor(account, accountId, tweetId);
+    },
+
+    async getUserTweets(userId: string, maxResults?: number): Promise<XTweet[]> {
+      return clientManager.getUserTweets(account, accountId, userId, maxResults);
     },
 
     // ───────────────────────────────────────────────────────────────────────────

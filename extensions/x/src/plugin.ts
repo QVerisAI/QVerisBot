@@ -61,6 +61,30 @@ export const xPlugin: ChannelPlugin<XAccountConfig> = {
 
   configSchema: buildChannelConfigSchema(XConfigSchema),
 
+  messaging: {
+    targetResolver: {
+      // Accept @handle, bare handle, tweet URLs, or numeric tweet IDs
+      looksLikeId: (raw: string) => {
+        const trimmed = raw.trim();
+        // Username format: @handle or bare handle (1-15 chars, alphanumeric + underscore)
+        const username = trimmed.replace(/^@/, "");
+        if (/^[a-zA-Z0-9_]{1,15}$/.test(username)) {
+          return true;
+        }
+        // Tweet URL format: https://x.com/user/status/123 or https://twitter.com/user/status/123
+        if (/^(?:https?:\/\/)?(?:www\.)?(?:twitter\.com|x\.com)\/[^/]+\/status\/\d+$/i.test(trimmed)) {
+          return true;
+        }
+        // Numeric tweet ID
+        if (/^\d+$/.test(trimmed)) {
+          return true;
+        }
+        return false;
+      },
+      hint: "Use @username, bare handle (e.g. ax2_zicode), tweet URL, or tweet ID",
+    },
+  },
+
   agentPrompt: {
     messageToolHints: () => [
       "X/Twitter has a 280-character limit. Use plain text without markdown formatting (no **bold**, *italic*, `code`, or other markdown syntax). Keep responses concise.",
