@@ -49,6 +49,9 @@ export const feishuPlugin: ChannelPlugin<ResolvedFeishuAccount> = {
       if (!account.config.appId || !account.config.appSecret) {
         throw new Error("Feishu app credentials not configured");
       }
+      if (!feishuOutbound?.sendText) {
+        throw new Error("Feishu outbound sendText method not available");
+      }
       await feishuOutbound.sendText({ cfg, to: id, text: PAIRING_APPROVED_MESSAGE });
     },
   },
