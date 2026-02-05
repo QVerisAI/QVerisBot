@@ -203,8 +203,17 @@ export const feishuPlugin: ChannelPlugin<ResolvedFeishuAccount> = {
       probe: snapshot.probe,
       lastProbeAt: snapshot.lastProbeAt ?? null,
     }),
-    probeAccount: async ({ account, timeoutMs }) =>
-      probeFeishu(account.config.appId, account.config.appSecret, timeoutMs, account.config.domain),
+    probeAccount: async ({ account, timeoutMs }) => {
+      if (!account.config.appId || !account.config.appSecret) {
+        return { ok: false, error: "Feishu app credentials not configured" };
+      }
+      return probeFeishu(
+        account.config.appId,
+        account.config.appSecret,
+        timeoutMs,
+        account.config.domain,
+      );
+    },
     buildAccountSnapshot: ({ account, runtime, probe }) => {
       const configured = account.tokenSource !== "none";
       return {
