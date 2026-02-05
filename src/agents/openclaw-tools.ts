@@ -11,6 +11,7 @@ import { createGatewayTool } from "./tools/gateway-tool.js";
 import { createImageTool } from "./tools/image-tool.js";
 import { createMessageTool } from "./tools/message-tool.js";
 import { createNodesTool } from "./tools/nodes-tool.js";
+import { createQverisTools } from "./tools/qveris-tools.js";
 import { createSessionStatusTool } from "./tools/session-status-tool.js";
 import { createSessionsHistoryTool } from "./tools/sessions-history-tool.js";
 import { createSessionsListTool } from "./tools/sessions-list-tool.js";
@@ -49,14 +50,14 @@ export function createOpenClawTools(options?: {
   replyToMode?: "off" | "first" | "all";
   /** Mutable ref to track if a reply was sent (for "first" mode). */
   hasRepliedRef?: { value: boolean };
+  /** Channel where the control message originated (e.g. "x", "feishu"). Used for X reply permission. */
+  originatingChannel?: string;
+  /** Sender ID of the control message. When originating from X, x-reply only allowed to this user's tweets. */
+  originatingSenderId?: string;
   /** If true, the model has native vision capability */
   modelHasVision?: boolean;
   /** Explicit agent ID override for cron/hook sessions. */
   requesterAgentIdOverride?: string;
-  /** Require explicit message targets (no implicit last-route sends). */
-  requireExplicitMessageTarget?: boolean;
-  /** If true, omit the message tool from the tool list. */
-  disableMessageTool?: boolean;
 }): AnyAgentTool[] {
   const imageTool = options?.agentDir?.trim()
     ? createImageTool({
@@ -74,20 +75,11 @@ export function createOpenClawTools(options?: {
     config: options?.config,
     sandboxed: options?.sandboxed,
   });
-  const messageTool = options?.disableMessageTool
-    ? null
-    : createMessageTool({
-        agentAccountId: options?.agentAccountId,
-        agentSessionKey: options?.agentSessionKey,
-        config: options?.config,
-        currentChannelId: options?.currentChannelId,
-        currentChannelProvider: options?.agentChannel,
-        currentThreadTs: options?.currentThreadTs,
-        replyToMode: options?.replyToMode,
-        hasRepliedRef: options?.hasRepliedRef,
-        sandboxRoot: options?.sandboxRoot,
-        requireExplicitTarget: options?.requireExplicitMessageTarget,
-      });
+  const qverisTools = createQverisTools({
+    config: options?.config,
+    sandboxed: options?.sandboxed,
+    agentSessionKey: options?.agentSessionKey,
+  });
   const tools: AnyAgentTool[] = [
     createBrowserTool({
       sandboxBridgeUrl: options?.sandboxBrowserBridgeUrl,
@@ -100,8 +92,26 @@ export function createOpenClawTools(options?: {
     }),
     createCronTool({
       agentSessionKey: options?.agentSessionKey,
+      originContext: {
+        channel: options?.agentChannel,
+        to: options?.agentTo,
+        accountId: options?.agentAccountId,
+        threadId: options?.agentThreadId,
+      },
     }),
-    ...(messageTool ? [messageTool] : []),
+    createMessageTool({
+      agentAccountId: options?.agentAccountId,
+      agentSessionKey: options?.agentSessionKey,
+      config: options?.config,
+      currentChannelId: options?.currentChannelId,
+      currentChannelProvider: options?.agentChannel,
+      currentThreadTs: options?.currentThreadTs,
+      replyToMode: options?.replyToMode,
+      hasRepliedRef: options?.hasRepliedRef,
+      sandboxRoot: options?.sandboxRoot,
+      originatingChannel: options?.originatingChannel,
+      originatingSenderId: options?.originatingSenderId,
+    }),
     createTtsTool({
       agentChannel: options?.agentChannel,
       config: options?.config,
@@ -146,6 +156,7 @@ export function createOpenClawTools(options?: {
     ...(webSearchTool ? [webSearchTool] : []),
     ...(webFetchTool ? [webFetchTool] : []),
     ...(imageTool ? [imageTool] : []),
+    ...qverisTools,
   ];
 
   const pluginTools = resolvePluginTools({

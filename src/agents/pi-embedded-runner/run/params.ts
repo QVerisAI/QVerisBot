@@ -39,8 +39,6 @@ export type RunEmbeddedPiAgentParams = {
   senderName?: string | null;
   senderUsername?: string | null;
   senderE164?: string | null;
-  /** Whether the sender is an owner (required for owner-only tools). */
-  senderIsOwner?: boolean;
   /** Current channel ID for auto-threading (Slack). */
   currentChannelId?: string;
   /** Current thread timestamp for auto-threading (Slack). */
@@ -49,10 +47,10 @@ export type RunEmbeddedPiAgentParams = {
   replyToMode?: "off" | "first" | "all";
   /** Mutable ref to track if a reply was sent (for "first" mode). */
   hasRepliedRef?: { value: boolean };
-  /** Require explicit message tool targets (no implicit last-route sends). */
-  requireExplicitMessageTarget?: boolean;
-  /** If true, omit the message tool from the tool list. */
-  disableMessageTool?: boolean;
+  /** Channel where the control message originated (e.g. "x", "feishu"). Used for X reply permission. */
+  originatingChannel?: string;
+  /** Sender ID of the control message. When originating from X, x-reply only allowed to this user's tweets. */
+  originatingSenderId?: string;
   sessionFile: string;
   workspaceDir: string;
   agentDir?: string;

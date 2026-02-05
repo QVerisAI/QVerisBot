@@ -5,7 +5,7 @@ export const CronScheduleSchema = Type.Union([
   Type.Object(
     {
       kind: Type.Literal("at"),
-      at: NonEmptyString,
+      atMs: Type.Integer({ minimum: 0 }),
     },
     { additionalProperties: false },
   ),
@@ -42,6 +42,10 @@ export const CronPayloadSchema = Type.Union([
       model: Type.Optional(Type.String()),
       thinking: Type.Optional(Type.String()),
       timeoutSeconds: Type.Optional(Type.Integer({ minimum: 1 })),
+      deliver: Type.Optional(Type.Boolean()),
+      channel: Type.Optional(Type.Union([Type.Literal("last"), NonEmptyString])),
+      to: Type.Optional(Type.String()),
+      bestEffortDeliver: Type.Optional(Type.Boolean()),
     },
     { additionalProperties: false },
   ),
@@ -62,30 +66,41 @@ export const CronPayloadPatchSchema = Type.Union([
       model: Type.Optional(Type.String()),
       thinking: Type.Optional(Type.String()),
       timeoutSeconds: Type.Optional(Type.Integer({ minimum: 1 })),
+      deliver: Type.Optional(Type.Boolean()),
+      channel: Type.Optional(Type.Union([Type.Literal("last"), NonEmptyString])),
+      to: Type.Optional(Type.String()),
+      bestEffortDeliver: Type.Optional(Type.Boolean()),
     },
     { additionalProperties: false },
   ),
 ]);
 
-export const CronDeliverySchema = Type.Object(
+export const CronIsolationSchema = Type.Object(
   {
-    mode: Type.Union([Type.Literal("none"), Type.Literal("announce")]),
-    channel: Type.Optional(Type.Union([Type.Literal("last"), NonEmptyString])),
-    to: Type.Optional(Type.String()),
-    bestEffort: Type.Optional(Type.Boolean()),
+    postToMainPrefix: Type.Optional(Type.String()),
+    postToMainMode: Type.Optional(Type.Union([Type.Literal("summary"), Type.Literal("full")])),
+    postToMainMaxChars: Type.Optional(Type.Integer({ minimum: 0 })),
   },
   { additionalProperties: false },
 );
 
-export const CronDeliveryPatchSchema = Type.Object(
+/**
+ * Origin context: where the cron job was created.
+ * Used for routing replies back to the originating session/channel.
+ */
+export const CronOriginSchema = Type.Object(
   {
-    mode: Type.Optional(Type.Union([Type.Literal("none"), Type.Literal("announce")])),
-    channel: Type.Optional(Type.Union([Type.Literal("last"), NonEmptyString])),
+    channel: Type.Optional(NonEmptyString),
     to: Type.Optional(Type.String()),
-    bestEffort: Type.Optional(Type.Boolean()),
+    accountId: Type.Optional(Type.String()),
+    threadId: Type.Optional(Type.Union([Type.String(), Type.Integer()])),
+    sessionKey: Type.Optional(Type.String()),
   },
   { additionalProperties: false },
 );
+
+/** Delivery routing mode for cron job replies */
+export const CronDeliveryModeSchema = Type.Union([Type.Literal("origin"), Type.Literal("current")]);
 
 export const CronJobStateSchema = Type.Object(
   {
@@ -115,8 +130,10 @@ export const CronJobSchema = Type.Object(
     sessionTarget: Type.Union([Type.Literal("main"), Type.Literal("isolated")]),
     wakeMode: Type.Union([Type.Literal("next-heartbeat"), Type.Literal("now")]),
     payload: CronPayloadSchema,
-    delivery: Type.Optional(CronDeliverySchema),
+    isolation: Type.Optional(CronIsolationSchema),
     state: CronJobStateSchema,
+    origin: Type.Optional(CronOriginSchema),
+    deliveryMode: Type.Optional(CronDeliveryModeSchema),
   },
   { additionalProperties: false },
 );
@@ -141,7 +158,9 @@ export const CronAddParamsSchema = Type.Object(
     sessionTarget: Type.Union([Type.Literal("main"), Type.Literal("isolated")]),
     wakeMode: Type.Union([Type.Literal("next-heartbeat"), Type.Literal("now")]),
     payload: CronPayloadSchema,
-    delivery: Type.Optional(CronDeliverySchema),
+    isolation: Type.Optional(CronIsolationSchema),
+    origin: Type.Optional(CronOriginSchema),
+    deliveryMode: Type.Optional(CronDeliveryModeSchema),
   },
   { additionalProperties: false },
 );
@@ -157,8 +176,10 @@ export const CronJobPatchSchema = Type.Object(
     sessionTarget: Type.Optional(Type.Union([Type.Literal("main"), Type.Literal("isolated")])),
     wakeMode: Type.Optional(Type.Union([Type.Literal("next-heartbeat"), Type.Literal("now")])),
     payload: Type.Optional(CronPayloadPatchSchema),
-    delivery: Type.Optional(CronDeliveryPatchSchema),
+    isolation: Type.Optional(CronIsolationSchema),
     state: Type.Optional(Type.Partial(CronJobStateSchema)),
+    origin: Type.Optional(CronOriginSchema),
+    deliveryMode: Type.Optional(CronDeliveryModeSchema),
   },
   { additionalProperties: false },
 );
