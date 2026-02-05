@@ -1,62 +1,27 @@
+import fs from "node:fs";
 import type { OpenClawConfig } from "../config/config.js";
 import type { FeishuAccountConfig } from "../config/types.feishu.js";
-import { isTruthyEnvValue } from "../infra/env.js";
-import { listBoundAccountIds, resolveDefaultAgentBoundAccountId } from "../routing/bindings.js";
 import { DEFAULT_ACCOUNT_ID, normalizeAccountId } from "../routing/session-key.js";
-import { resolveFeishuCredentials, type FeishuCredentials } from "./token.js";
 
-const debugAccounts = (...args: unknown[]) => {
-  if (isTruthyEnvValue(process.env.CLAWDBOT_DEBUG_FEISHU_ACCOUNTS)) {
-    console.warn("[feishu:accounts]", ...args);
-  }
-};
-
-/** Normalize startupChatId config (string or string[]) to a non-empty string array. */
-export function getStartupChatIds(config: FeishuAccountConfig): string[] {
-  const raw = config.startupChatId;
-  if (Array.isArray(raw)) {
-    return raw.map((s) => String(s).trim()).filter(Boolean);
-  }
-  if (raw != null && String(raw).trim()) {
-    return [String(raw).trim()];
-  }
-  return [];
-}
+export type FeishuTokenSource = "config" | "file" | "env" | "none";
 
 export type ResolvedFeishuAccount = {
   accountId: string;
-  enabled: boolean;
-  name?: string;
-  credentials: FeishuCredentials;
   config: FeishuAccountConfig;
+  tokenSource: FeishuTokenSource;
+  name?: string;
+  enabled: boolean;
 };
 
-function listConfiguredAccountIds(cfg: OpenClawConfig): string[] {
-  const accounts = cfg.channels?.feishu?.accounts;
-  if (!accounts || typeof accounts !== "object") return [];
-  const ids = new Set<string>();
-  for (const key of Object.keys(accounts)) {
-    if (!key) continue;
-    ids.add(normalizeAccountId(key));
+function readFileIfExists(filePath?: string): string | undefined {
+  if (!filePath) {
+    return undefined;
   }
-  return [...ids];
-}
-
-export function listFeishuAccountIds(cfg: OpenClawConfig): string[] {
-  const ids = Array.from(
-    new Set([...listConfiguredAccountIds(cfg), ...listBoundAccountIds(cfg, "feishu")]),
-  );
-  debugAccounts("listFeishuAccountIds", ids);
-  if (ids.length === 0) return [DEFAULT_ACCOUNT_ID];
-  return ids.sort((a, b) => a.localeCompare(b));
-}
-
-export function resolveDefaultFeishuAccountId(cfg: OpenClawConfig): string {
-  const boundDefault = resolveDefaultAgentBoundAccountId(cfg, "feishu");
-  if (boundDefault) return boundDefault;
-  const ids = listFeishuAccountIds(cfg);
-  if (ids.includes(DEFAULT_ACCOUNT_ID)) return DEFAULT_ACCOUNT_ID;
-  return ids[0] ?? DEFAULT_ACCOUNT_ID;
+  try {
+    return fs.readFileSync(filePath, "utf-8").trim();
+  } catch {
+    return undefined;
+  }
 }
 
 function resolveAccountConfig(
@@ -64,9 +29,13 @@ function resolveAccountConfig(
   accountId: string,
 ): FeishuAccountConfig | undefined {
   const accounts = cfg.channels?.feishu?.accounts;
-  if (!accounts || typeof accounts !== "object") return undefined;
+  if (!accounts || typeof accounts !== "object") {
+    return undefined;
+  }
   const direct = accounts[accountId] as FeishuAccountConfig | undefined;
-  if (direct) return direct;
+  if (direct) {
+    return direct;
+  }
   const normalized = normalizeAccountId(accountId);
   const matchKey = Object.keys(accounts).find((key) => normalizeAccountId(key) === normalized);
   return matchKey ? (accounts[matchKey] as FeishuAccountConfig | undefined) : undefined;
@@ -80,48 +49,94 @@ function mergeFeishuAccountConfig(cfg: OpenClawConfig, accountId: string): Feish
   return { ...base, ...account };
 }
 
+function resolveAppSecret(config?: { appSecret?: string; appSecretFile?: string }): {
+  value?: string;
+  source?: Exclude<FeishuTokenSource, "env" | "none">;
+} {
+  const direct = config?.appSecret?.trim();
+  if (direct) {
+    return { value: direct, source: "config" };
+  }
+  const fromFile = readFileIfExists(config?.appSecretFile);
+  if (fromFile) {
+    return { value: fromFile, source: "file" };
+  }
+  return {};
+}
+
+export function listFeishuAccountIds(cfg: OpenClawConfig): string[] {
+  const feishuCfg = cfg.channels?.feishu;
+  const accounts = feishuCfg?.accounts;
+  const ids = new Set<string>();
+
+  const baseConfigured = Boolean(
+    feishuCfg?.appId?.trim() && (feishuCfg?.appSecret?.trim() || Boolean(feishuCfg?.appSecretFile)),
+  );
+  const envConfigured = Boolean(
+    process.env.FEISHU_APP_ID?.trim() && process.env.FEISHU_APP_SECRET?.trim(),
+  );
+  if (baseConfigured || envConfigured) {
+    ids.add(DEFAULT_ACCOUNT_ID);
+  }
+
+  if (accounts) {
+    for (const id of Object.keys(accounts)) {
+      ids.add(normalizeAccountId(id));
+    }
+  }
+
+  return Array.from(ids);
+}
+
+export function resolveDefaultFeishuAccountId(cfg: OpenClawConfig): string {
+  const ids = listFeishuAccountIds(cfg);
+  if (ids.includes(DEFAULT_ACCOUNT_ID)) {
+    return DEFAULT_ACCOUNT_ID;
+  }
+  return ids[0] ?? DEFAULT_ACCOUNT_ID;
+}
+
 export function resolveFeishuAccount(params: {
   cfg: OpenClawConfig;
   accountId?: string | null;
 }): ResolvedFeishuAccount {
-  const hasExplicitAccountId = Boolean(params.accountId?.trim());
+  const accountId = normalizeAccountId(params.accountId);
   const baseEnabled = params.cfg.channels?.feishu?.enabled !== false;
+  const merged = mergeFeishuAccountConfig(params.cfg, accountId);
+  const accountEnabled = merged.enabled !== false;
+  const enabled = baseEnabled && accountEnabled;
 
-  const resolve = (accountId: string) => {
-    const merged = mergeFeishuAccountConfig(params.cfg, accountId);
-    const accountEnabled = merged.enabled !== false;
-    const enabled = baseEnabled && accountEnabled;
-    const credentials = resolveFeishuCredentials(params.cfg, { accountId });
-    debugAccounts("resolve", {
-      accountId,
-      enabled,
-      credentialSource: credentials.source,
-    });
-    return {
-      accountId,
-      enabled,
-      name: merged.name?.trim() || undefined,
-      credentials,
-      config: merged,
-    } satisfies ResolvedFeishuAccount;
+  const allowEnv = accountId === DEFAULT_ACCOUNT_ID;
+  const envAppId = allowEnv ? process.env.FEISHU_APP_ID?.trim() : undefined;
+  const envAppSecret = allowEnv ? process.env.FEISHU_APP_SECRET?.trim() : undefined;
+
+  const appId = merged.appId?.trim() || envAppId || "";
+  const secretResolution = resolveAppSecret(merged);
+  const appSecret = secretResolution.value ?? envAppSecret ?? "";
+
+  let tokenSource: FeishuTokenSource = "none";
+  if (secretResolution.value) {
+    tokenSource = secretResolution.source ?? "config";
+  } else if (envAppSecret) {
+    tokenSource = "env";
+  }
+  if (!appId || !appSecret) {
+    tokenSource = "none";
+  }
+
+  const config: FeishuAccountConfig = {
+    ...merged,
+    appId,
+    appSecret,
   };
 
-  const normalized = normalizeAccountId(params.accountId);
-  const primary = resolve(normalized);
-  if (hasExplicitAccountId) return primary;
-  if (primary.credentials.source !== "none") return primary;
+  const name = config.name?.trim() || config.botName?.trim() || undefined;
 
-  // If accountId is omitted, prefer a configured account credential over failing on
-  // the implicit "default" account.
-  const fallbackId = resolveDefaultFeishuAccountId(params.cfg);
-  if (fallbackId === primary.accountId) return primary;
-  const fallback = resolve(fallbackId);
-  if (fallback.credentials.source === "none") return primary;
-  return fallback;
-}
-
-export function listEnabledFeishuAccounts(cfg: OpenClawConfig): ResolvedFeishuAccount[] {
-  return listFeishuAccountIds(cfg)
-    .map((accountId) => resolveFeishuAccount({ cfg, accountId }))
-    .filter((account) => account.enabled);
+  return {
+    accountId,
+    config,
+    tokenSource,
+    name,
+    enabled,
+  };
 }

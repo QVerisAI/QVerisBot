@@ -1,0 +1,122 @@
+{
+  "meta": {
+    "lastTouchedVersion": "2026.1.25",
+    "lastTouchedAt": "2026-01-28T03:08:36.070Z"
+  },
+  "wizard": {
+    "lastRunAt": "2026-01-28T03:08:36.065Z",
+    "lastRunVersion": "2026.1.25",
+    "lastRunCommand": "onboard",
+    "lastRunMode": "local"
+  },
+  "auth": {
+    "profiles": {
+      "openrouter:default": {
+        "provider": "openrouter",
+        "mode": "api_key"
+      },
+      "opencode:default": {
+        "provider": "opencode",
+        "mode": "api_key"
+      }
+    }
+  },
+  "models": {
+    "proxy": "http://quaestio:quaestio_2025@47.237.171.0:8081",
+    "providers": {
+      "moonshot": {
+        "baseUrl": "https://api.moonshot.cn/v1",
+        "models": []
+      }
+    }
+  },
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "opencode/claude-opus-4-5"
+      },
+      "models": {
+        "openrouter/auto": {
+          "alias": "OpenRouter"
+        },
+        "openrouter/google/gemini-2.0-flash-exp:free": {},
+        "openrouter/moonshotai/kimi-k2.5": {},
+        "openrouter/qwen/qwen-plus": {},
+        "openrouter/deepseek/deepseek-v3.1-terminus": {},
+        "opencode/claude-opus-4-5": {
+          "alias": "Opus"
+        }
+      },
+      "workspace": "/home/alex/clawd",
+      "compaction": {
+        "mode": "safeguard"
+      },
+      "timeoutSeconds": 600,
+      "maxConcurrent": 4,
+      "subagents": {
+        "maxConcurrent": 8
+      }
+    }
+  },
+  "messages": {
+    "ackReactionScope": "group-mentions"
+  },
+  "commands": {
+    "native": "auto",
+    "nativeSkills": "auto"
+  },
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "dmPolicy": "pairing",
+      "botToken": "8578305846:AAFwU-w7GBfgv5WiE_w0Hl6Vf3a917kZHXo",
+      "groups": {
+        "*": {
+          "requireMention": true
+        }
+      },
+      "allowFrom": ["@QVerisBot"],
+      "groupPolicy": "allowlist",
+      "streamMode": "partial",
+      "proxy": "http://localhost:7890"
+    },
+    "feishu": {
+      "enabled": true,
+      "appId": "cli_a9f2dc95fe78dbcb",
+      "appSecret": "9DUETQZa83rvn12aeADpsbC1ioi1bkNf",
+      "startupChatId": "oc_73b21c6ba64c37641f09d90ac4493df8",
+      "verificationToken": "",
+      "eventMode": "websocket",
+      "webhookPort": 3000,
+      "webhookPath": "https://open.feishu.cn/open-apis/bot/v2/hook/6cf29a71-b083-4c9f-9380-ee5b92edb432"
+    }
+  },
+  "gateway": {
+    "port": 18789,
+    "mode": "local",
+    "bind": "loopback",
+    "auth": {
+      "mode": "token",
+      "token": "74ce28869012fed825b50560ccaaf1e2eeb7128c3d3dcdee"
+    },
+    "tailscale": {
+      "mode": "off",
+      "resetOnExit": false
+    }
+  },
+  "skills": {
+    "install": {
+      "nodeManager": "pnpm"
+    }
+  },
+  "plugins": {
+    "entries": {
+      "telegram": {
+        "enabled": true
+      },
+      "feishu": {
+        "enabled": true
+      }
+    }
+  }
+}

@@ -1,67 +1,172 @@
 import {
+  buildChannelConfigSchema,
   DEFAULT_ACCOUNT_ID,
-  getChatChannelMeta,
-  type ChannelPlugin,
-} from "../../../src/plugin-sdk/index.js";
-
-// Import feishu functions directly from source
-import {
-  getStartupChatIds,
+  deleteAccountFromConfigSection,
+  feishuOutbound,
+  formatPairingApproveHint,
   listFeishuAccountIds,
-  resolveFeishuAccount,
+  monitorFeishuProvider,
+  normalizeFeishuTarget,
+  PAIRING_APPROVED_MESSAGE,
+  probeFeishu,
   resolveDefaultFeishuAccountId,
+  resolveFeishuAccount,
+  resolveFeishuConfig,
+  resolveFeishuGroupRequireMention,
+  setAccountEnabledInConfigSection,
+  type ChannelAccountSnapshot,
+  type ChannelPlugin,
+  type ChannelStatusIssue,
   type ResolvedFeishuAccount,
-} from "../../../src/feishu/accounts.js";
-import {
-  sendMediaFeishu,
-  sendMessageFeishu,
-  type SendFeishuMessageParams,
-} from "../../../src/feishu/send.js";
-import { loadWebMedia } from "../../../src/web/media.js";
-import { monitorFeishuProvider, type FeishuMessageContext } from "../../../src/feishu/monitor.js";
-import { createFeishuClient } from "../../../src/feishu/client.js";
-import { dispatchFeishuMessage } from "../../../src/feishu/message-dispatch.js";
+} from "openclaw/plugin-sdk";
+import { FeishuConfigSchema } from "./config-schema.js";
+import { feishuOnboardingAdapter } from "./onboarding.js";
 
-const meta = getChatChannelMeta("feishu");
+const meta = {
+  id: "feishu",
+  label: "Feishu",
+  selectionLabel: "Feishu (Lark Open Platform)",
+  detailLabel: "Feishu Bot",
+  docsPath: "/channels/feishu",
+  docsLabel: "feishu",
+  blurb: "Feishu/Lark bot via WebSocket.",
+  aliases: ["lark"],
+  order: 35,
+  quickstartAllowFrom: true,
+};
 
-/**
- * Detect the appropriate receiveIdType from Feishu target ID prefix
- * - ou_xxx → open_id (user)
- * - oc_xxx → chat_id (group chat)
- * - on_xxx → union_id (cross-app user id)
- */
-function detectFeishuReceiveIdType(
-  target: string,
-): SendFeishuMessageParams["receiveIdType"] {
-  const trimmed = target.trim().toLowerCase();
-  if (trimmed.startsWith("ou_")) return "open_id";
-  if (trimmed.startsWith("on_")) return "union_id";
-  // Default to chat_id for oc_ prefix or unknown formats
-  return "chat_id";
-}
+const normalizeAllowEntry = (entry: string) => entry.replace(/^(feishu|lark):/i, "").trim();
 
 export const feishuPlugin: ChannelPlugin<ResolvedFeishuAccount> = {
   id: "feishu",
-  meta: {
-    ...meta,
-    aliases: ["lark"],
+  meta,
+  onboarding: feishuOnboardingAdapter,
+  pairing: {
+    idLabel: "feishuOpenId",
+    normalizeAllowEntry: normalizeAllowEntry,
+    notifyApproval: async ({ cfg, id }) => {
+      const account = resolveFeishuAccount({ cfg });
+      if (!account.config.appId || !account.config.appSecret) {
+        throw new Error("Feishu app credentials not configured");
+      }
+      await feishuOutbound.sendText({ cfg, to: id, text: PAIRING_APPROVED_MESSAGE });
+    },
   },
   capabilities: {
-    chatTypes: ["direct", "channel"],
-    reactions: true,
+    chatTypes: ["direct", "group"],
     media: true,
+    reactions: false,
+    threads: false,
+    polls: false,
+    nativeCommands: false,
+    blockStreaming: true,
   },
+  reload: { configPrefixes: ["channels.feishu"] },
+  outbound: feishuOutbound,
+  messaging: {
+    normalizeTarget: normalizeFeishuTarget,
+    targetResolver: {
+      looksLikeId: (raw, normalized) => {
+        const value = (normalized ?? raw).trim();
+        if (!value) {
+          return false;
+        }
+        return /^o[cun]_[a-zA-Z0-9]+$/.test(value) || /^(user|group|chat):/i.test(value);
+      },
+      hint: "<open_id|union_id|chat_id>",
+    },
+  },
+  configSchema: buildChannelConfigSchema(FeishuConfigSchema),
   config: {
     listAccountIds: (cfg) => listFeishuAccountIds(cfg),
     resolveAccount: (cfg, accountId) => resolveFeishuAccount({ cfg, accountId }),
     defaultAccountId: (cfg) => resolveDefaultFeishuAccountId(cfg),
-    isConfigured: (account) => account.credentials.source !== "none",
-    describeAccount: (account) => ({
+    setAccountEnabled: ({ cfg, accountId, enabled }) =>
+      setAccountEnabledInConfigSection({
+        cfg,
+        sectionKey: "feishu",
+        accountId,
+        enabled,
+        allowTopLevel: true,
+      }),
+    deleteAccount: ({ cfg, accountId }) =>
+      deleteAccountFromConfigSection({
+        cfg,
+        sectionKey: "feishu",
+        accountId,
+        clearBaseFields: ["appId", "appSecret", "appSecretFile", "name", "botName"],
+      }),
+    isConfigured: (account) => account.tokenSource !== "none",
+    describeAccount: (account): ChannelAccountSnapshot => ({
       accountId: account.accountId,
       name: account.name,
       enabled: account.enabled,
-      configured: account.credentials.source !== "none",
+      configured: account.tokenSource !== "none",
+      tokenSource: account.tokenSource,
     }),
+    resolveAllowFrom: ({ cfg, accountId }) =>
+      resolveFeishuConfig({ cfg, accountId: accountId ?? undefined }).allowFrom.map((entry) =>
+        String(entry),
+      ),
+    formatAllowFrom: ({ allowFrom }) =>
+      allowFrom
+        .map((entry) => String(entry).trim())
+        .filter(Boolean)
+        .map((entry) => (entry === "*" ? entry : normalizeAllowEntry(entry)))
+        .map((entry) => (entry === "*" ? entry : entry.toLowerCase())),
+  },
+  security: {
+    resolveDmPolicy: ({ cfg, accountId, account }) => {
+      const resolvedAccountId = accountId ?? account.accountId ?? DEFAULT_ACCOUNT_ID;
+      const useAccountPath = Boolean(cfg.channels?.feishu?.accounts?.[resolvedAccountId]);
+      const basePath = useAccountPath
+        ? `channels.feishu.accounts.${resolvedAccountId}.`
+        : "channels.feishu.";
+      return {
+        policy: account.config.dmPolicy ?? "pairing",
+        allowFrom: account.config.allowFrom ?? [],
+        policyPath: `${basePath}dmPolicy`,
+        allowFromPath: basePath,
+        approveHint: formatPairingApproveHint("feishu"),
+        normalizeEntry: normalizeAllowEntry,
+      };
+    },
+  },
+  groups: {
+    resolveRequireMention: ({ cfg, accountId, groupId }) => {
+      if (!groupId) {
+        return true;
+      }
+      return resolveFeishuGroupRequireMention({
+        cfg,
+        accountId: accountId ?? undefined,
+        chatId: groupId,
+      });
+    },
+  },
+  directory: {
+    self: async () => null,
+    listPeers: async ({ cfg, accountId, query, limit }) => {
+      const resolved = resolveFeishuConfig({ cfg, accountId: accountId ?? undefined });
+      const normalizedQuery = query?.trim().toLowerCase() ?? "";
+      const peers = resolved.allowFrom
+        .map((entry) => String(entry).trim())
+        .filter((entry) => Boolean(entry) && entry !== "*")
+        .map((entry) => normalizeAllowEntry(entry))
+        .filter((entry) => (normalizedQuery ? entry.toLowerCase().includes(normalizedQuery) : true))
+        .slice(0, limit && limit > 0 ? limit : undefined)
+        .map((id) => ({ kind: "user", id }) as const);
+      return peers;
+    },
+    listGroups: async ({ cfg, accountId, query, limit }) => {
+      const resolved = resolveFeishuConfig({ cfg, accountId: accountId ?? undefined });
+      const normalizedQuery = query?.trim().toLowerCase() ?? "";
+      const groups = Object.keys(resolved.groups ?? {})
+        .filter((id) => (normalizedQuery ? id.toLowerCase().includes(normalizedQuery) : true))
+        .slice(0, limit && limit > 0 ? limit : undefined)
+        .map((id) => ({ kind: "group", id }) as const);
+      return groups;
+    },
   },
   status: {
     defaultRuntime: {
@@ -71,168 +176,101 @@ export const feishuPlugin: ChannelPlugin<ResolvedFeishuAccount> = {
       lastStopAt: null,
       lastError: null,
     },
-    buildChannelSummary: ({ snapshot }) => ({
+    collectStatusIssues: (accounts) => {
+      const issues: ChannelStatusIssue[] = [];
+      for (const account of accounts) {
+        if (!account.configured) {
+          issues.push({
+            channel: "feishu",
+            accountId: account.accountId ?? DEFAULT_ACCOUNT_ID,
+            kind: "config",
+            message: "Feishu app ID/secret not configured",
+          });
+        }
+      }
+      return issues;
+    },
+    buildChannelSummary: async ({ snapshot }) => ({
       configured: snapshot.configured ?? false,
+      tokenSource: snapshot.tokenSource ?? "none",
       running: snapshot.running ?? false,
       lastStartAt: snapshot.lastStartAt ?? null,
       lastStopAt: snapshot.lastStopAt ?? null,
       lastError: snapshot.lastError ?? null,
+      probe: snapshot.probe,
+      lastProbeAt: snapshot.lastProbeAt ?? null,
     }),
-    buildAccountSnapshot: ({ account, runtime }) => ({
-      accountId: account.accountId,
-      name: account.name,
-      enabled: account.enabled,
-      configured: account.credentials.source !== "none",
-      running: runtime?.running ?? false,
-      lastStartAt: runtime?.lastStartAt ?? null,
-      lastStopAt: runtime?.lastStopAt ?? null,
-      lastError: runtime?.lastError ?? null,
-    }),
-  },
-  messaging: {
-    normalizeTarget: (raw) => {
-      // Accept explicit channel prefixes like "feishu:oc_xxx" / "lark:ou_xxx"
-      // and normalize them to the raw Feishu id.
-      let value = String(raw ?? "").trim();
-      value = value.replace(/^(feishu|lark):/i, "").trim();
-      return value;
+    probeAccount: async ({ account, timeoutMs }) =>
+      probeFeishu(account.config.appId, account.config.appSecret, timeoutMs, account.config.domain),
+    buildAccountSnapshot: ({ account, runtime, probe }) => {
+      const configured = account.tokenSource !== "none";
+      return {
+        accountId: account.accountId,
+        name: account.name,
+        enabled: account.enabled,
+        configured,
+        tokenSource: account.tokenSource,
+        running: runtime?.running ?? false,
+        lastStartAt: runtime?.lastStartAt ?? null,
+        lastStopAt: runtime?.lastStopAt ?? null,
+        lastError: runtime?.lastError ?? null,
+        probe,
+        lastInboundAt: runtime?.lastInboundAt ?? null,
+        lastOutboundAt: runtime?.lastOutboundAt ?? null,
+      };
     },
-    targetResolver: {
-      hint: "Use ou_xxx (open_id), oc_xxx (chat_id), or on_xxx (union_id)",
-      // Recognize Feishu ID patterns: ou_ (open_id), oc_ (chat_id), on_ (union_id)
-      looksLikeId: (raw: string, normalized?: string) => {
-        const trimmed = raw.trim();
-        const normalizedTrimmed = normalized?.trim() ?? "";
-        const re = /^(ou_|oc_|on_)[a-z0-9]+$/i;
-        return re.test(trimmed) || re.test(normalizedTrimmed);
-      },
-    },
-  },
-  outbound: {
-    deliveryMode: "direct",
-    chunker: null,
-    textChunkLimit: 4000,
-    sendText: async ({ to, text, accountId, cfg }) => {
-      // Detect receiveIdType from target prefix
-      const receiveIdType = detectFeishuReceiveIdType(to);
-      const result = await sendMessageFeishu({
-        to,
-        text,
-        accountId: accountId ?? undefined,
-        config: cfg,
-        receiveIdType,
-        autoRichText: true, // Enable markdown rendering via interactive card
-      });
-      if (!result.success || !result.messageId) {
-        throw new Error(result.error ?? "Failed to send Feishu message");
+    logSelfId: ({ account, runtime }) => {
+      const appId = account.config.appId;
+      if (appId) {
+        runtime.log?.(`feishu:${appId}`);
       }
-      return { channel: "feishu" as const, messageId: result.messageId };
-    },
-    sendMedia: async ({ to, text, mediaUrl, accountId, cfg }) => {
-      const receiveIdType = detectFeishuReceiveIdType(to);
-      let lastMessageId: string | undefined;
-
-      // Send text first if present
-      if (text?.trim()) {
-        const textResult = await sendMessageFeishu({
-          to,
-          text,
-          accountId: accountId ?? undefined,
-          config: cfg,
-          receiveIdType,
-          autoRichText: true,
-        });
-        if (!textResult.success) {
-          throw new Error(textResult.error ?? "Failed to send Feishu text message");
-        }
-        lastMessageId = textResult.messageId;
-      }
-
-      // Send media if mediaUrl is provided
-      if (mediaUrl) {
-        const resolved = resolveFeishuAccount({ cfg, accountId: accountId ?? undefined });
-        const maxMb = resolved.config.mediaMaxMb ?? cfg.channels?.feishu?.mediaMaxMb ?? 20;
-        const maxBytes = Math.max(1, maxMb) * 1024 * 1024;
-        const media = await loadWebMedia(mediaUrl, maxBytes);
-        if (media.buffer) {
-          const kind =
-            media.kind === "image"
-              ? ("image" as const)
-              : media.kind === "audio"
-                ? ("audio" as const)
-                : media.kind === "video"
-                  ? ("video" as const)
-                  : ("file" as const);
-
-          const mediaResult = await sendMediaFeishu({
-            to,
-            buffer: media.buffer,
-            contentType: media.contentType,
-            fileName: media.fileName,
-            kind,
-            accountId: accountId ?? undefined,
-            config: cfg,
-            receiveIdType,
-          });
-          if (!mediaResult.success) {
-            throw new Error(mediaResult.error ?? "Failed to send Feishu media");
-          }
-          lastMessageId = mediaResult.messageId;
-        }
-      }
-
-      if (!lastMessageId) {
-        throw new Error("No content to send");
-      }
-      return { channel: "feishu" as const, messageId: lastMessageId };
     },
   },
   gateway: {
     startAccount: async (ctx) => {
-      const account = ctx.account;
-      ctx.log?.info(`[${account.accountId}] starting Feishu provider`);
-
-      // Create client for startup message
-      const client = createFeishuClient(account.credentials, {
-        timeoutMs: (account.config.timeoutSeconds ?? 30) * 1000,
-      });
-
-      // Message handler that dispatches to the agent system
-      const onMessage = async (msgCtx: FeishuMessageContext) => {
-        await dispatchFeishuMessage({
-          ctx: msgCtx,
-          cfg: ctx.cfg,
-          runtime: ctx.runtime,
-          account,
-        });
-      };
-
-      // Start the monitor with message handler
-      const monitorPromise = monitorFeishuProvider({
-        accountId: account.accountId,
-        config: ctx.cfg,
-        runtime: ctx.runtime,
-        abortSignal: ctx.abortSignal,
-        onMessage,
-      });
-
-      // Send startup message to all configured startup chat IDs
-      const startupChatIds = getStartupChatIds(account.config);
-      const timestamp = new Date().toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" });
-      for (const chatId of startupChatIds) {
-        try {
-          await client.sendTextMessage(
-            chatId,
-            `🚀 Clawdbot 飞书网关已启动 (${timestamp})`,
-            "chat_id",
-          );
-          ctx.log?.info(`[${account.accountId}] sent startup message to ${chatId}`);
-        } catch (err) {
-          ctx.log?.warn(`[${account.accountId}] failed to send startup message to ${chatId}: ${err}`);
-        }
+      const { account, log, setStatus, abortSignal, cfg, runtime } = ctx;
+      const { appId, appSecret, domain } = account.config;
+      if (!appId || !appSecret) {
+        throw new Error("Feishu app ID/secret not configured");
       }
 
-      return monitorPromise;
+      let feishuBotLabel = "";
+      try {
+        const probe = await probeFeishu(appId, appSecret, 5000, domain);
+        if (probe.ok && probe.bot?.appName) {
+          feishuBotLabel = ` (${probe.bot.appName})`;
+        }
+        if (probe.ok && probe.bot) {
+          setStatus({ accountId: account.accountId, bot: probe.bot });
+        }
+      } catch (err) {
+        log?.debug?.(`[${account.accountId}] bot probe failed: ${String(err)}`);
+      }
+
+      log?.info(`[${account.accountId}] starting Feishu provider${feishuBotLabel}`);
+      setStatus({
+        accountId: account.accountId,
+        running: true,
+        lastStartAt: Date.now(),
+      });
+
+      try {
+        await monitorFeishuProvider({
+          appId,
+          appSecret,
+          accountId: account.accountId,
+          config: cfg,
+          runtime,
+          abortSignal,
+        });
+      } catch (err) {
+        setStatus({
+          accountId: account.accountId,
+          running: false,
+          lastError: err instanceof Error ? err.message : String(err),
+        });
+        throw err;
+      }
     },
   },
 };

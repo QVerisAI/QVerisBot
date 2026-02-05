@@ -1,0 +1,4 @@
+2026-01-28 21:23:33,404 - scheduler - INFO - Registered job class: telemetry (TelemetryJob)
+2026-01-28 21:23:33,404 - scheduler - INFO - ✓ 遥测任务已注册: telemetry (方法: check, status)
+2026-01-28 21:23:33,406 - scheduler - INFO - Registered job class: script (ScriptJob)
+2026-01-28 21:23:33,406 - scheduler - INFO - ✓ 脚本执行任务已注册: script (方法: execute)

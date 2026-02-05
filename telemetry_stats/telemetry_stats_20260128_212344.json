@@ -1,0 +1,31 @@
+{
+  "timestamp": "2026-01-28T13:23:48.122119+00:00",
+  "description": null,
+  "summary": {
+    "total_tools": 0,
+    "success_tools": 0,
+    "actual_success_tools": 0,
+    "auto_fixed_tools": 0,
+    "failed_tools": 0,
+    "ignored_tools": 0,
+    "success_rate": 0,
+    "status_changes": {}
+  },
+  "provider_stats": {},
+  "details": {
+    "success_list": [],
+    "auto_fixed_list": [],
+    "failed_list": [],
+    "ignored_list": []
+  },
+  "tools": {
+    "total": 0,
+    "success": 0,
+    "failed": 0,
+    "ignored": 0,
+    "success_list": [],
+    "auto_fixed_list": [],
+    "failed_list": [],
+    "ignored_list": []
+  }
+}

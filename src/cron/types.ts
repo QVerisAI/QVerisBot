@@ -1,7 +1,7 @@
 import type { ChannelId } from "../channels/plugins/types.js";
 
 export type CronSchedule =
-  | { kind: "at"; atMs: number }
+  | { kind: "at"; at: string }
   | { kind: "every"; everyMs: number; anchorMs?: number }
   | { kind: "cron"; expr: string; tz?: string };
 
@@ -9,6 +9,17 @@ export type CronSessionTarget = "main" | "isolated";
 export type CronWakeMode = "next-heartbeat" | "now";
 
 export type CronMessageChannel = ChannelId | "last";
+
+export type CronDeliveryMode = "none" | "announce";
+
+export type CronDelivery = {
+  mode: CronDeliveryMode;
+  channel?: CronMessageChannel;
+  to?: string;
+  bestEffort?: boolean;
+};
+
+export type CronDeliveryPatch = Partial<CronDelivery>;
 
 export type CronPayload =
   | { kind: "systemEvent"; text: string }
@@ -41,38 +52,6 @@ export type CronPayloadPatch =
       bestEffortDeliver?: boolean;
     };
 
-export type CronIsolation = {
-  postToMainPrefix?: string;
-  /**
-   * What to post back into the main session after an isolated run.
-   * - summary: small status/summary line (default)
-   * - full: the agent's final text output (optionally truncated)
-   */
-  postToMainMode?: "summary" | "full";
-  /** Max chars when postToMainMode="full". Default: 8000. */
-  postToMainMaxChars?: number;
-};
-
-/**
- * Origin context: where the cron job was created.
- * Used for routing replies back to the originating session/channel.
- */
-export type CronOrigin = {
-  /** The channel where the job was created (telegram, whatsapp, etc.) */
-  channel?: ChannelId;
-  /** The chat/conversation ID where the job was created */
-  to?: string;
-  /** The account ID (for multi-account setups) */
-  accountId?: string;
-  /** The thread ID (for threaded conversations) */
-  threadId?: string | number;
-  /** The session key where the job was created */
-  sessionKey?: string;
-};
-
-/** Delivery routing mode for cron job replies */
-export type CronDeliveryMode = "origin" | "current";
-
 export type CronJobState = {
   nextRunAtMs?: number;
   runningAtMs?: number;
@@ -95,19 +74,8 @@ export type CronJob = {
   sessionTarget: CronSessionTarget;
   wakeMode: CronWakeMode;
   payload: CronPayload;
-  isolation?: CronIsolation;
+  delivery?: CronDelivery;
   state: CronJobState;
-  /**
-   * Origin context: where the job was created.
-   * Replies are routed back here by default.
-   */
-  origin?: CronOrigin;
-  /**
-   * Delivery routing mode:
-   * - "origin" (default): Route replies to where the job was created
-   * - "current": Route replies to the session's current lastChannel/lastTo
-   */
-  deliveryMode?: CronDeliveryMode;
 };
 
 export type CronStoreFile = {
@@ -121,5 +89,6 @@ export type CronJobCreate = Omit<CronJob, "id" | "createdAtMs" | "updatedAtMs" |
 
 export type CronJobPatch = Partial<Omit<CronJob, "id" | "createdAtMs" | "state" | "payload">> & {
   payload?: CronPayloadPatch;
+  delivery?: CronDeliveryPatch;
   state?: Partial<CronJobState>;
 };
