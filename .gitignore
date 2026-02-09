@@ -65,6 +65,7 @@ apps/ios/*.mobileprovision
 # Local untracked files
 .local/
 .vscode/
+.moltbot/
 IDENTITY.md
 USER.md
 .tgz

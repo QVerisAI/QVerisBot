@@ -4,7 +4,6 @@ import { GroupPolicySchema } from "./zod-schema.core.js";
 import {
   BlueBubblesConfigSchema,
   DiscordConfigSchema,
-  FeishuConfigSchema,
   GoogleChatConfigSchema,
   IMessageConfigSchema,
   MSTeamsConfigSchema,
@@ -30,7 +29,6 @@ export const ChannelsSchema = z
     whatsapp: WhatsAppConfigSchema.optional(),
     telegram: TelegramConfigSchema.optional(),
     discord: DiscordConfigSchema.optional(),
-    feishu: FeishuConfigSchema.optional(),
     googlechat: GoogleChatConfigSchema.optional(),
     slack: SlackConfigSchema.optional(),
     signal: SignalConfigSchema.optional(),

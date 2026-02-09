@@ -23,7 +23,7 @@ export function isXAction(action: string): boolean {
 
 /**
  * Check if the sender is allowed to trigger proactive X actions (follow, like, reply, dm).
- * Uses actionsAllowFrom (X) or xActionsAllowFrom (Feishu); does not reuse mention allowlist.
+ * Uses actionsAllowFrom (X); does not reuse mention allowlist.
  */
 function checkXActionsAllowed(params: {
   cfg: OpenClawConfig;
@@ -40,53 +40,24 @@ function checkXActionsAllowed(params: {
     );
   }
 
-  if (origChannel === "x") {
-    const account = resolveXAccount(cfg, accountId ?? DEFAULT_ACCOUNT_ID);
-    const list = account?.actionsAllowFrom;
-    if (!Array.isArray(list) || list.length === 0) {
-      throw new Error(
-        "Permission denied: X actions allowlist (channels.x.actionsAllowFrom) is not configured; proactive X operations are disabled.",
-      );
-    }
-    if (!list.includes(origSenderId)) {
-      throw new Error(
-        "Permission denied: your X user is not in the actions allowlist (channels.x.actionsAllowFrom); only listed users can trigger follow/like/reply/dm.",
-      );
-    }
-    return;
+  if (origChannel !== "x") {
+    throw new Error(
+      `Permission denied: X actions are only allowed when the request originates from X (got ${origChannel}).`,
+    );
   }
 
-  if (origChannel === "feishu") {
-    const feishu = (cfg.channels as Record<string, unknown> | undefined)?.feishu as
-      | Record<string, unknown>
-      | undefined;
-    const baseList = (feishu?.xActionsAllowFrom as string[] | undefined) ?? [];
-    const accounts = feishu?.accounts as
-      | Record<string, { xActionsAllowFrom?: string[] }>
-      | undefined;
-    let list = baseList;
-    if (accounts && typeof accounts === "object") {
-      for (const acc of Object.values(accounts)) {
-        const L = acc?.xActionsAllowFrom;
-        if (Array.isArray(L)) list = [...list, ...L];
-      }
-    }
-    if (list.length === 0) {
-      throw new Error(
-        "Permission denied: Feishu X actions allowlist (channels.feishu.xActionsAllowFrom) is not configured; proactive X operations from Feishu are disabled.",
-      );
-    }
-    if (!list.includes(origSenderId)) {
-      throw new Error(
-        "Permission denied: your Feishu user is not in the X actions allowlist (channels.feishu.xActionsAllowFrom); only listed users can trigger X follow/like/reply/dm.",
-      );
-    }
-    return;
+  const account = resolveXAccount(cfg, accountId ?? DEFAULT_ACCOUNT_ID);
+  const list = account?.actionsAllowFrom;
+  if (!Array.isArray(list) || list.length === 0) {
+    throw new Error(
+      "Permission denied: X actions allowlist (channels.x.actionsAllowFrom) is not configured; proactive X operations are disabled.",
+    );
   }
-
-  throw new Error(
-    `Permission denied: X actions are only allowed when the request originates from X or Feishu (got ${origChannel}).`,
-  );
+  if (!list.includes(origSenderId)) {
+    throw new Error(
+      "Permission denied: your X user is not in the actions allowlist (channels.x.actionsAllowFrom); only listed users can trigger follow/like/reply/dm.",
+    );
+  }
 }
 
 /**
@@ -298,7 +269,7 @@ async function handleReply(
 /**
  * Handle X actions dispatched from the message tool.
  * Pass full ctx so x-reply can enforce "reply only to mentioner" when originating from X.
- * All proactive X actions (follow, like, reply, dm) require the sender to be in actionsAllowFrom (X) or xActionsAllowFrom (Feishu).
+ * All proactive X actions (follow, like, reply, dm) require the sender to be in actionsAllowFrom (X).
  */
 export async function handleXAction(
   params: Record<string, unknown>,

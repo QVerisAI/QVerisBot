@@ -8,7 +8,6 @@ export const CHAT_CHANNEL_ORDER = [
   "telegram",
   "whatsapp",
   "discord",
-  "feishu",
   "googlechat",
   "slack",
   "signal",
@@ -59,16 +58,6 @@ const CHAT_CHANNEL_META: Record<ChatChannelId, ChannelMeta> = {
     blurb: "very well supported right now.",
     systemImage: "bubble.left.and.bubble.right",
   },
-  feishu: {
-    id: "feishu",
-    label: "Feishu",
-    selectionLabel: "Feishu (Lark Bot API)",
-    detailLabel: "Feishu Bot",
-    docsPath: "/channels/feishu",
-    docsLabel: "feishu",
-    blurb: "Feishu/Lark bot with webhook or WebSocket event subscription.",
-    systemImage: "message.badge.circle",
-  },
   googlechat: {
     id: "googlechat",
     label: "Google Chat",
@@ -115,7 +104,6 @@ export const CHAT_CHANNEL_ALIASES: Record<string, ChatChannelId> = {
   imsg: "imessage",
   "google-chat": "googlechat",
   gchat: "googlechat",
-  lark: "feishu",
 };
 
 const normalizeChannelKey = (raw?: string | null): string | undefined => {

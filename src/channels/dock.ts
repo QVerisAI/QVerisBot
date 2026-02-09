@@ -11,7 +11,6 @@ import type {
   ChannelThreadingAdapter,
 } from "./plugins/types.js";
 import { resolveDiscordAccount } from "../discord/accounts.js";
-import { resolveFeishuAccount } from "../feishu/accounts.js";
 import { resolveIMessageAccount } from "../imessage/accounts.js";
 import { requireActivePluginRegistry } from "../plugins/runtime.js";
 import { normalizeAccountId } from "../routing/session-key.js";
@@ -214,38 +213,6 @@ const DOCKS: Record<ChatChannelId, ChannelDock> = {
         currentThreadTs: context.ReplyToId,
         hasRepliedRef,
       }),
-    },
-  },
-  feishu: {
-    id: "feishu",
-    capabilities: {
-      chatTypes: ["direct", "group"],
-      reactions: true,
-      media: true,
-      blockStreaming: true,
-    },
-    outbound: { textChunkLimit: 4000 },
-    config: {
-      resolveAllowFrom: ({ cfg, accountId }) =>
-        (resolveFeishuAccount({ cfg, accountId }).config.allowFrom ?? []).map((entry) =>
-          String(entry),
-        ),
-      formatAllowFrom: ({ allowFrom }) =>
-        allowFrom
-          .map((entry) => String(entry).trim())
-          .filter(Boolean)
-          .map((entry) => entry.replace(/^feishu:/i, "").toLowerCase()),
-    },
-    threading: {
-      resolveReplyToMode: ({ cfg }) => cfg.channels?.feishu?.replyToMode ?? "first",
-      buildToolContext: ({ context, hasRepliedRef }) => {
-        const threadId = context.MessageThreadId ?? context.ReplyToId;
-        return {
-          currentChannelId: context.To?.trim() || undefined,
-          currentThreadTs: threadId != null ? String(threadId) : undefined,
-          hasRepliedRef,
-        };
-      },
     },
   },
   googlechat: {

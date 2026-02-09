@@ -251,12 +251,12 @@ export type ChannelThreadingToolContext = {
    */
   skipCrossContextDecoration?: boolean;
   /**
-   * Channel where the control message originated (e.g. "x", "feishu").
+   * Channel where the control message originated (e.g. "x", "discord").
    * Used for X reply permission: when "x", reply only allowed to the mentioning user.
    */
   originatingChannel?: string;
   /**
-   * Sender ID of the control message (channel-specific, e.g. X user ID or Feishu user ID).
+   * Sender ID of the control message (channel-specific, e.g. X user ID or Discord user ID).
    * Used for X reply permission: when originating from X, target tweet author must match.
    */
   originatingSenderId?: string;

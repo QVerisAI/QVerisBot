@@ -216,7 +216,7 @@ export async function monitorXProvider(options: XMonitorOptions): Promise<XMonit
   }
 
   // Get data directory for state persistence
-  const dataDir = config.session?.store ?? ".moltbot";
+  const dataDir = config.session?.store ?? ".openclaw";
 
   // Load last poll state
   const state = loadXPollState(dataDir, accountId);
