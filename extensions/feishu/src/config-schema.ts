@@ -129,6 +129,8 @@ export const FeishuAccountConfigSchema = z
     configWrites: z.boolean().optional(),
     dmPolicy: DmPolicySchema.optional(),
     allowFrom: z.array(z.union([z.string(), z.number()])).optional(),
+    /** Feishu user IDs allowed to trigger X actions (follow/like/reply/dm). Separate from allowFrom. */
+    xActionsAllowFrom: z.array(z.union([z.string(), z.number()])).optional(),
     groupPolicy: GroupPolicySchema.optional(),
     groupAllowFrom: z.array(z.union([z.string(), z.number()])).optional(),
     requireMention: z.boolean().optional(),
@@ -163,6 +165,8 @@ export const FeishuConfigSchema = z
     configWrites: z.boolean().optional(),
     dmPolicy: DmPolicySchema.optional().default("pairing"),
     allowFrom: z.array(z.union([z.string(), z.number()])).optional(),
+    /** Feishu user IDs allowed to trigger X actions (follow/like/reply/dm). Separate from allowFrom. */
+    xActionsAllowFrom: z.array(z.union([z.string(), z.number()])).optional(),
     groupPolicy: GroupPolicySchema.optional().default("allowlist"),
     groupAllowFrom: z.array(z.union([z.string(), z.number()])).optional(),
     requireMention: z.boolean().optional().default(true),
