@@ -90,6 +90,8 @@ describe("xOnboardingAdapter", () => {
         "access-token-secret",
         "60",
         "http://127.0.0.1:7890",
+        "12345678", // allowFrom (default)
+        "12345678", // actionsAllowFrom (defaults to allowFrom value)
       ],
     });
 
@@ -110,5 +112,7 @@ describe("xOnboardingAdapter", () => {
     expect(result.cfg.channels?.x?.accessTokenSecret).toBe("access-token-secret");
     expect(result.cfg.channels?.x?.pollIntervalSeconds).toBe(60);
     expect(result.cfg.channels?.x?.proxy).toBe("http://127.0.0.1:7890");
+    expect(result.cfg.channels?.x?.allowFrom).toEqual(["12345678"]);
+    expect(result.cfg.channels?.x?.actionsAllowFrom).toEqual(["12345678"]);
   });
 });

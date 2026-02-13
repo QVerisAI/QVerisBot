@@ -14,6 +14,8 @@ type XCredentialInput = {
   accessTokenSecret: string;
   pollIntervalSeconds?: number;
   proxy?: string;
+  allowFrom?: string[];
+  actionsAllowFrom?: string[];
 };
 
 function parsePollIntervalSeconds(input: string): number | undefined {
@@ -43,6 +45,8 @@ function writeAccountConfig(params: {
     accessTokenSecret: input.accessTokenSecret,
     ...(input.pollIntervalSeconds ? { pollIntervalSeconds: input.pollIntervalSeconds } : {}),
     ...(input.proxy ? { proxy: input.proxy } : {}),
+    ...(input.allowFrom ? { allowFrom: input.allowFrom } : {}),
+    ...(input.actionsAllowFrom ? { actionsAllowFrom: input.actionsAllowFrom } : {}),
   };
 
   if (accountId === DEFAULT_ACCOUNT_ID && !existingX.accounts) {
@@ -179,6 +183,37 @@ export const xOnboardingAdapter: ChannelOnboardingAdapter = {
         placeholder: "http://127.0.0.1:7890",
       });
 
+      // Prompt for X user IDs used in allowFrom / actionsAllowFrom.
+      // These control who can mention the bot and who can trigger proactive actions.
+      const existingAllowFrom = existing?.allowFrom ?? [];
+      const existingActionsAllowFrom = existing?.actionsAllowFrom ?? [];
+      const allowFromInput = await prompter.text({
+        message: "Your X user ID(s) for allowFrom (comma-separated, required for mentions)",
+        placeholder: "12345678",
+        initialValue: existingAllowFrom.length > 0 ? existingAllowFrom.join(", ") : "12345678",
+        validate: (value) =>
+          String(value ?? "").trim() ? undefined : "Required — enter at least one X user ID",
+      });
+      const allowFrom = String(allowFromInput ?? "")
+        .split(/[\n,;]+/g)
+        .map((s) => s.trim())
+        .filter(Boolean);
+
+      const actionsAllowFromInput = await prompter.text({
+        message: "X user ID(s) for actionsAllowFrom (comma-separated, for proactive actions)",
+        placeholder: "12345678",
+        initialValue:
+          existingActionsAllowFrom.length > 0
+            ? existingActionsAllowFrom.join(", ")
+            : allowFrom.length > 0
+              ? allowFrom.join(", ")
+              : "12345678",
+      });
+      const actionsAllowFrom = String(actionsAllowFromInput ?? "")
+        .split(/[\n,;]+/g)
+        .map((s) => s.trim())
+        .filter(Boolean);
+
       next = writeAccountConfig({
         cfg: next,
         accountId: xAccountId,
@@ -189,6 +224,8 @@ export const xOnboardingAdapter: ChannelOnboardingAdapter = {
           accessTokenSecret,
           pollIntervalSeconds: parsePollIntervalSeconds(pollIntervalInput),
           proxy: proxyInput.trim() || undefined,
+          allowFrom: allowFrom.length > 0 ? allowFrom : undefined,
+          actionsAllowFrom: actionsAllowFrom.length > 0 ? actionsAllowFrom : undefined,
         },
       });
     } else {
