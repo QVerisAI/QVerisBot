@@ -62,6 +62,12 @@ export const MESSAGE_ACTION_TARGET_MODE: Record<ChannelMessageActionName, Messag
     "x-unrepost": "to",
     "x-reply": "to",
     "x-post": "none",
+    "x-quote": "to",
+    "x-timeline": "to",
+    "x-user-info": "to",
+    "x-me": "none",
+    "x-search": "none",
+    "x-tweet-info": "to",
     "set-presence": "none",
   };
 
