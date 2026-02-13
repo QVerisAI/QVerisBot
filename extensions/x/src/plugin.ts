@@ -29,6 +29,7 @@ type XAccountConfig = {
   enabled?: boolean;
   pollIntervalSeconds?: number;
   allowFrom?: string[];
+  actionsAllowFrom?: string[];
   name?: string;
   proxy?: string;
 };
