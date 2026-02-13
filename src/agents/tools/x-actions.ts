@@ -39,7 +39,14 @@ export function isXAction(action: string): boolean {
 
 /**
  * Resolve the X actions allowlist for a cross-channel originator (e.g. Feishu).
- * Reads `channels.<channel>.xActionsAllowFrom` from config.
+ *
+ * Checks two lists in order:
+ * 1. `channels.<channel>.xActionsAllowFrom` — dedicated X-action allowlist (Feishu user IDs)
+ * 2. `channels.<channel>.allowFrom` — general allowlist (fallback: any user allowed to chat
+ *    with the bot is also allowed to trigger X actions)
+ *
+ * This fallback makes cross-channel X operations work out of the box when only `allowFrom`
+ * is configured during onboarding, without requiring explicit `xActionsAllowFrom`.
  */
 function resolveCrossChannelXActionsAllowFrom(
   cfg: OpenClawConfig,
@@ -50,23 +57,32 @@ function resolveCrossChannelXActionsAllowFrom(
   if (!channelCfg || typeof channelCfg !== "object") {
     return undefined;
   }
-  const list = channelCfg.xActionsAllowFrom;
-  if (!Array.isArray(list)) {
-    return undefined;
+
+  // Prefer explicit xActionsAllowFrom
+  const xList = channelCfg.xActionsAllowFrom;
+  if (Array.isArray(xList) && xList.length > 0) {
+    return xList.map((entry) => String(entry).trim());
   }
-  return list.map((entry) => String(entry).trim());
+
+  // Fallback to allowFrom — if a user is trusted enough to talk to the bot,
+  // they should be able to trigger X actions too.
+  const allowFrom = channelCfg.allowFrom;
+  if (Array.isArray(allowFrom) && allowFrom.length > 0) {
+    return allowFrom.map((entry) => String(entry).trim());
+  }
+
+  return undefined;
 }
 
-/** Channels allowed to trigger X actions cross-channel (via xActionsAllowFrom). */
-const CROSS_CHANNEL_X_ACTION_SOURCES = new Set(["feishu"]);
-
 /**
- * Check if the sender is allowed to trigger proactive X actions (follow, like, reply, dm).
+ * Check if the sender is allowed to trigger proactive X actions (follow, like, repost, reply, dm).
  *
- * Permission model (two separate allowlists, do not mix):
+ * Permission model:
  * - From X: uses `channels.x.actionsAllowFrom` (X user IDs).
- * - From Feishu: uses `channels.feishu.xActionsAllowFrom` (Feishu user IDs).
- * - From other channels: denied.
+ * - From other configured channels (Feishu, Telegram, etc.): uses
+ *   `channels.<channel>.xActionsAllowFrom` or falls back to `channels.<channel>.allowFrom`.
+ * - From CLI/unattended: allowed if `channels.x.actionsAllowFrom` is configured
+ *   (the CLI operator is assumed to be the owner).
  */
 function checkXActionsAllowed(params: {
   cfg: OpenClawConfig;
@@ -77,9 +93,16 @@ function checkXActionsAllowed(params: {
   const origChannel = actionCtx?.toolContext?.originatingChannel?.trim().toLowerCase();
   const origSenderId = actionCtx?.toolContext?.originatingSenderId?.trim();
 
+  // --- CLI / unattended context: allow if X actionsAllowFrom is configured ---
   if (!origChannel || !origSenderId) {
+    const account = resolveXAccount(cfg, accountId ?? DEFAULT_ACCOUNT_ID);
+    const list = account?.actionsAllowFrom;
+    if (Array.isArray(list) && list.length > 0) {
+      // X channel has actionsAllowFrom configured — CLI/owner is trusted.
+      return;
+    }
     throw new Error(
-      "Permission denied: X actions (follow, like, repost, reply, dm) require an originating channel and sender; not allowed from CLI or unattended context.",
+      "Permission denied: X actions require channels.x.actionsAllowFrom to be configured.",
     );
   }
 
@@ -100,25 +123,32 @@ function checkXActionsAllowed(params: {
     return;
   }
 
-  // --- From cross-channel sources (e.g. Feishu): check channels.<channel>.xActionsAllowFrom ---
-  if (CROSS_CHANNEL_X_ACTION_SOURCES.has(origChannel)) {
-    const list = resolveCrossChannelXActionsAllowFrom(cfg, origChannel);
-    if (!Array.isArray(list) || list.length === 0) {
-      throw new Error(
-        `Permission denied: X actions allowlist (channels.${origChannel}.xActionsAllowFrom) is not configured; cross-channel X operations from ${origChannel} are disabled.`,
-      );
-    }
+  // --- From any other channel: check xActionsAllowFrom → allowFrom → X actionsAllowFrom ---
+  const list = resolveCrossChannelXActionsAllowFrom(cfg, origChannel);
+  if (Array.isArray(list) && list.length > 0) {
+    // Explicit allowlist exists — check the sender.
     if (!list.includes(origSenderId)) {
       throw new Error(
-        `Permission denied: your ${origChannel} user is not in the actions allowlist (channels.${origChannel}.xActionsAllowFrom); only listed users can trigger follow/like/repost/reply/dm.`,
+        `Permission denied: your ${origChannel} user is not in the allowlist for X actions. ` +
+          `Add your user ID to channels.${origChannel}.xActionsAllowFrom or channels.${origChannel}.allowFrom.`,
       );
     }
     return;
   }
 
-  // --- Other channels: denied ---
+  // No per-channel allowlist. If X itself has actionsAllowFrom configured,
+  // allow cross-channel operations — the user is already authenticated by
+  // the originating channel infrastructure and the owner explicitly enabled
+  // X actions by setting channels.x.actionsAllowFrom.
+  const xAccount = resolveXAccount(cfg, accountId ?? DEFAULT_ACCOUNT_ID);
+  if (Array.isArray(xAccount?.actionsAllowFrom) && xAccount.actionsAllowFrom.length > 0) {
+    return;
+  }
+
   throw new Error(
-    `Permission denied: X actions are not supported from ${origChannel}. Supported origins: x, ${[...CROSS_CHANNEL_X_ACTION_SOURCES].join(", ")}.`,
+    `Permission denied: no allowlist configured for X actions. ` +
+      `Set channels.${origChannel}.xActionsAllowFrom, channels.${origChannel}.allowFrom, ` +
+      `or channels.x.actionsAllowFrom.`,
   );
 }
 

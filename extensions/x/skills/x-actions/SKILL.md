@@ -247,10 +247,6 @@ X account must be configured in `channels.x` with:
 
 ## Permission Control
 
-Two separate allowlists; do not reuse one for the other.
-
-- **Mention allowlist**: `channels.x.allowFrom` — X user IDs who can mention the bot.
-- **Write actions allowlist (X)**: `channels.x.actionsAllowFrom` — X user IDs who can trigger write actions.
-- **Write actions allowlist (Feishu)**: `channels.feishu.xActionsAllowFrom` — Feishu user IDs who can trigger X write actions.
-- **Read actions**: No additional permission required — `x-search`, `x-timeline`, `x-tweet-info`, `x-user-info`, `x-me` are always allowed.
+- **Read actions** (`x-search`, `x-timeline`, `x-tweet-info`, `x-user-info`, `x-me`): always allowed, no permission check.
+- **Write actions**: if `channels.x.actionsAllowFrom` is configured during onboarding, cross-channel write actions (from Feishu, Telegram, CLI, etc.) work automatically. No extra per-channel config needed.
 - **Reply restriction from X**: When triggered from X mention, `x-reply` only to that user's tweets.

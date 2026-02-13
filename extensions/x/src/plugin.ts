@@ -67,7 +67,7 @@ export const xPlugin: ChannelPlugin<XAccountConfig> = {
   agentPrompt: {
     messageToolHints: () => [
       "X/Twitter has a 280-character limit. Use plain text without markdown formatting (no **bold**, *italic*, `code`, or other markdown syntax). Keep responses concise.",
-      "For X/Twitter actions, ALWAYS use the message tool with X-specific actions: x-post (new tweet), x-reply, x-quote (quote tweet), x-like, x-unlike, x-repost, x-unrepost, x-follow, x-unfollow, x-dm, x-search (search tweets), x-timeline (user timeline), x-tweet-info (tweet details), x-user-info (user profile), x-me (current account). Do NOT use the browser tool or external tools for X operations.",
+      "X plugin is configured with OAuth credentials. For ANY X/Twitter operation, use the message tool with x-* actions: x-post, x-reply, x-quote, x-like, x-unlike, x-repost, x-unrepost, x-follow, x-unfollow, x-dm, x-search, x-timeline, x-tweet-info, x-user-info, x-me. These work from ANY channel (Feishu, Telegram, CLI, Web). Do NOT use browser or external tools for X operations. Do NOT try to modify config — permissions are already set.",
     ],
   },
 

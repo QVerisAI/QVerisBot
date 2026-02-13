@@ -218,15 +218,15 @@ message({ action: "x-me" })
 
 Write actions require allowlist permission. Read actions do not.
 
-| List                       | Config key                          | Controls                                               |
-| -------------------------- | ----------------------------------- | ------------------------------------------------------ |
-| Mention allowlist          | `channels.x.allowFrom`              | Which X users can mention the bot and get a reply      |
-| Actions allowlist (X)      | `channels.x.actionsAllowFrom`       | Which X users can trigger write actions via X mentions |
-| Actions allowlist (Feishu) | `channels.feishu.xActionsAllowFrom` | Which Feishu users can trigger X write actions         |
+**Read actions** (`x-search`, `x-timeline`, `x-tweet-info`, `x-user-info`, `x-me`) — always allowed, no permission check needed.
 
-- Read actions (`x-search`, `x-timeline`, `x-tweet-info`, `x-user-info`, `x-me`) are always allowed.
-- When triggered **from X** (mention), `x-reply` can only target the mentioning user's tweets.
-- When triggered **from other channels**, `x-reply` can target any tweet.
+**Write actions** permission cascade (checked in order):
+
+1. **From X**: sender must be in `channels.x.actionsAllowFrom`.
+2. **From other channels** (Feishu, Telegram, etc.): if `channels.<channel>.xActionsAllowFrom` is set, sender must be in it. Otherwise, if `channels.<channel>.allowFrom` is set, sender must be in it. Otherwise, if `channels.x.actionsAllowFrom` is configured (any value), the action is **allowed** (the owner explicitly enabled X actions and the sender is authenticated by the originating channel).
+3. **From CLI/unattended**: allowed if `channels.x.actionsAllowFrom` is configured.
+
+**In practice**: if `channels.x.actionsAllowFrom` is configured during onboarding, cross-channel X write actions work from any channel without extra configuration. You do NOT need to set `channels.feishu.xActionsAllowFrom` separately.
 
 ## Do NOT Do These
 
