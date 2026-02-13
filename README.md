@@ -1,23 +1,27 @@
 # QVerisBot — OpenClaw with QVeris Universal Toolbox
 
-<p align="center">
-    <picture>
-        <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/QVerisAI/QVerisBot/main/docs/assets/qverisbot-logo-text-dark.png">
-        <img src="https://raw.githubusercontent.com/QVerisAI/QVerisBot/main/docs/assets/QVerisBot-logo-text-alpha.png" alt="QVerisBot" width="280">
-    </picture>
-</p>
-
-<p align="center">
-  <strong>Your Professional AI Assistant with QVeris Universal Toolbox</strong>
-</p>
-
-<p align="center">
-  <a href="https://github.com/QVerisAI/QVerisBot/actions/workflows/ci.yml?branch=main"><img src="https://img.shields.io/github/actions/workflow/status/QVerisAI/QVerisBot/ci.yml?branch=main&style=for-the-badge" alt="CI status"></a>
-  <a href="https://github.com/QVerisAI/QVerisBot/releases"><img src="https://img.shields.io/github/v/release/QVerisAI/QVerisBot?include_prereleases&style=for-the-badge" alt="GitHub release"></a>
-  <a href="https://deepwiki.com/QVerisAI/QVerisBot"><img src="https://img.shields.io/badge/DeepWiki-QVerisBot-blue?style=for-the-badge" alt="DeepWiki"></a>
-  <a href="https://discord.gg/clawd"><img src="https://img.shields.io/discord/1456350064065904867?label=Discord&logo=discord&logoColor=white&color=5865F2&style=for-the-badge" alt="Discord"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge" alt="MIT License"></a>
-</p>
+<table>
+  <tr>
+    <td width="170" valign="top">
+      <img src="docs/assets/qverisbot.png" alt="QVerisBot logo" width="150" />
+    </td>
+    <td valign="top">
+      <strong>QVerisBot</strong><br/>
+      Your professional AI assistant with QVeris Universal Toolbox.<br/>
+      OpenClaw reliability + QVeris integrations for real-world workflows.<br/><br/>
+      <a href="#quick-start-5-minutes">Quick Start</a> ·
+      <a href="https://docs.openclaw.ai">Docs</a> ·
+      <a href="https://qveris.ai/integrations">500+ Integrations</a> ·
+      <a href="https://deepwiki.com/QVerisAI/QVerisBot">DeepWiki</a> ·
+      <a href="https://discord.gg/clawd">Discord</a><br/><br/>
+      <a href="https://github.com/QVerisAI/QVerisBot/actions/workflows/ci.yml?branch=main"><img src="https://img.shields.io/github/actions/workflow/status/QVerisAI/QVerisBot/ci.yml?branch=main&style=flat-square" alt="CI status"></a>
+      <a href="https://github.com/QVerisAI/QVerisBot/releases"><img src="https://img.shields.io/github/v/release/QVerisAI/QVerisBot?include_prereleases&style=flat-square" alt="GitHub release"></a>
+      <a href="https://deepwiki.com/QVerisAI/QVerisBot"><img src="https://img.shields.io/badge/DeepWiki-QVerisBot-blue?style=flat-square" alt="DeepWiki"></a>
+      <a href="https://discord.gg/clawd"><img src="https://img.shields.io/discord/1456350064065904867?label=Discord&logo=discord&logoColor=white&color=5865F2&style=flat-square" alt="Discord"></a>
+      <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square" alt="MIT License"></a>
+    </td>
+  </tr>
+</table>
 
 **QVerisBot** is a production-focused distribution built by the **[QVeris AI](https://qveris.ai)** team on top of [OpenClaw](https://github.com/openclaw/openclaw). It keeps OpenClaw's local-first architecture and adds a QVeris-first product layer for professional workflows.
 
@@ -42,6 +46,8 @@ It answers you on the channels you already use (WhatsApp, Telegram, Slack, Disco
 
 ## Quick Start (5 minutes)
 
+**System requirements:** Node.js 22.12+, pnpm 10.x, Python 3.12+ (for skills)
+
 ```bash
 git clone https://github.com/QVerisAI/QVerisBot.git
 cd QVerisBot
@@ -51,13 +57,14 @@ pnpm build
 pnpm openclaw onboard --install-daemon
 ```
 
-The onboarding wizard now supports:
+The onboarding wizard guides you through: model/auth, **QVeris API key**, `web_search` (defaults to QVeris Smart Search), **X (Twitter) credentials**, channels, and skills. For Feishu/飞书, see [QVerisBot Source Guide](docs/qverisbot-from-source.md).
 
-- QVeris API key setup during first run
-- Automatic `web_search` provider switch to QVeris Smart Search when QVeris is enabled
-- X (Twitter) channel credential setup in the same guided flow
+**Verify:** Start the gateway and chat:
 
-For detailed setup (especially Feishu/飞书), see [QVerisBot Source Guide](docs/qverisbot-from-source.md).
+```bash
+pnpm openclaw gateway --port 18789 --verbose
+pnpm openclaw agent --message "Hello QVerisBot" --thinking high
+```
 
 ## QVeris Universal Toolbox — The Core of QVerisBot
 
@@ -77,210 +84,18 @@ For detailed setup (especially Feishu/飞书), see [QVerisBot Source Guide](docs
   <em>Think of it as an "App Store for AI tools"</em>
 </p>
 
-**Subscriptions (OAuth):**
+**Subscriptions (OAuth):** [Anthropic](https://www.anthropic.com/) (Claude Pro/Max) · [OpenAI](https://openai.com/) (ChatGPT/Codex)
 
-- **[Anthropic](https://www.anthropic.com/)** (Claude Pro/Max)
-- **[OpenAI](https://openai.com/)** (ChatGPT/Codex)
-
-### 💰 Finance & Markets (80+ providers)
+<details>
+<summary><strong>📦 500+ integrations — Finance · Search · Research · Business · Blockchain · AI · Productivity · News · Weather · Travel · Geospatial · Government</strong></summary>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Binance-Exchange-F0B90B?logo=binance&logoColor=black" height="24"/>
-  <img src="https://img.shields.io/badge/Bloomberg-Terminal-000000" height="24"/>
-  <img src="https://img.shields.io/badge/Alpha_Vantage-Stocks-1E88E5" height="24"/>
-  <img src="https://img.shields.io/badge/Polygon.io-Markets-8B5CF6" height="24"/>
-  <img src="https://img.shields.io/badge/Finnhub-Finance-00C7B7" height="24"/>
-  <img src="https://img.shields.io/badge/Yahoo_Finance-Data-6001D2" height="24"/>
-</p>
-<p align="center">
-  <img src="https://img.shields.io/badge/CoinGecko-Crypto-8DC351?logo=coingecko&logoColor=white" height="24"/>
-  <img src="https://img.shields.io/badge/CoinMarketCap-Crypto-17181B" height="24"/>
-  <img src="https://img.shields.io/badge/SEC-Filings-003366" height="24"/>
-  <img src="https://img.shields.io/badge/FRED-Economic-00529B" height="24"/>
-  <img src="https://img.shields.io/badge/Tushare-A股-E4393C" height="24"/>
-  <img src="https://img.shields.io/badge/同花顺iFinD-金融终端-FF6600" height="24"/>
+  <img src="https://img.shields.io/badge/Binance-Exchange-F0B90B?logo=binance&logoColor=black" height="20"/> <img src="https://img.shields.io/badge/Bloomberg-Terminal-000000" height="20"/> <img src="https://img.shields.io/badge/CoinGecko-Crypto-8DC351?logo=coingecko&logoColor=white" height="20"/> <img src="https://img.shields.io/badge/Brave_Search-AI-FB542B?logo=brave&logoColor=white" height="20"/> <img src="https://img.shields.io/badge/Firecrawl-Scraping-FF6B35" height="20"/> <img src="https://img.shields.io/badge/PubMed-Medical-326599" height="20"/> <img src="https://img.shields.io/badge/arXiv-Papers-B31B1B" height="20"/> <img src="https://img.shields.io/badge/Crunchbase-Startups-0288D1" height="20"/> <img src="https://img.shields.io/badge/LinkedIn-Pro-0A66C2?logo=linkedin&logoColor=white" height="20"/> <img src="https://img.shields.io/badge/Etherscan-Ethereum-3C3C3D?logo=ethereum&logoColor=white" height="20"/> <img src="https://img.shields.io/badge/OpenAI-GPT-412991?logo=openai&logoColor=white" height="20"/> <img src="https://img.shields.io/badge/Notion-Workspace-000000?logo=notion&logoColor=white" height="20"/> <img src="https://img.shields.io/badge/Stripe-Payments-008CDD?logo=stripe&logoColor=white" height="20"/> <img src="https://img.shields.io/badge/NewsAPI-News-FF5733" height="20"/> <img src="https://img.shields.io/badge/OpenWeather-Weather-EB6E4B" height="20"/> <img src="https://img.shields.io/badge/Amadeus-Flights-005EB8" height="20"/> <img src="https://img.shields.io/badge/Google_Maps-Maps-4285F4?logo=googlemaps&logoColor=white" height="20"/> <img src="https://img.shields.io/badge/World_Bank-Data-002244" height="20"/>
 </p>
 
-### 🔍 Search & Web Intelligence (45+ providers)
+<p align="center"><a href="https://qveris.ai/integrations"><strong>Explore all 500+ integrations →</strong></a></p>
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Brave_Search-AI_Search-FB542B?logo=brave&logoColor=white" height="24"/>
-  <img src="https://img.shields.io/badge/Tavily-AI_Search-000000" height="24"/>
-  <img src="https://img.shields.io/badge/SerpAPI-Google_Results-007ACC" height="24"/>
-  <img src="https://img.shields.io/badge/Exa.ai-Neural_Search-5A67D8" height="24"/>
-  <img src="https://img.shields.io/badge/博查AI-联网搜索-FF4500" height="24"/>
-</p>
-<p align="center">
-  <img src="https://img.shields.io/badge/Firecrawl-Scraping-FF6B35" height="24"/>
-  <img src="https://img.shields.io/badge/Diffbot-Knowledge-43B02A" height="24"/>
-  <img src="https://img.shields.io/badge/Apify-Automation-00C7B7" height="24"/>
-  <img src="https://img.shields.io/badge/ScrapingBee-Web_Data-FFB800" height="24"/>
-  <img src="https://img.shields.io/badge/Jina_AI-Reader-00C7FF" height="24"/>
-</p>
-
-### 🏢 Business Intelligence (40+ providers)
-
-<p align="center">
-  <img src="https://img.shields.io/badge/Crunchbase-Startups-0288D1" height="24"/>
-  <img src="https://img.shields.io/badge/LinkedIn-Professional-0A66C2?logo=linkedin&logoColor=white" height="24"/>
-  <img src="https://img.shields.io/badge/Clearbit-Enrichment-3B5998" height="24"/>
-  <img src="https://img.shields.io/badge/HubSpot-CRM-FF7A59?logo=hubspot&logoColor=white" height="24"/>
-</p>
-<p align="center">
-  <img src="https://img.shields.io/badge/企查查-企业信息-1890FF" height="24"/>
-  <img src="https://img.shields.io/badge/天眼查-商业查询-FF6A00" height="24"/>
-  <img src="https://img.shields.io/badge/企名片-创投数据-6366F1" height="24"/>
-  <img src="https://img.shields.io/badge/OpenCorporates-Global-4CAF50" height="24"/>
-</p>
-
-### 🔬 Research & Science (60+ providers)
-
-<p align="center">
-  <img src="https://img.shields.io/badge/PubMed-Medical-326599" height="24"/>
-  <img src="https://img.shields.io/badge/arXiv-Papers-B31B1B" height="24"/>
-  <img src="https://img.shields.io/badge/Semantic_Scholar-AI-1857B6" height="24"/>
-  <img src="https://img.shields.io/badge/CrossRef-DOI-F36E21" height="24"/>
-  <img src="https://img.shields.io/badge/OpenAlex-Research-5C6BC0" height="24"/>
-</p>
-<p align="center">
-  <img src="https://img.shields.io/badge/NASA-Space-0B3D91?logo=nasa&logoColor=white" height="24"/>
-  <img src="https://img.shields.io/badge/ClinicalTrials-Medical-00A1E0" height="24"/>
-  <img src="https://img.shields.io/badge/OpenFDA-Drug_Data-0055AA" height="24"/>
-  <img src="https://img.shields.io/badge/WHO_GHO-Health-009FDA" height="24"/>
-  <img src="https://img.shields.io/badge/GBIF-Biodiversity-4E9A06" height="24"/>
-</p>
-
-### 🗺️ Geospatial & Maps (25+ providers)
-
-<p align="center">
-  <img src="https://img.shields.io/badge/Google_Maps-Navigation-4285F4?logo=googlemaps&logoColor=white" height="24"/>
-  <img src="https://img.shields.io/badge/Mapbox-Maps-000000?logo=mapbox&logoColor=white" height="24"/>
-  <img src="https://img.shields.io/badge/HERE-Location-00AFAA" height="24"/>
-  <img src="https://img.shields.io/badge/TomTom-Navigation-FF0000" height="24"/>
-  <img src="https://img.shields.io/badge/ArcGIS-GIS-2C7AC3" height="24"/>
-</p>
-<p align="center">
-  <img src="https://img.shields.io/badge/高德地图-定位服务-1E88E5" height="24"/>
-  <img src="https://img.shields.io/badge/百度地图-导航-3385FF" height="24"/>
-  <img src="https://img.shields.io/badge/OpenStreetMap-Open-7EBC6F" height="24"/>
-  <img src="https://img.shields.io/badge/Planet_Labs-Satellite-009688" height="24"/>
-  <img src="https://img.shields.io/badge/Copernicus-Earth-003399" height="24"/>
-</p>
-
-### 📊 Government & Statistics (50+ providers)
-
-<p align="center">
-  <img src="https://img.shields.io/badge/World_Bank-Global-002244" height="24"/>
-  <img src="https://img.shields.io/badge/IMF-Economy-004C97" height="24"/>
-  <img src="https://img.shields.io/badge/UN_Data-Statistics-009EDB" height="24"/>
-  <img src="https://img.shields.io/badge/Eurostat-EU-003399" height="24"/>
-  <img src="https://img.shields.io/badge/OECD-Economic-0062AC" height="24"/>
-</p>
-<p align="center">
-  <img src="https://img.shields.io/badge/US_Census-Population-003865" height="24"/>
-  <img src="https://img.shields.io/badge/BLS-Labor-00529B" height="24"/>
-  <img src="https://img.shields.io/badge/中国国家统计局-数据-D32F2F" height="24"/>
-  <img src="https://img.shields.io/badge/USPTO-Patents-002B49" height="24"/>
-  <img src="https://img.shields.io/badge/Data.gov-Open-112E51" height="24"/>
-</p>
-
-### ⛓️ Blockchain & Web3 (35+ providers)
-
-<p align="center">
-  <img src="https://img.shields.io/badge/Etherscan-Ethereum-3C3C3D?logo=ethereum&logoColor=white" height="24"/>
-  <img src="https://img.shields.io/badge/Alchemy-Web3-0052FF" height="24"/>
-  <img src="https://img.shields.io/badge/Helius-Solana-9945FF" height="24"/>
-  <img src="https://img.shields.io/badge/Solscan-Explorer-00FFA3" height="24"/>
-</p>
-<p align="center">
-  <img src="https://img.shields.io/badge/CryptoPanic-News-F7931A" height="24"/>
-  <img src="https://img.shields.io/badge/TheBlockBeats-区块链-1A1A1A" height="24"/>
-  <img src="https://img.shields.io/badge/Deribit-Derivatives-FF6600" height="24"/>
-  <img src="https://img.shields.io/badge/Kalshi-Prediction-6366F1" height="24"/>
-</p>
-
-### 🤖 AI & Media Processing (55+ providers)
-
-<p align="center">
-  <img src="https://img.shields.io/badge/OpenAI-GPT-412991?logo=openai&logoColor=white" height="24"/>
-  <img src="https://img.shields.io/badge/Anthropic-Claude-D97757" height="24"/>
-  <img src="https://img.shields.io/badge/Google-Gemini-8E75B2?logo=google&logoColor=white" height="24"/>
-  <img src="https://img.shields.io/badge/DeepSeek-V3-0066FF" height="24"/>
-  <img src="https://img.shields.io/badge/Groq-Fast-F55036" height="24"/>
-</p>
-<p align="center">
-  <img src="https://img.shields.io/badge/ElevenLabs-Voice-000000" height="24"/>
-  <img src="https://img.shields.io/badge/Deepgram-Speech-13EF93" height="24"/>
-  <img src="https://img.shields.io/badge/AssemblyAI-Transcription-0055FF" height="24"/>
-  <img src="https://img.shields.io/badge/Stability_AI-Images-9B4DCA" height="24"/>
-  <img src="https://img.shields.io/badge/Replicate-Models-000000" height="24"/>
-</p>
-
-### 🛠️ Productivity & SaaS (65+ providers)
-
-<p align="center">
-  <img src="https://img.shields.io/badge/Notion-Workspace-000000?logo=notion&logoColor=white" height="24"/>
-  <img src="https://img.shields.io/badge/Slack-Messaging-4A154B?logo=slack&logoColor=white" height="24"/>
-  <img src="https://img.shields.io/badge/GitHub-Code-181717?logo=github&logoColor=white" height="24"/>
-  <img src="https://img.shields.io/badge/Airtable-Database-18BFFF?logo=airtable&logoColor=white" height="24"/>
-  <img src="https://img.shields.io/badge/Figma-Design-F24E1E?logo=figma&logoColor=white" height="24"/>
-</p>
-<p align="center">
-  <img src="https://img.shields.io/badge/Stripe-Payments-008CDD?logo=stripe&logoColor=white" height="24"/>
-  <img src="https://img.shields.io/badge/SendGrid-Email-1A82E2" height="24"/>
-  <img src="https://img.shields.io/badge/Asana-Tasks-F06A6A" height="24"/>
-  <img src="https://img.shields.io/badge/ClickUp-Projects-7B68EE" height="24"/>
-  <img src="https://img.shields.io/badge/Cal.com-Scheduling-292929" height="24"/>
-</p>
-
-### 📰 News & Social Media (40+ providers)
-
-<p align="center">
-  <img src="https://img.shields.io/badge/NewsAPI-Headlines-FF5733" height="24"/>
-  <img src="https://img.shields.io/badge/Guardian-News-052962" height="24"/>
-  <img src="https://img.shields.io/badge/NYTimes-News-000000" height="24"/>
-  <img src="https://img.shields.io/badge/GDELT-Events-4CAF50" height="24"/>
-  <img src="https://img.shields.io/badge/HackerNews-Tech-FF6600" height="24"/>
-</p>
-<p align="center">
-  <img src="https://img.shields.io/badge/Twitter/X-Social-000000?logo=x&logoColor=white" height="24"/>
-  <img src="https://img.shields.io/badge/Reddit-Community-FF4500?logo=reddit&logoColor=white" height="24"/>
-  <img src="https://img.shields.io/badge/YouTube-Video-FF0000?logo=youtube&logoColor=white" height="24"/>
-  <img src="https://img.shields.io/badge/Instagram-Social-E4405F?logo=instagram&logoColor=white" height="24"/>
-</p>
-
-### 🌤️ Weather & Environment (25+ providers)
-
-<p align="center">
-  <img src="https://img.shields.io/badge/OpenWeather-Forecast-EB6E4B" height="24"/>
-  <img src="https://img.shields.io/badge/AccuWeather-Forecast-F36E22" height="24"/>
-  <img src="https://img.shields.io/badge/Visual_Crossing-Weather-1E88E5" height="24"/>
-  <img src="https://img.shields.io/badge/NWS-US_Weather-003087" height="24"/>
-</p>
-<p align="center">
-  <img src="https://img.shields.io/badge/EPA-Environment-0071BC" height="24"/>
-  <img src="https://img.shields.io/badge/AirNow-Air_Quality-00A3E0" height="24"/>
-  <img src="https://img.shields.io/badge/OpenAQ-Air_Data-198CFF" height="24"/>
-  <img src="https://img.shields.io/badge/USGS-Earthquake-006400" height="24"/>
-</p>
-
-### ✈️ Travel & Local (30+ providers)
-
-<p align="center">
-  <img src="https://img.shields.io/badge/Amadeus-Flights-005EB8" height="24"/>
-  <img src="https://img.shields.io/badge/Skyscanner-Travel-0770E3" height="24"/>
-  <img src="https://img.shields.io/badge/FlightAware-Aviation-003366" height="24"/>
-  <img src="https://img.shields.io/badge/TripAdvisor-Reviews-34E0A1" height="24"/>
-</p>
-<p align="center">
-  <img src="https://img.shields.io/badge/Yelp-Local-D32323?logo=yelp&logoColor=white" height="24"/>
-  <img src="https://img.shields.io/badge/Foursquare-Places-F94877" height="24"/>
-  <img src="https://img.shields.io/badge/携程-旅行-2577E3" height="24"/>
-  <img src="https://img.shields.io/badge/Booking-Hotels-003580" height="24"/>
-</p>
-
-> [!TIP]
-> This is just the tip of the iceberg. QVeris integrates **500+ data providers** across finance, research, government, blockchain, and more. [Explore all integrations →](https://qveris.ai/integrations)
+</details>
 
 ### What can you build with QVeris?
 
@@ -306,24 +121,11 @@ qveris_execute(
 # Returns: {"symbol": "BTCUSDT", "price": "102345.67"}
 ```
 
-### Quick Setup QVeris (5 minutes)
+### Get your QVeris API key
 
-1. **Create Account**: Visit [qveris.ai](https://qveris.ai) → Sign Up
-2. **Get API Key**: Dashboard → API Keys → Create New Key
-3. **Configure**: Add to `~/.openclaw/openclaw.json`:
-
-```json
-{
-  "tools": {
-    "qveris": {
-      "enabled": true,
-      "apiKey": "qv_your_api_key_here"
-    }
-  }
-}
-```
-
-Or set via environment: `export QVERIS_API_KEY="qv_your_api_key_here"`
+1. **Create account:** [qveris.ai](https://qveris.ai) → Sign Up
+2. **Get API key:** Dashboard → API Keys → Create New Key
+3. **Use it:** Run `pnpm openclaw onboard` — the wizard will prompt for your key and configure QVeris + `web_search` automatically.
 
 > [!NOTE]
 > QVeris offers a free tier. For production use, purchase credits at [qveris.ai/dashboard](https://qveris.ai/dashboard).
@@ -344,9 +146,9 @@ Or set via environment: `export QVERIS_API_KEY="qv_your_api_key_here"`
 
 ---
 
-## Install & Run details
+## Reference
 
-### System Requirements
+### System requirements
 
 | Component | Minimum | Recommended        |
 | :-------- | :------ | :----------------- |
@@ -354,37 +156,9 @@ Or set via environment: `export QVERIS_API_KEY="qv_your_api_key_here"`
 | pnpm      | 10.x    | 10.23.0+           |
 | Python    | 3.12    | 3.12+ (for skills) |
 
-### From Source (Recommended)
+### Default behavior on channels
 
-```bash
-git clone https://github.com/QVerisAI/QVerisBot.git
-cd QVerisBot
-
-pnpm install
-pnpm ui:build   # first time only
-pnpm build
-
-pnpm openclaw onboard --install-daemon
-```
-
-The onboarding wizard now supports:
-
-- QVeris API key setup during first run
-- Automatic `web_search` provider switch to QVeris Smart Search when QVeris is enabled
-- X (Twitter) channel credential setup in the same guided flow
-
-For detailed setup (especially Feishu/飞书), see [QVerisBot Source Guide](docs/qverisbot-from-source.md).
-
-### Verify your setup
-
-```bash
-# Start gateway
-pnpm openclaw gateway --port 18789 --verbose
-
-# Talk to the assistant
-pnpm openclaw agent --message "Hello QVerisBot" --thinking high
-
-Default behavior on Telegram/WhatsApp/Signal/iMessage/Microsoft Teams/Discord/Google Chat/Slack:
+On Telegram, WhatsApp, Signal, iMessage, Microsoft Teams, Discord, Google Chat, Slack:
 
 - **DM pairing** (`dmPolicy="pairing"` / `channels.discord.dm.policy="pairing"` / `channels.slack.dm.policy="pairing"`): unknown senders receive a short pairing code and the bot does not process their message.
 - Approve with: `openclaw pairing approve <channel> <code>` (then the sender is added to a local allowlist store).
@@ -466,7 +240,7 @@ WhatsApp / Telegram / Slack / Discord / Google Chat / Signal / iMessage / BlueBu
 ├─ macOS app
 └─ iOS / Android nodes
 
-````
+```
 
 ## Key subsystems
 
@@ -591,12 +365,12 @@ Minimal `~/.openclaw/openclaw.json` (model + defaults):
   agents: {
     defaults: {
       model: {
-        primary: "anthropic/claude-opus-4-6"
-      }
-    }
+        primary: "anthropic/claude-opus-4-6",
+      },
+    },
   },
 }
-````
+```
 
 [Full configuration reference (all keys + examples).](https://docs.openclaw.ai/gateway/configuration)
 
