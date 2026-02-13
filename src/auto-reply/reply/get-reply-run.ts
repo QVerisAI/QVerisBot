@@ -189,7 +189,7 @@ export async function runPreparedReply(
     inboundMetaPrompt,
     groupIntro,
     groupSystemPrompt,
-    additionalSystemPrompt,
+    agentCfg?.additionalSystemPrompt?.trim() ?? "",
   ]
     .filter(Boolean)
     .join("\n\n");
