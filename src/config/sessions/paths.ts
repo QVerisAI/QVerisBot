@@ -33,6 +33,26 @@ export function resolveDefaultSessionStorePath(agentId?: string): string {
   return path.join(resolveAgentSessionsDir(agentId), "sessions.json");
 }
 
+export type SessionFilePathOptions = {
+  agentId?: string;
+  sessionsDir?: string;
+};
+
+export function resolveSessionFilePathOptions(params: {
+  agentId?: string;
+  storePath?: string;
+}): SessionFilePathOptions | undefined {
+  const storePath = params.storePath?.trim();
+  if (storePath) {
+    return { sessionsDir: path.dirname(path.resolve(storePath)) };
+  }
+  const agentId = params.agentId?.trim();
+  if (agentId) {
+    return { agentId };
+  }
+  return undefined;
+}
+
 export const SAFE_SESSION_ID_RE = /^[a-z0-9][a-z0-9._-]{0,127}$/i;
 
 export function validateSessionId(sessionId: string): string {
@@ -43,7 +63,7 @@ export function validateSessionId(sessionId: string): string {
   return trimmed;
 }
 
-function resolveSessionsDir(opts?: { agentId?: string; sessionsDir?: string }): string {
+function resolveSessionsDir(opts?: SessionFilePathOptions): string {
   const sessionsDir = opts?.sessionsDir?.trim();
   if (sessionsDir) {
     return path.resolve(sessionsDir);
@@ -57,12 +77,14 @@ function resolvePathWithinSessionsDir(sessionsDir: string, candidate: string): s
     throw new Error("Session file path must not be empty");
   }
   const resolvedBase = path.resolve(sessionsDir);
-  const resolvedCandidate = path.resolve(resolvedBase, trimmed);
-  const relative = path.relative(resolvedBase, resolvedCandidate);
-  if (relative.startsWith("..") || path.isAbsolute(relative)) {
+  // Normalize absolute paths that are within the sessions directory.
+  // Older versions stored absolute sessionFile paths in sessions.json;
+  // convert them to relative so the containment check passes.
+  const normalized = path.isAbsolute(trimmed) ? path.relative(resolvedBase, trimmed) : trimmed;
+  if (!normalized || normalized.startsWith("..") || path.isAbsolute(normalized)) {
     throw new Error("Session file path must be within sessions directory");
   }
-  return resolvedCandidate;
+  return path.resolve(resolvedBase, normalized);
 }
 
 export function resolveSessionTranscriptPathInDir(
@@ -95,7 +117,7 @@ export function resolveSessionTranscriptPath(
 export function resolveSessionFilePath(
   sessionId: string,
   entry?: { sessionFile?: string },
-  opts?: { agentId?: string; sessionsDir?: string },
+  opts?: SessionFilePathOptions,
 ): string {
   const sessionsDir = resolveSessionsDir(opts);
   const candidate = entry?.sessionFile?.trim();

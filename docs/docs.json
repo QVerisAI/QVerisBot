@@ -725,7 +725,43 @@
     },
     {
       "source": "/gcp",
-      "destination": "/platforms/gcp"
+      "destination": "/install/gcp"
+    },
+    {
+      "source": "/platforms/fly",
+      "destination": "/install/fly"
+    },
+    {
+      "source": "/platforms/hetzner",
+      "destination": "/install/hetzner"
+    },
+    {
+      "source": "/platforms/gcp",
+      "destination": "/install/gcp"
+    },
+    {
+      "source": "/platforms/macos-vm",
+      "destination": "/install/macos-vm"
+    },
+    {
+      "source": "/platforms/exe-dev",
+      "destination": "/install/exe-dev"
+    },
+    {
+      "source": "/platforms/railway",
+      "destination": "/install/railway"
+    },
+    {
+      "source": "/platforms/render",
+      "destination": "/install/render"
+    },
+    {
+      "source": "/platforms/northflank",
+      "destination": "/install/northflank"
+    },
+    {
+      "source": "/gateway/trusted-proxy",
+      "destination": "/gateway/trusted-proxy-auth"
     }
   ],
   "navigation": {
@@ -1011,6 +1047,7 @@
                       "gateway/configuration-reference",
                       "gateway/configuration-examples",
                       "gateway/authentication",
+                      "gateway/trusted-proxy-auth",
                       "gateway/health",
                       "gateway/heartbeat",
                       "gateway/doctor",
