@@ -1,10 +1,9 @@
-import { Client, type BaseMessageInteractiveComponent } from "@buape/carbon";
-import { GatewayIntents, GatewayPlugin } from "@buape/carbon/gateway";
+import type { GatewayPlugin } from "@buape/carbon/gateway";
+import { Client, ReadyListener, type BaseMessageInteractiveComponent } from "@buape/carbon";
 import { Routes } from "discord-api-types/v10";
 import { inspect } from "node:util";
 import type { HistoryEntry } from "../../auto-reply/reply/history.js";
 import type { OpenClawConfig, ReplyToMode } from "../../config/config.js";
-import type { RuntimeEnv } from "../../runtime.js";
 import { resolveTextChunkLimit } from "../../auto-reply/chunk.js";
 import { listNativeCommandSpecsForConfig } from "../../auto-reply/commands-registry.js";
 import { listSkillCommandsForAgents } from "../../auto-reply/skill-commands.js";
@@ -19,6 +18,7 @@ import { danger, logVerbose, shouldLogVerbose, warn } from "../../globals.js";
 import { formatErrorMessage } from "../../infra/errors.js";
 import { createDiscordRetryRunner } from "../../infra/retry-policy.js";
 import { createSubsystemLogger } from "../../logging/subsystem.js";
+import { createNonExitingRuntime, type RuntimeEnv } from "../../runtime.js";
 import { resolveDiscordAccount } from "../accounts.js";
 import { attachDiscordGatewayLogging } from "../gateway-logging.js";
 import { getDiscordGatewayEmitter, waitForDiscordGatewayStop } from "../monitor.gateway.js";
@@ -29,6 +29,7 @@ import { resolveDiscordUserAllowlist } from "../resolve-users.js";
 import { normalizeDiscordToken } from "../token.js";
 import { createAgentComponentButton, createAgentSelectMenu } from "./agent-components.js";
 import { createExecApprovalButton, DiscordExecApprovalHandler } from "./exec-approvals.js";
+import { createDiscordGatewayPlugin } from "./gateway-plugin.js";
 import { registerGateway, unregisterGateway } from "./gateway-registry.js";
 import {
   DiscordMessageListener,
@@ -42,6 +43,7 @@ import {
   createDiscordCommandArgFallbackButton,
   createDiscordNativeCommand,
 } from "./native-command.js";
+import { resolveDiscordPresenceUpdate } from "./presence.js";
 
 export type MonitorDiscordOpts = {
   token?: string;
@@ -123,25 +125,6 @@ function formatDiscordDeployErrorDetails(err: unknown): string {
   return details.length > 0 ? ` (${details.join(", ")})` : "";
 }
 
-function resolveDiscordGatewayIntents(
-  intentsConfig?: import("../../config/types.discord.js").DiscordIntentsConfig,
-): number {
-  let intents =
-    GatewayIntents.Guilds |
-    GatewayIntents.GuildMessages |
-    GatewayIntents.MessageContent |
-    GatewayIntents.DirectMessages |
-    GatewayIntents.GuildMessageReactions |
-    GatewayIntents.DirectMessageReactions;
-  if (intentsConfig?.presence) {
-    intents |= GatewayIntents.GuildPresences;
-  }
-  if (intentsConfig?.guildMembers) {
-    intents |= GatewayIntents.GuildMembers;
-  }
-  return intents;
-}
-
 export async function monitorDiscordProvider(opts: MonitorDiscordOpts = {}) {
   const cfg = opts.config ?? loadConfig();
   const account = resolveDiscordAccount({
@@ -155,13 +138,7 @@ export async function monitorDiscordProvider(opts: MonitorDiscordOpts = {}) {
     );
   }
 
-  const runtime: RuntimeEnv = opts.runtime ?? {
-    log: console.log,
-    error: console.error,
-    exit: (code: number): never => {
-      throw new Error(`exit ${code}`);
-    },
-  };
+  const runtime: RuntimeEnv = opts.runtime ?? createNonExitingRuntime();
 
   const discordCfg = account.config;
   // Proxy is now configured globally via top-level `proxy` (gateway startup).
@@ -234,7 +211,8 @@ export async function monitorDiscordProvider(opts: MonitorDiscordOpts = {}) {
           const channels = guildCfg?.channels ?? {};
           const channelKeys = Object.keys(channels).filter((key) => key !== "*");
           if (channelKeys.length === 0) {
-            entries.push({ input: guildKey, guildKey });
+            const input = /^\d+$/.test(guildKey) ? `guild:${guildKey}` : guildKey;
+            entries.push({ input, guildKey });
             continue;
           }
           for (const channelKey of channelKeys) {
@@ -546,6 +524,22 @@ export async function monitorDiscordProvider(opts: MonitorDiscordOpts = {}) {
     );
   }
 
+  class DiscordStatusReadyListener extends ReadyListener {
+    async handle(_data: unknown, client: Client) {
+      const gateway = client.getPlugin<GatewayPlugin>("gateway");
+      if (!gateway) {
+        return;
+      }
+
+      const presence = resolveDiscordPresenceUpdate(discordCfg);
+      if (!presence) {
+        return;
+      }
+
+      gateway.updatePresence(presence);
+    }
+  }
+
   const client = new Client(
     {
       baseUrl: "http://localhost",
@@ -557,18 +551,10 @@ export async function monitorDiscordProvider(opts: MonitorDiscordOpts = {}) {
     },
     {
       commands,
-      listeners: [],
+      listeners: [new DiscordStatusReadyListener()],
       components,
     },
-    [
-      new GatewayPlugin({
-        reconnect: {
-          maxAttempts: 50,
-        },
-        intents: resolveDiscordGatewayIntents(discordCfg.intents),
-        autoInteractions: true,
-      }),
-    ],
+    [createDiscordGatewayPlugin({ discordConfig: discordCfg, runtime })],
   );
 
   await deployDiscordCommands({ client, runtime, enabled: nativeEnabled });
@@ -747,3 +733,7 @@ async function clearDiscordNativeCommands(params: {
     params.runtime.error?.(danger(`discord: failed to clear native commands: ${String(err)}`));
   }
 }
+
+export const __testing = {
+  createDiscordGatewayPlugin,
+};
