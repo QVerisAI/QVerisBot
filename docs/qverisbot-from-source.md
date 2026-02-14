@@ -2,6 +2,8 @@
 
 本文档用于从源码完成 QVerisBot 的安装、配置、启动与排障，适用于 macOS 和 Linux。
 
+如果你希望更快安装（npm 包或 one-liner），请先看 [安装总览](/install)。
+
 ---
 
 ## 适用范围
@@ -182,13 +184,21 @@ pnpm openclaw --version
 
 ## 4. Onboard 一键配置（推荐）
 
-从当前版本开始，`openclaw onboard` 已支持在向导内完成 QVeris、Feishu、X 的关键认证配置。  
+从当前版本开始，`qverisbot onboard`（兼容 `openclaw onboard`）已支持在向导内完成 QVeris、Feishu、X 的关键认证配置。  
 常规场景下**无需手动编辑** `~/.openclaw/openclaw.json`，只需要在向导里填入对应 auth 信息即可开箱使用。
 
 ### 4.1 一键流程（CLI）
 
 ```bash
 pnpm openclaw onboard --flow quickstart
+```
+
+如果你通过 npm 全局安装：
+
+```bash
+qverisbot onboard --flow quickstart
+# 兼容别名:
+openclaw onboard --flow quickstart
 ```
 
 建议选择 `quickstart`，按提示完成：
@@ -223,6 +233,13 @@ pnpm openclaw channels status
 pnpm openclaw channels status --deep
 pnpm openclaw channels status feishu
 pnpm openclaw channels status x
+```
+
+全局安装版本可直接使用：
+
+```bash
+qverisbot channels status
+qverisbot channels status --deep
 ```
 
 ---
