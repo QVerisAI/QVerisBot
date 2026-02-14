@@ -10,11 +10,10 @@ import type {
   ChannelCapabilities,
   ChannelMeta,
   ChannelMessageActionName,
-} from "../../../src/channels/plugins/types.core.js";
-import type { ChannelPlugin } from "../../../src/channels/plugins/types.plugin.js";
-import type { OpenClawConfig } from "../../../src/plugin-sdk/index.js";
-import { handleXAction } from "../../../src/agents/tools/x-actions.js";
-import { buildChannelConfigSchema } from "../../../src/plugin-sdk/index.js";
+  ChannelPlugin,
+  OpenClawConfig,
+} from "openclaw/plugin-sdk";
+import { handleXAction, buildChannelConfigSchema } from "openclaw/plugin-sdk";
 import { XConfigSchema } from "./config-schema.js";
 import { xOnboardingAdapter } from "./onboarding.js";
 import { getXRuntime } from "./runtime.js";

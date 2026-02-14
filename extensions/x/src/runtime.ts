@@ -1,4 +1,4 @@
-import type { PluginRuntime } from "../../../src/plugin-sdk/index.js";
+import type { PluginRuntime } from "openclaw/plugin-sdk";
 
 let runtime: PluginRuntime | null = null;
 

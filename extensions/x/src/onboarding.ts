@@ -1,8 +1,10 @@
-import type { ChannelOnboardingAdapter } from "../../../src/channels/plugins/onboarding-types.js";
-import type { OpenClawConfig } from "../../../src/config/config.js";
-import { promptAccountId } from "../../../src/channels/plugins/onboarding/helpers.js";
-import { DEFAULT_ACCOUNT_ID, normalizeAccountId } from "../../../src/routing/session-key.js";
-import { formatDocsLink } from "../../../src/terminal/links.js";
+import type { ChannelOnboardingAdapter, OpenClawConfig } from "openclaw/plugin-sdk";
+import {
+  promptAccountId,
+  DEFAULT_ACCOUNT_ID,
+  normalizeAccountId,
+  formatDocsLink,
+} from "openclaw/plugin-sdk";
 import { getXRuntime } from "./runtime.js";
 
 const channel = "x" as const;

@@ -63,6 +63,7 @@ export type {
   OpenClawPluginApi,
   OpenClawPluginService,
   OpenClawPluginServiceContext,
+  OpenClawPluginToolFactory,
   ProviderAuthContext,
   ProviderAuthResult,
 } from "../plugins/types.js";
@@ -232,7 +233,9 @@ export {
   readReactionParams,
   readStringParam,
 } from "../agents/tools/common.js";
+export { handleXAction } from "../agents/tools/x-actions.js";
 export { formatDocsLink } from "../terminal/links.js";
+export type { OutboundDeliveryResult } from "../infra/outbound/deliver.js";
 export type { HookEntry } from "../hooks/types.js";
 export { normalizeE164 } from "../utils.js";
 export { missingTargetError } from "../infra/outbound/target-errors.js";
