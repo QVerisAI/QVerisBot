@@ -344,6 +344,28 @@ export const feishuOnboardingAdapter: ChannelOnboardingAdapter = {
       }
     }
 
+    // DM access policy
+    const currentDmPolicy =
+      (next.channels?.feishu as FeishuConfig | undefined)?.dmPolicy ?? "pairing";
+    const selectedDmPolicy = await prompter.select({
+      message: "DM access policy",
+      options: [
+        { value: "allowlist", label: "Allowlist - only specific users can DM (recommended)" },
+        { value: "pairing", label: "Pairing - unknown users get a one-time code to approve" },
+        { value: "open", label: "Open - anyone can DM the bot" },
+        { value: "disabled", label: "Disabled - ignore all DMs" },
+      ],
+      initialValue: currentDmPolicy,
+    });
+    if (selectedDmPolicy) {
+      next = setFeishuDmPolicy(next, selectedDmPolicy as DmPolicy);
+    }
+
+    // DM allowlist: prompt for user open_ids
+    if (selectedDmPolicy === "allowlist") {
+      next = await promptFeishuAllowFrom({ cfg: next, prompter });
+    }
+
     return { cfg: next, accountId: DEFAULT_ACCOUNT_ID };
   },
 
