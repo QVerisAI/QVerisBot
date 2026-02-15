@@ -48,4 +48,10 @@ pnpm check          # types + lint + format
 pnpm test           # vitest tests
 pnpm check:docs     # docs format + lint + broken links
 pnpm release:check  # validate npm pack
+pnpm test:pack:smoke        # build + pack + local install + onboard + plugin load check
+pnpm test:pack:smoke:docker # same, in Docker (isolated, CI-friendly)
 ```
+
+**Pre-release smoke test:** Before merging upstream or shipping major features, run `pnpm test:pack:smoke` (or `--docker`) to verify the npm package installs correctly, onboard wizard runs, and bundled extensions (e.g. X channel) load without errors.
+
+**Agent test (optional):** Set `QVERISBOT_SMOKE_AGENT=1` and `ANTHROPIC_API_KEY` (or `OPENAI_API_KEY`) to run a full onboard + gateway + agent flow and verify the bot responds to a test message.
