@@ -208,11 +208,32 @@ echo "==> 5. Global install and CLI verification"
 npm install -g "$TARBALL_PATH" 2>/dev/null
 echo ""
 
-echo "    Version: $(qverisbot --version)"
+QVERISBOT_CMD=()
+if command -v qverisbot >/dev/null 2>&1; then
+  QVERISBOT_CMD=(qverisbot)
+else
+  NPM_PREFIX="$(npm prefix -g 2>/dev/null || true)"
+  NPM_ROOT="$(npm root -g 2>/dev/null || true)"
+  if [[ -n "$NPM_PREFIX" && -x "$NPM_PREFIX/bin/qverisbot" ]]; then
+    QVERISBOT_CMD=("$NPM_PREFIX/bin/qverisbot")
+  elif [[ -n "$NPM_PREFIX" && -x "$NPM_PREFIX/bin/openclaw" ]]; then
+    QVERISBOT_CMD=("$NPM_PREFIX/bin/openclaw")
+  elif [[ -n "$NPM_ROOT" && -f "$NPM_ROOT/@qverisai/qverisbot/openclaw.mjs" ]]; then
+    QVERISBOT_CMD=(node "$NPM_ROOT/@qverisai/qverisbot/openclaw.mjs")
+  else
+    echo "    FAIL: qverisbot CLI not found after global install" >&2
+    echo "    npm prefix -g: ${NPM_PREFIX:-<empty>}" >&2
+    echo "    npm root -g:   ${NPM_ROOT:-<empty>}" >&2
+    exit 1
+  fi
+fi
+
+echo "    CLI resolved to: ${QVERISBOT_CMD[*]}"
+echo "    Version: $("${QVERISBOT_CMD[@]}" --version)"
 echo ""
 
 echo "    Doctor (plugin load check):"
-doctor_out=$(qverisbot doctor 2>&1) || true
+doctor_out=$("${QVERISBOT_CMD[@]}" doctor 2>&1) || true
 echo "$doctor_out" | grep -E "^(◇|│|├|└|  )" | head -50 || true
 if echo "$doctor_out" | grep -q "Errors: 0" && echo "$doctor_out" | grep -q "Loaded:"; then
   echo "    PASS: Plugins loaded with 0 errors"
@@ -225,7 +246,7 @@ echo ""
 echo "==> 5b. Onboard test (non-interactive)"
 ONBOARD_HOME=$(mktemp -d)
 export HOME="$ONBOARD_HOME"
-qverisbot onboard --non-interactive --accept-risk --flow quickstart --mode local \
+"${QVERISBOT_CMD[@]}" onboard --non-interactive --accept-risk --flow quickstart --mode local \
   --auth-choice skip \
   --skip-channels --skip-skills --skip-daemon --skip-ui --skip-health \
   2>/dev/null || true
@@ -255,7 +276,7 @@ if [[ "${QVERISBOT_SMOKE_AGENT:-0}" == "1" ]]; then
     export HOME="$ONBOARD_HOME"
     echo "    Onboard with auth (temp HOME)..."
 
-    qverisbot onboard --non-interactive --accept-risk --flow quickstart --mode local \
+    "${QVERISBOT_CMD[@]}" onboard --non-interactive --accept-risk --flow quickstart --mode local \
       $AUTH_FLAGS \
       --skip-channels --skip-skills --skip-daemon --skip-ui --skip-health \
       2>/dev/null || true
@@ -267,7 +288,7 @@ if [[ "${QVERISBOT_SMOKE_AGENT:-0}" == "1" ]]; then
     echo "    OK   Config created"
 
     echo "    Starting gateway..."
-    qverisbot gateway --port 18789 --bind loopback --allow-unconfigured > /tmp/qverisbot-smoke-gateway.log 2>&1 &
+    "${QVERISBOT_CMD[@]}" gateway --port 18789 --bind loopback --allow-unconfigured > /tmp/qverisbot-smoke-gateway.log 2>&1 &
     GATEWAY_PID=$!
 
     echo "    Waiting for gateway..."
@@ -292,7 +313,7 @@ if [[ "${QVERISBOT_SMOKE_AGENT:-0}" == "1" ]]; then
 
     SESSION_ID="smoke-test-$(date +%s)"
     echo "    Sending agent message (session: $SESSION_ID)..."
-    agent_out=$(qverisbot agent --message "Reply with exactly: OK" --session-id "$SESSION_ID" --agent main --thinking off 2>&1) || true
+    agent_out=$("${QVERISBOT_CMD[@]}" agent --message "Reply with exactly: OK" --session-id "$SESSION_ID" --agent main --thinking off 2>&1) || true
 
     if echo "$agent_out" | grep -qE "OK|ok"; then
       echo "    PASS: Agent replied"

@@ -619,7 +619,8 @@ async function runQverisSearch(params: {
   }
 
   if (!res.ok) {
-    const detail = await readResponseText(res);
+    const detailResult = await readResponseText(res);
+    const detail = detailResult.text;
     throw new Error(`QVeris API error (${res.status}): ${detail || res.statusText}`);
   }
 
