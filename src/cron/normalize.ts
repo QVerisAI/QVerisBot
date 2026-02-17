@@ -151,7 +151,7 @@ function coerceDelivery(delivery: UnknownRecord) {
     const mode = delivery.mode.trim().toLowerCase();
     if (mode === "deliver") {
       next.mode = "announce";
-    } else if (mode === "announce" || mode === "none") {
+    } else if (mode === "announce" || mode === "none" || mode === "webhook") {
       next.mode = mode;
     } else {
       delete next.mode;
@@ -297,6 +297,20 @@ export function normalizeCronJobInput(
         next.agentId = sanitizeAgentId(trimmed);
       } else {
         delete next.agentId;
+      }
+    }
+  }
+
+  if ("sessionKey" in base) {
+    const sessionKey = base.sessionKey;
+    if (sessionKey === null) {
+      next.sessionKey = null;
+    } else if (typeof sessionKey === "string") {
+      const trimmed = sessionKey.trim();
+      if (trimmed) {
+        next.sessionKey = trimmed;
+      } else {
+        delete next.sessionKey;
       }
     }
   }

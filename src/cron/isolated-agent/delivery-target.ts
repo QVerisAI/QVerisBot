@@ -13,6 +13,8 @@ import {
   resolveOutboundTarget,
   resolveSessionDeliveryTarget,
 } from "../../infra/outbound/targets.js";
+import { buildChannelAccountBindings } from "../../routing/bindings.js";
+import { normalizeAgentId } from "../../routing/session-key.js";
 
 export async function resolveDeliveryTarget(
   cfg: OpenClawConfig,
@@ -126,19 +128,38 @@ export async function resolveDeliveryTarget(
   const channel = resolved.channel ?? fallbackChannel ?? DEFAULT_CHAT_CHANNEL;
   const mode = resolved.mode as "explicit" | "implicit";
   const toCandidate = resolved.to;
-  const accountId = useOrigin && origin?.accountId ? origin.accountId : resolved.accountId;
-  const threadId = useOrigin && origin?.threadId != null ? origin.threadId : resolved.threadId;
+
+  //const accountId = useOrigin && origin?.accountId ? origin.accountId : resolved.accountId;
+  //const threadId = useOrigin && origin?.threadId != null ? origin.threadId : resolved.threadId;
+
+  // When the session has no lastAccountId (e.g. first-run isolated cron
+  // session), fall back to the agent's bound account from bindings config.
+  // This ensures the message tool in isolated sessions resolves the correct
+  // bot token for multi-account setups.
+  let accountId = resolved.accountId;
+  if (!accountId && channel) {
+    const bindings = buildChannelAccountBindings(cfg);
+    const byAgent = bindings.get(channel);
+    const boundAccounts = byAgent?.get(normalizeAgentId(agentId));
+    if (boundAccounts && boundAccounts.length > 0) {
+      accountId = boundAccounts[0];
+    }
+  }
 
   // Only carry threadId when delivering to the same recipient as the session's
   // last conversation. This prevents stale thread IDs (e.g. from a Telegram
   // supergroup topic) from being sent to a different target (e.g. a private
   // chat) where they would cause API errors.
+  const threadId =
+    resolved.threadId && resolved.to && resolved.to === resolved.lastTo
+      ? resolved.threadId
+      : undefined;
 
   if (!toCandidate) {
     return {
       channel,
       to: undefined,
-      accountId: resolved.accountId,
+      accountId,
       threadId,
       mode,
     };
@@ -154,7 +175,7 @@ export async function resolveDeliveryTarget(
   return {
     channel,
     to: docked.ok ? docked.to : undefined,
-    accountId: resolved.accountId,
+    accountId,
     threadId,
     mode,
     error: docked.ok ? undefined : docked.error,
