@@ -1,14 +1,24 @@
 #!/usr/bin/env bash
-# QVerisBot npm release script - bump version, sync plugins, build, validate, tag, push.
+# QVerisBot npm release script - bump version, sync plugins, build, validate, and push.
+# Branch-protection friendly default:
+# - Always push current branch (for PR flow)
+# - Only create/push release tag on main (or in --tag-only mode)
 # CI (GitHub Actions) publishes on tag push. Use --local to publish locally instead.
+#
+# Recommended release flow (with protected main):
+#   1) Run this script on a release branch (e.g. release/2026.2.18) to bump/validate/commit/push.
+#   2) Open and merge PR into main.
+#   3) On main, run: ./scripts/release-npm.sh <version> --tag-only
+#      This pushes v<version> tag and triggers CI npm publish.
 #
 # Usage:
 #   ./scripts/release-npm.sh [patch|minor|major] [--skip-smoke] [--skip-tests] [--dry-run] [--no-push] [--local] [--tag-only]
 #   ./scripts/release-npm.sh 2026.2.17 [--skip-smoke] [--skip-tests] [--dry-run] [--no-push] [--local] [--tag-only]
 #
 # Examples:
-#   ./scripts/release-npm.sh patch               # Bump, tag, push → CI publishes
-#   ./scripts/release-npm.sh 2026.2.17 --tag-only  # Tag + push only (version already committed)
+#   ./scripts/release-npm.sh patch               # Bump, validate, commit, push current branch
+#   ./scripts/release-npm.sh 2026.2.17 --tag-only  # Tag + push only (usually run on main after merge)
+#   ./scripts/release-npm.sh 2026.2.17 --no-push # Validate and commit locally, do not push branch/tag
 #   ./scripts/release-npm.sh patch --skip-smoke # Skip install smoke (faster)
 #   ./scripts/release-npm.sh patch --local      # Publish locally (no CI)
 set -euo pipefail
@@ -24,6 +34,11 @@ NO_PUSH=0
 LOCAL_PUBLISH=0
 TAG_ONLY=0
 BUMP="patch"
+CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+IS_MAIN_BRANCH=0
+if [[ "$CURRENT_BRANCH" == "main" ]]; then
+  IS_MAIN_BRANCH=1
+fi
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -144,14 +159,24 @@ done
   fi
 fi
 
-echo "==> Tag $TAG"
+CREATE_AND_PUSH_TAG=0
+if [[ "$TAG_ONLY" -eq 1 || "$IS_MAIN_BRANCH" -eq 1 ]]; then
+  CREATE_AND_PUSH_TAG=1
+fi
+
 TAG_FORCE_PUSH=0
-if git rev-parse "$TAG" >/dev/null 2>&1; then
-  git tag -f "$TAG"
-  echo "Tag $TAG already existed; moved to current HEAD"
-  TAG_FORCE_PUSH=1
+if [[ "$CREATE_AND_PUSH_TAG" -eq 1 ]]; then
+  echo "==> Tag $TAG"
+  if git rev-parse "$TAG" >/dev/null 2>&1; then
+    git tag -f "$TAG"
+    echo "Tag $TAG already existed; moved to current HEAD"
+    TAG_FORCE_PUSH=1
+  else
+    git tag "$TAG"
+  fi
 else
-  git tag "$TAG"
+  echo "==> Skip tag on non-main branch: $CURRENT_BRANCH"
+  echo "    After PR merge to main, run: ./scripts/release-npm.sh $NEW_VER --tag-only"
 fi
 
 if [[ "$LOCAL_PUBLISH" -eq 1 ]]; then
@@ -159,22 +184,34 @@ if [[ "$LOCAL_PUBLISH" -eq 1 ]]; then
   npm publish --access public
 fi
 
-echo "==> Push"
-git push origin main
-if [[ "$NO_PUSH" -eq 0 ]]; then
-  if [[ "$TAG_FORCE_PUSH" -eq 1 ]]; then
-    git push -f origin "$TAG"
-  else
-    git push origin "$TAG"
+if [[ "$NO_PUSH" -eq 1 ]]; then
+  echo "==> Skip push (--no-push)"
+else
+  echo "==> Push branch: $CURRENT_BRANCH"
+  git push origin "$CURRENT_BRANCH"
+  if [[ "$CREATE_AND_PUSH_TAG" -eq 1 ]]; then
+    if [[ "$TAG_FORCE_PUSH" -eq 1 ]]; then
+      git push -f origin "$TAG"
+    else
+      git push origin "$TAG"
+    fi
   fi
-  if [[ "$LOCAL_PUBLISH" -eq 0 ]]; then
+  if [[ "$LOCAL_PUBLISH" -eq 0 && "$CREATE_AND_PUSH_TAG" -eq 1 ]]; then
     echo "==> CI will publish $PKG_NAME@$NEW_VER on tag push"
   fi
 fi
 
 echo ""
 if [[ "$LOCAL_PUBLISH" -eq 1 ]]; then
-  echo "OK: $PKG_NAME@$NEW_VER published. Tag: $TAG"
+  if [[ "$CREATE_AND_PUSH_TAG" -eq 1 ]]; then
+    echo "OK: $PKG_NAME@$NEW_VER published. Tag: $TAG"
+  else
+    echo "OK: $PKG_NAME@$NEW_VER published (no tag on branch $CURRENT_BRANCH)."
+  fi
 else
-  echo "OK: $PKG_NAME@$NEW_VER tagged. CI will publish on push. Tag: $TAG"
+  if [[ "$CREATE_AND_PUSH_TAG" -eq 1 ]]; then
+    echo "OK: $PKG_NAME@$NEW_VER tagged. CI will publish on push. Tag: $TAG"
+  else
+    echo "OK: $PKG_NAME@$NEW_VER committed on $CURRENT_BRANCH. Merge PR, then run --tag-only on main to trigger CI publish."
+  fi
 fi
