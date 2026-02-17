@@ -41,6 +41,8 @@ apps/ios/*.xcodeproj/
 apps/ios/*.xcworkspace/
 apps/ios/.swiftpm/
 vendor/
+!src/auto-reply/reply/export-html/vendor/
+!src/auto-reply/reply/export-html/vendor/**
 apps/ios/Clawdbot.xcodeproj/
 apps/ios/Clawdbot.xcodeproj/**
 apps/macos/.build/**

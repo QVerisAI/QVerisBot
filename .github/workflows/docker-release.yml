@@ -3,6 +3,10 @@ name: Docker Release
 on:
   workflow_dispatch:
 
+concurrency:
+  group: docker-release-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
