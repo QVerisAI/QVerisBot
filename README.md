@@ -166,6 +166,56 @@ The onboarding wizard guides you through: model auth, **QVeris API key**, `web_s
 
 ---
 
+## Troubleshooting
+
+### `qverisbot: command not found` after `npm i -g`
+
+Your npm global bin directory is likely not in your shell's PATH.
+
+```bash
+# 1. Find where npm puts global binaries
+npm config get prefix
+# e.g. /Users/you/.npm-global  →  bin dir is /Users/you/.npm-global/bin
+
+# 2. Add it to PATH (zsh — macOS default)
+echo 'export PATH="$(npm config get prefix)/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+
+# 3. Verify
+qverisbot --version
+```
+
+<details>
+<summary>Other shells (bash / fish)</summary>
+
+**bash:**
+
+```bash
+echo 'export PATH="$(npm config get prefix)/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
+```
+
+**fish:**
+
+```fish
+echo 'set -gx PATH (npm config get prefix)/bin $PATH' >> ~/.config/fish/config.fish
+source ~/.config/fish/config.fish
+```
+
+</details>
+
+**Alternatively**, run without modifying PATH:
+
+```bash
+# Use npx (always works, no global install needed)
+npx @qverisai/qverisbot onboard
+
+# Or use the full path directly
+$(npm config get prefix)/bin/qverisbot onboard
+```
+
+---
+
 ## Reference
 
 ### System requirements

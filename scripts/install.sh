@@ -181,6 +181,34 @@ ensure_pnpm() {
   corepack prepare pnpm@10.23.0 --activate
 }
 
+persist_npm_bin_in_shell_rc() {
+  local bin_dir="$1"
+  local shell_name
+  shell_name="$(basename "${SHELL:-/bin/bash}")"
+  local rc_file
+
+  case "$shell_name" in
+    zsh)  rc_file="$HOME/.zshrc" ;;
+    fish) rc_file="$HOME/.config/fish/config.fish" ;;
+    *)    rc_file="$HOME/.bashrc" ;;
+  esac
+
+  # Idempotent: skip if the bin dir is already referenced in the rc file
+  if [[ -f "$rc_file" ]] && grep -qF "$bin_dir" "$rc_file"; then
+    return 0
+  fi
+
+  mkdir -p "$(dirname "$rc_file")"
+
+  if [[ "$shell_name" == "fish" ]]; then
+    printf '\nset -gx PATH %s $PATH\n' "$bin_dir" >> "$rc_file"
+  else
+    printf '\nexport PATH="%s:$PATH"\n' "$bin_dir" >> "$rc_file"
+  fi
+
+  echo "Added $bin_dir to PATH in $rc_file"
+}
+
 configure_npm_prefix_if_requested() {
   if [[ "$SET_NPM_PREFIX" != "1" ]]; then
     return 0
@@ -188,6 +216,7 @@ configure_npm_prefix_if_requested() {
   mkdir -p "$HOME/.npm-global"
   npm config set prefix "$HOME/.npm-global"
   export PATH="$HOME/.npm-global/bin:$PATH"
+  persist_npm_bin_in_shell_rc "$HOME/.npm-global/bin"
 }
 
 run_onboard_after_npm_install() {
@@ -218,6 +247,20 @@ run_onboard_after_npm_install() {
     return 0
   fi
 
+  # Fallback: use the absolute path from npm prefix (PATH may not be
+  # updated in the current shell when running via curl | bash).
+  local npm_bin
+  npm_bin="$(npm config get prefix)/bin"
+
+  if [[ -x "$npm_bin/qverisbot" ]]; then
+    "$npm_bin/qverisbot" onboard
+    return 0
+  fi
+  if [[ -x "$npm_bin/openclaw" ]]; then
+    "$npm_bin/openclaw" onboard
+    return 0
+  fi
+
   echo "Warning: install finished but no CLI command found in PATH." >&2
 }
 
@@ -226,6 +269,18 @@ install_from_npm() {
   echo "Installing ${PACKAGE_NAME}@${VERSION}..."
   npm i -g "${PACKAGE_NAME}@${VERSION}"
   run_onboard_after_npm_install
+
+  # Final reminder: if the user's current shell doesn't see the command,
+  # tell them how to activate the PATH change we persisted earlier.
+  if ! command_exists qverisbot && ! command_exists openclaw; then
+    local npm_bin
+    npm_bin="$(npm config get prefix)/bin"
+    echo ""
+    echo "Installation complete. To use 'qverisbot' in new terminals,"
+    echo "restart your terminal or run:  source ~/.zshrc  (or your shell rc file)."
+    echo ""
+    echo "To run right now:  $npm_bin/qverisbot onboard"
+  fi
 }
 
 install_from_git() {
