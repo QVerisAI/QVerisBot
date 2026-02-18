@@ -129,6 +129,34 @@ The onboarding wizard guides you through: model auth, **QVeris API key**, `web_s
   <img src="https://img.shields.io/badge/Binance-Exchange-F0B90B?logo=binance&logoColor=black" height="20"/> <img src="https://img.shields.io/badge/Bloomberg-Terminal-000000" height="20"/> <img src="https://img.shields.io/badge/CoinGecko-Crypto-8DC351?logo=coingecko&logoColor=white" height="20"/> <img src="https://img.shields.io/badge/Brave_Search-AI-FB542B?logo=brave&logoColor=white" height="20"/> <img src="https://img.shields.io/badge/Firecrawl-Scraping-FF6B35" height="20"/> <img src="https://img.shields.io/badge/PubMed-Medical-326599" height="20"/> <img src="https://img.shields.io/badge/arXiv-Papers-B31B1B" height="20"/> <img src="https://img.shields.io/badge/Crunchbase-Startups-0288D1" height="20"/> <img src="https://img.shields.io/badge/LinkedIn-Pro-0A66C2?logo=linkedin&logoColor=white" height="20"/> <img src="https://img.shields.io/badge/Etherscan-Ethereum-3C3C3D?logo=ethereum&logoColor=white" height="20"/> <img src="https://img.shields.io/badge/OpenAI-GPT-412991?logo=openai&logoColor=white" height="20"/> <img src="https://img.shields.io/badge/Notion-Workspace-000000?logo=notion&logoColor=white" height="20"/> <img src="https://img.shields.io/badge/Stripe-Payments-008CDD?logo=stripe&logoColor=white" height="20"/> <img src="https://img.shields.io/badge/NewsAPI-News-FF5733" height="20"/> <img src="https://img.shields.io/badge/OpenWeather-Weather-EB6E4B" height="20"/> <img src="https://img.shields.io/badge/Amadeus-Flights-005EB8" height="20"/> <img src="https://img.shields.io/badge/Google_Maps-Maps-4285F4?logo=googlemaps&logoColor=white" height="20"/> <img src="https://img.shields.io/badge/World_Bank-Data-002244" height="20"/>
 </p>
 
+**OpenClaw** is a _personal AI assistant_ you run on your own devices.
+It answers you on the channels you already use (WhatsApp, Telegram, Slack, Discord, Google Chat, Signal, iMessage, Microsoft Teams, WebChat), plus extension channels like BlueBubbles, Matrix, Zalo, and Zalo Personal. It can speak and listen on macOS/iOS/Android, and can render a live Canvas you control. The Gateway is just the control plane — the product is the assistant.
+
+If you want a personal, single-user assistant that feels local, fast, and always-on, this is it.
+
+[Website](https://openclaw.ai) · [Docs](https://docs.openclaw.ai) · [Vision](VISION.md) · [DeepWiki](https://deepwiki.com/openclaw/openclaw) · [Getting Started](https://docs.openclaw.ai/start/getting-started) · [Updating](https://docs.openclaw.ai/install/updating) · [Showcase](https://docs.openclaw.ai/start/showcase) · [FAQ](https://docs.openclaw.ai/start/faq) · [Wizard](https://docs.openclaw.ai/start/wizard) · [Nix](https://github.com/openclaw/nix-openclaw) · [Docker](https://docs.openclaw.ai/install/docker) · [Discord](https://discord.gg/clawd)
+
+Preferred setup: run the onboarding wizard (`openclaw onboard`) in your terminal.
+The wizard guides you step by step through setting up the gateway, workspace, channels, and skills. The CLI wizard is the recommended path and works on **macOS, Linux, and Windows (via WSL2; strongly recommended)**.
+Works with npm, pnpm, or bun.
+New install? Start here: [Getting started](https://docs.openclaw.ai/start/getting-started)
+
+**Subscriptions (OAuth):**
+
+- **[Anthropic](https://www.anthropic.com/)** (Claude Pro/Max)
+- **[OpenAI](https://openai.com/)** (ChatGPT/Codex)
+
+Model note: while any model is supported, I strongly recommend **Anthropic Pro/Max (100/200) + Opus 4.6** for long‑context strength and better prompt‑injection resistance. See [Onboarding](https://docs.openclaw.ai/start/onboarding).
+
+## Models (selection + auth)
+
+- Models config + CLI: [Models](https://docs.openclaw.ai/concepts/models)
+- Auth profile rotation (OAuth vs API keys) + fallbacks: [Model failover](https://docs.openclaw.ai/concepts/model-failover)
+
+## Install (recommended)
+
+Runtime: **Node ≥22**.
+
 <p align="center"><a href="https://qveris.ai/integrations"><strong>Explore all 500+ integrations →</strong></a></p>
 
 </details>

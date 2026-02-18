@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { GatewayRequestContext } from "./types.js";
 import { sendHandlers } from "./send.js";
+import type { GatewayRequestContext } from "./types.js";
 
 const mocks = vi.hoisted(() => ({
   deliverOutboundPayloads: vi.fn(),
@@ -232,6 +232,24 @@ describe("gateway send mirroring", () => {
           sessionKey: "agent:main:slack:channel:resolved",
           agentId: "main",
         }),
+      }),
+    );
+  });
+
+  it("forwards threadId to outbound delivery when provided", async () => {
+    mocks.deliverOutboundPayloads.mockResolvedValue([{ messageId: "m-thread", channel: "slack" }]);
+
+    await runSend({
+      to: "channel:C1",
+      message: "hi",
+      channel: "slack",
+      threadId: "1710000000.9999",
+      idempotencyKey: "idem-thread",
+    });
+
+    expect(mocks.deliverOutboundPayloads).toHaveBeenCalledWith(
+      expect.objectContaining({
+        threadId: "1710000000.9999",
       }),
     );
   });
