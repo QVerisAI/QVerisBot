@@ -987,6 +987,10 @@
                 ]
               },
               {
+                "group": "Extensions",
+                "pages": ["plugins/community", "plugins/voice-call", "plugins/zalouser"]
+              },
+              {
                 "group": "Automation",
                 "pages": [
                   "hooks",

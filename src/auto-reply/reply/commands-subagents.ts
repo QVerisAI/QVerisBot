@@ -1,8 +1,7 @@
 import crypto from "node:crypto";
-import type { SubagentRunRecord } from "../../agents/subagent-registry.js";
-import type { CommandHandler } from "./commands-types.js";
 import { AGENT_LANE_SUBAGENT } from "../../agents/lanes.js";
 import { abortEmbeddedPiRun } from "../../agents/pi-embedded.js";
+import type { SubagentRunRecord } from "../../agents/subagent-registry.js";
 import {
   clearSubagentRunSteerRestart,
   listSubagentRunsForRequester,
@@ -36,6 +35,7 @@ import {
 } from "../../shared/subagents-format.js";
 import { INTERNAL_MESSAGE_CHANNEL } from "../../utils/message-channel.js";
 import { stopSubagentsForRequester } from "./abort.js";
+import type { CommandHandler } from "./commands-types.js";
 import { clearSessionQueues } from "./queue.js";
 import { formatRunLabel, formatRunStatus, sortSubagentRuns } from "./subagents-utils.js";
 
@@ -118,8 +118,15 @@ function formatTimestampWithAge(valueMs?: number) {
   return `${formatTimestamp(valueMs)} (${formatTimeAgo(Date.now() - valueMs, { fallback: "n/a" })})`;
 }
 
-function resolveRequesterSessionKey(params: Parameters<CommandHandler>[0]): string | undefined {
-  const raw = params.sessionKey?.trim() || params.ctx.CommandTargetSessionKey?.trim();
+function resolveRequesterSessionKey(
+  params: Parameters<CommandHandler>[0],
+  opts?: { preferCommandTarget?: boolean },
+): string | undefined {
+  const commandTarget = params.ctx.CommandTargetSessionKey?.trim();
+  const commandSession = params.sessionKey?.trim();
+  const raw = opts?.preferCommandTarget
+    ? commandTarget || commandSession
+    : commandSession || commandTarget;
   if (!raw) {
     return undefined;
   }
@@ -286,7 +293,9 @@ export const handleSubagentsCommand: CommandHandler = async (params, allowTextCo
     action = "steer";
   }
 
-  const requesterKey = resolveRequesterSessionKey(params);
+  const requesterKey = resolveRequesterSessionKey(params, {
+    preferCommandTarget: action === "spawn",
+  });
   if (!requesterKey) {
     return { shouldContinue: false, reply: { text: "⚠️ Missing session key." } };
   }
@@ -674,7 +683,7 @@ export const handleSubagentsCommand: CommandHandler = async (params, allowTextCo
     }
 
     const result = await spawnSubagentDirect(
-      { task, agentId, model, thinking, cleanup: "keep" },
+      { task, agentId, model, thinking, cleanup: "keep", expectsCompletionMessage: true },
       {
         agentSessionKey: requesterKey,
         agentChannel: params.command.channel,
