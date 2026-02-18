@@ -364,8 +364,9 @@ export async function runCronIsolatedAgentTurn(params: {
     cfgWithAgentDefaults,
     agentId,
     {
-      channel: agentPayload?.channel ?? "last",
-      to: agentPayload?.to,
+      channel: deliveryPlan.channel ?? "last",
+      to: deliveryPlan.to,
+      sessionKey: params.job.sessionKey,
     },
     {
       origin: params.job.origin,
