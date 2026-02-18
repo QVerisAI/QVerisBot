@@ -201,7 +201,7 @@ persist_npm_bin_in_shell_rc() {
   mkdir -p "$(dirname "$rc_file")"
 
   if [[ "$shell_name" == "fish" ]]; then
-    printf '\nset -gx PATH %s $PATH\n' "$bin_dir" >> "$rc_file"
+    printf '\nset -gx PATH "%s" $PATH\n' "$bin_dir" >> "$rc_file"
   else
     printf '\nexport PATH="%s:$PATH"\n' "$bin_dir" >> "$rc_file"
   fi
