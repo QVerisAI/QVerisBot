@@ -35,7 +35,7 @@ try {
     addCmd = `echo 'export PATH="${binDir}:$PATH"' >> ${rcFile} && source ${rcFile}`;
   } else if (shell === "fish") {
     rcFile = "~/.config/fish/config.fish";
-    addCmd = `echo 'set -gx PATH ${binDir} $PATH' >> ${rcFile} && source ${rcFile}`;
+    addCmd = `echo 'set -gx PATH "${binDir}" $PATH' >> ${rcFile} && source ${rcFile}`;
   } else {
     rcFile = "~/.bashrc";
     addCmd = `echo 'export PATH="${binDir}:$PATH"' >> ${rcFile} && source ${rcFile}`;
