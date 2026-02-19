@@ -2,8 +2,8 @@
  * X channel message sending.
  */
 
-import type { XAccountConfig, XSendResult, XLogSink } from "./types.js";
 import { getOrCreateClientManager } from "./client.js";
+import type { XAccountConfig, XSendResult, XLogSink } from "./types.js";
 
 /**
  * X character limit for tweets.

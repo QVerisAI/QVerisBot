@@ -10,8 +10,8 @@
  * - X_PROXY (optional, e.g., http://127.0.0.1:7890)
  */
 
-import { HttpsProxyAgent } from "https-proxy-agent";
 import crypto from "node:crypto";
+import { HttpsProxyAgent } from "https-proxy-agent";
 
 const consumerKey = process.env.X_CONSUMER_KEY || "YOUR_CONSUMER_KEY";
 const consumerSecret = process.env.X_CONSUMER_SECRET || "YOUR_CONSUMER_SECRET";

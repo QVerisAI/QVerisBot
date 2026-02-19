@@ -1,6 +1,5 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { GatewayServiceRuntime } from "./service-runtime.js";
 import {
   GATEWAY_LAUNCH_AGENT_LABEL,
   resolveGatewayServiceDescription,
@@ -15,6 +14,7 @@ import {
 import { formatLine, toPosixPath } from "./output.js";
 import { resolveGatewayStateDir, resolveHomeDir } from "./paths.js";
 import { parseKeyValueOutput } from "./runtime-parse.js";
+import type { GatewayServiceRuntime } from "./service-runtime.js";
 
 function resolveLaunchAgentLabel(args?: { env?: Record<string, string | undefined> }): string {
   const envLabel = args?.env?.OPENCLAW_LAUNCHD_LABEL?.trim();
@@ -334,6 +334,23 @@ function isLaunchctlNotLoaded(res: { stdout: string; stderr: string; code: numbe
   );
 }
 
+function formatLaunchctlBootstrapFailure(detail: string): string {
+  const trimmed = detail.trim();
+  const lower = trimmed.toLowerCase();
+  const isGuiDomainBootstrapIssue =
+    lower.includes("domain does not support specified action") ||
+    lower.includes("bootstrap failed: 125");
+  if (!isGuiDomainBootstrapIssue) {
+    return `launchctl bootstrap failed: ${trimmed}`;
+  }
+  return [
+    `launchctl bootstrap failed: ${trimmed}`,
+    "This usually means launchctl is not running in a logged-in macOS GUI session.",
+    "Common causes include running as the wrong user (including sudo).",
+    "See troubleshooting: https://docs.openclaw.ai/gateway",
+  ].join("\n");
+}
+
 export async function stopLaunchAgent({
   stdout,
   env,
@@ -402,7 +419,7 @@ export async function installLaunchAgent({
   await execLaunchctl(["enable", `${domain}/${label}`]);
   const boot = await execLaunchctl(["bootstrap", domain, plistPath]);
   if (boot.code !== 0) {
-    throw new Error(`launchctl bootstrap failed: ${boot.stderr || boot.stdout}`.trim());
+    throw new Error(formatLaunchctlBootstrapFailure(boot.stderr || boot.stdout));
   }
   await execLaunchctl(["kickstart", "-k", `${domain}/${label}`]);
 

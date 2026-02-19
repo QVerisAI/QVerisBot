@@ -1,7 +1,8 @@
-import { messagingApi } from "@line/bot-sdk";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { messagingApi } from "@line/bot-sdk";
 import { logVerbose } from "../globals.js";
 
 interface DownloadResult {
@@ -41,7 +42,7 @@ export async function downloadLineMedia(
 
   // Write to temp file
   const tempDir = os.tmpdir();
-  const fileName = `line-media-${messageId}-${Date.now()}${ext}`;
+  const fileName = `line-media-${Date.now()}-${crypto.randomUUID()}${ext}`;
   const filePath = path.join(tempDir, fileName);
 
   await fs.promises.writeFile(filePath, buffer);
