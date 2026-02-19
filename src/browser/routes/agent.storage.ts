@@ -1,6 +1,6 @@
 import type { BrowserRouteContext } from "../server-context.js";
-import type { BrowserRouteRegistrar } from "./types.js";
 import { handleRouteError, readBody, requirePwAi, resolveProfileContext } from "./agent.shared.js";
+import type { BrowserRouteRegistrar } from "./types.js";
 import { jsonError, toBoolean, toNumber, toStringOrEmpty } from "./utils.js";
 
 type StorageKind = "local" | "session";
@@ -13,11 +13,35 @@ function resolveBodyTargetId(body: unknown): string | undefined {
   return targetId || undefined;
 }
 
-function parseStorageKind(raw: string): StorageKind | null {
+export function parseStorageKind(raw: string): StorageKind | null {
   if (raw === "local" || raw === "session") {
     return raw;
   }
   return null;
+}
+
+export function parseStorageMutationRequest(
+  kindParam: unknown,
+  body: Record<string, unknown>,
+): { kind: StorageKind | null; targetId: string | undefined } {
+  return {
+    kind: parseStorageKind(toStringOrEmpty(kindParam)),
+    targetId: resolveBodyTargetId(body),
+  };
+}
+
+export function parseRequiredStorageMutationRequest(
+  kindParam: unknown,
+  body: Record<string, unknown>,
+): { kind: StorageKind; targetId: string | undefined } | null {
+  const parsed = parseStorageMutationRequest(kindParam, body);
+  if (!parsed.kind) {
+    return null;
+  }
+  return {
+    kind: parsed.kind,
+    targetId: parsed.targetId,
+  };
 }
 
 export function registerBrowserAgentStorageRoutes(

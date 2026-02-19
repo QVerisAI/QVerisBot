@@ -1,20 +1,20 @@
+import { isToolAllowedByPolicies } from "../agents/pi-tools.policy.js";
+import {
+  resolveSandboxConfigForAgent,
+  resolveSandboxToolPolicyForAgent,
+} from "../agents/sandbox.js";
 /**
  * Synchronous security audit collector functions.
  *
  * These functions analyze config-based security properties without I/O.
  */
 import type { SandboxToolPolicy } from "../agents/sandbox/types.js";
-import type { OpenClawConfig } from "../config/config.js";
-import type { AgentToolsConfig } from "../config/types.tools.js";
-import { isToolAllowedByPolicies } from "../agents/pi-tools.policy.js";
-import {
-  resolveSandboxConfigForAgent,
-  resolveSandboxToolPolicyForAgent,
-} from "../agents/sandbox.js";
 import { getBlockedBindReason } from "../agents/sandbox/validate-sandbox-security.js";
 import { resolveToolProfilePolicy } from "../agents/tool-policy.js";
 import { resolveBrowserConfig } from "../browser/config.js";
 import { formatCliCommand } from "../cli/command-format.js";
+import type { OpenClawConfig } from "../config/config.js";
+import type { AgentToolsConfig } from "../config/types.tools.js";
 import { resolveGatewayAuth } from "../gateway/auth.js";
 import { resolveNodeCommandAllowlist } from "../gateway/node-command-policy.js";
 import { inferParamBFromIdOrName } from "../shared/model-param-b.js";
@@ -441,7 +441,7 @@ export function collectHooksHardeningFindings(
   if (token && gatewayToken && token === gatewayToken) {
     findings.push({
       checkId: "hooks.token_reuse_gateway_token",
-      severity: "warn",
+      severity: "critical",
       title: "Hooks token reuses the Gateway token",
       detail:
         "hooks.token matches gateway.auth token; compromise of hooks expands blast radius to the Gateway API.",

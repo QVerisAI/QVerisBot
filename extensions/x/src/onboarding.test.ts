@@ -10,7 +10,7 @@ function createPrompter(params: { confirmValue: boolean; textValues: string[] })
     intro: vi.fn(async () => {}),
     outro: vi.fn(async () => {}),
     note: vi.fn(async () => {}),
-    select: vi.fn(async () => ""),
+    select: vi.fn(async () => "") as unknown as WizardPrompter["select"],
     multiselect: vi.fn(async () => []),
     text: vi.fn(async () => String(queue.shift() ?? "")),
     confirm: vi.fn(async () => params.confirmValue),

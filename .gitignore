@@ -93,6 +93,7 @@ local/
 .cursor/
 /local/
 package-lock.json
+.claude/settings.local.json
 qverisai-*.tgz
 
 # Local iOS signing overrides

@@ -246,6 +246,7 @@ function createMockRuntime(): PluginRuntime {
       signal: {} as PluginRuntime["channel"]["signal"],
       imessage: {} as PluginRuntime["channel"]["imessage"],
       whatsapp: {} as PluginRuntime["channel"]["whatsapp"],
+      x: {} as PluginRuntime["channel"]["x"],
     },
     logging: {
       shouldLogVerbose: vi.fn(

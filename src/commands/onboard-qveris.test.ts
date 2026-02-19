@@ -6,13 +6,14 @@ import { DEFAULT_QVERIS_WEB_SEARCH_TOOL_ID, promptQverisConfig } from "./onboard
 function createPrompter(params: {
   confirmValue: boolean;
   textValue: string;
-  note?: ReturnType<typeof vi.fn>;
+  note?: WizardPrompter["note"];
 }): WizardPrompter {
+  const note = params.note ?? (vi.fn(async () => {}) as unknown as WizardPrompter["note"]);
   return {
     intro: vi.fn(async () => {}),
     outro: vi.fn(async () => {}),
-    note: params.note ?? vi.fn(async () => {}),
-    select: vi.fn(async () => ""),
+    note,
+    select: vi.fn(async () => "") as unknown as WizardPrompter["select"],
     multiselect: vi.fn(async () => []),
     text: vi.fn(async () => params.textValue),
     confirm: vi.fn(async () => params.confirmValue),
