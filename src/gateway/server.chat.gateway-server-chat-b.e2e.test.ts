@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, test, vi } from "vitest";
+import type { GetReplyOptions } from "../auto-reply/types.js";
 import { __setMaxChatHistoryMessagesBytesForTest } from "./server-constants.js";
 import {
   connectOk,
@@ -15,17 +16,6 @@ import {
 } from "./test-helpers.js";
 
 installGatewayTestHooks({ scope: "suite" });
-
-async function waitFor(condition: () => boolean, timeoutMs = 1_500) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (condition()) {
-      return;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 5));
-  }
-  throw new Error("timeout waiting for condition");
-}
 
 const sendReq = (
   ws: { send: (payload: string) => void },
@@ -147,6 +137,43 @@ describe("gateway server chat", () => {
     });
   });
 
+  test("chat.send does not force-disable block streaming", async () => {
+    await withGatewayChatHarness(async ({ ws, createSessionDir }) => {
+      const spy = getReplyFromConfig;
+      await connectOk(ws);
+
+      await createSessionDir();
+      await writeMainSessionStore();
+      testState.agentConfig = { blockStreamingDefault: "on" };
+      try {
+        spy.mockReset();
+        let capturedOpts: GetReplyOptions | undefined;
+        spy.mockImplementationOnce((async (...args: unknown[]) => {
+          const opts = args[1] as GetReplyOptions | undefined;
+          capturedOpts = opts;
+        }) as never);
+
+        const sendRes = await rpcReq(ws, "chat.send", {
+          sessionKey: "main",
+          message: "hello",
+          idempotencyKey: "idem-block-streaming",
+        });
+        expect(sendRes.ok).toBe(true);
+
+        await vi.waitFor(
+          () => {
+            expect(spy.mock.calls.length).toBeGreaterThan(0);
+          },
+          { timeout: 2_000, interval: 10 },
+        );
+
+        expect(capturedOpts?.disableBlockStreaming).toBeUndefined();
+      } finally {
+        testState.agentConfig = undefined;
+      }
+    });
+  });
+
   test("chat.history hard-caps single oversized nested payloads", async () => {
     await withGatewayChatHarness(async ({ ws, createSessionDir }) => {
       const historyMaxBytes = 64 * 1024;
@@ -262,7 +289,7 @@ describe("gateway server chat", () => {
 
   test("smoke: supports abort and idempotent completion", async () => {
     await withGatewayChatHarness(async ({ ws, createSessionDir }) => {
-      const spy = vi.mocked(getReplyFromConfig) as unknown as ReturnType<typeof vi.fn>;
+      const spy = getReplyFromConfig;
       let aborted = false;
       await connectOk(ws);
 
@@ -270,7 +297,10 @@ describe("gateway server chat", () => {
       await writeMainSessionStore();
 
       spy.mockReset();
-      spy.mockImplementationOnce(async (_ctx, opts) => {
+      spy.mockImplementationOnce((async (...args: unknown[]) => {
+        const _ctx = args[0];
+        const opts = args[1] as GetReplyOptions | undefined;
+        void _ctx;
         opts?.onAgentRunStart?.(opts.runId ?? "idem-abort-1");
         const signal = opts?.abortSignal;
         await new Promise<void>((resolve) => {
@@ -288,7 +318,7 @@ describe("gateway server chat", () => {
             { once: true },
           );
         });
-      });
+      }) as never);
 
       const sendResP = onceMessage(ws, (o) => o.type === "res" && o.id === "send-abort-1", 8_000);
       sendReq(ws, "send-abort-1", "chat.send", {
@@ -300,7 +330,12 @@ describe("gateway server chat", () => {
 
       const sendRes = await sendResP;
       expect(sendRes.ok).toBe(true);
-      await waitFor(() => spy.mock.calls.length > 0, 2_000);
+      await vi.waitFor(
+        () => {
+          expect(spy.mock.calls.length).toBeGreaterThan(0);
+        },
+        { timeout: 2_000, interval: 10 },
+      );
 
       const inFlight = await rpcReq<{ status?: string }>(ws, "chat.send", {
         sessionKey: "main",
@@ -316,7 +351,12 @@ describe("gateway server chat", () => {
       });
       expect(abortRes.ok).toBe(true);
       expect(abortRes.payload?.aborted).toBe(true);
-      await waitFor(() => aborted, 2_000);
+      await vi.waitFor(
+        () => {
+          expect(aborted).toBe(true);
+        },
+        { timeout: 2_000, interval: 10 },
+      );
 
       spy.mockReset();
       spy.mockResolvedValueOnce(undefined);
@@ -328,20 +368,18 @@ describe("gateway server chat", () => {
       });
       expect(completeRes.ok).toBe(true);
 
-      let completed = false;
-      for (let i = 0; i < 20; i += 1) {
-        const again = await rpcReq<{ status?: string }>(ws, "chat.send", {
-          sessionKey: "main",
-          message: "hello",
-          idempotencyKey: "idem-complete-1",
-        });
-        if (again.ok && again.payload?.status === "ok") {
-          completed = true;
-          break;
-        }
-        await new Promise((resolve) => setTimeout(resolve, 10));
-      }
-      expect(completed).toBe(true);
+      await vi.waitFor(
+        async () => {
+          const again = await rpcReq<{ status?: string }>(ws, "chat.send", {
+            sessionKey: "main",
+            message: "hello",
+            idempotencyKey: "idem-complete-1",
+          });
+          expect(again.ok).toBe(true);
+          expect(again.payload?.status).toBe("ok");
+        },
+        { timeout: 2_000, interval: 10 },
+      );
     });
   });
 });
