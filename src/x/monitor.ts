@@ -6,11 +6,11 @@
  */
 
 import type { OpenClawConfig } from "../config/config.js";
-import type { XAccountConfig, XMention, XLogSink } from "./types.js";
 import { stripMarkdown } from "../line/markdown-to-line.js";
 import { getOrCreateClientManager } from "./client.js";
 import { chunkTextForX, X_CHAR_LIMIT } from "./send.js";
 import { loadXPollState, updateXLastTweetId } from "./state.js";
+import type { XAccountConfig, XMention, XLogSink } from "./types.js";
 
 export type XMonitorDeps = {
   resolveAgentRoute: (params: {

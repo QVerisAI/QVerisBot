@@ -6,6 +6,8 @@
  */
 
 import type { OpenClawConfig } from "../config/config.js";
+import { resolveXAccount, isXAccountConfigured, DEFAULT_ACCOUNT_ID } from "./accounts.js";
+import { getOrCreateClientManager } from "./client.js";
 import type {
   XAccountConfig,
   XFollowResult,
@@ -20,8 +22,6 @@ import type {
   XSearchResult,
   XQuoteResult,
 } from "./types.js";
-import { resolveXAccount, isXAccountConfigured, DEFAULT_ACCOUNT_ID } from "./accounts.js";
-import { getOrCreateClientManager } from "./client.js";
 
 /**
  * Options for creating an X service instance
