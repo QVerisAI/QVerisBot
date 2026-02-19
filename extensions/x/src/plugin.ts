@@ -131,7 +131,7 @@ export const xPlugin: ChannelPlugin<XAccountConfig> = {
           return true;
         }
         // @username (Twitter handles: 1-15 alphanumeric/underscore chars)
-        if (/^@\w{1,15}$/i.test(trimmed)) {
+        if (/^@\w{4,15}$/i.test(trimmed)) {
           return true;
         }
         // X/Twitter URLs (tweet or profile)
