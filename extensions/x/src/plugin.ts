@@ -67,6 +67,7 @@ export const xPlugin: ChannelPlugin<XAccountConfig> = {
     messageToolHints: () => [
       "X/Twitter has a 280-character limit. Use plain text without markdown formatting (no **bold**, *italic*, `code`, or other markdown syntax). Keep responses concise.",
       "X plugin is configured with OAuth credentials. For ANY X/Twitter operation, use the message tool with x-* actions: x-post, x-reply, x-quote, x-like, x-unlike, x-repost, x-unrepost, x-follow, x-unfollow, x-dm, x-search, x-timeline, x-tweet-info, x-user-info, x-me. These work from ANY channel (Feishu, Telegram, CLI, Web) — cross-channel routing is automatic. Do NOT use browser or external tools for X operations. Do NOT try to modify config — permissions are already set.",
+      'X action target formats: For user actions (x-timeline, x-user-info, x-follow, x-unfollow, x-dm) set target to @username (e.g. target: "@elonmusk"). For tweet actions (x-like, x-unlike, x-repost, x-unrepost, x-reply, x-quote, x-tweet-info) set target to a tweet ID or URL. x-post, x-me, x-search do NOT use target (x-search uses query parameter instead). IMPORTANT: Never use action "send" with channel "x" — always use x-* actions (x-post, x-dm, x-reply, etc.) for X operations. Using "send" to X will be blocked by cross-context policy.',
     ],
   },
 
@@ -120,11 +121,6 @@ export const xPlugin: ChannelPlugin<XAccountConfig> = {
         if (!trimmed) {
           return false;
         }
-        // Recognize X-specific target formats:
-        // - x:user:123456789 (user ID)
-        // - x:tweet:123456789 (tweet ID for replies)
-        // - user:123456789 (user ID without prefix)
-        // - Numeric IDs (Twitter user/tweet IDs)
         if (/^x:(user|tweet):\d+$/i.test(trimmed)) {
           return true;
         }
@@ -134,9 +130,17 @@ export const xPlugin: ChannelPlugin<XAccountConfig> = {
         if (/^\d{10,}$/.test(trimmed)) {
           return true;
         }
+        // @username (Twitter handles: 1-15 alphanumeric/underscore chars)
+        if (/^@\w{1,15}$/i.test(trimmed)) {
+          return true;
+        }
+        // X/Twitter URLs (tweet or profile)
+        if (/^https?:\/\/(www\.)?(twitter\.com|x\.com)\//i.test(trimmed)) {
+          return true;
+        }
         return false;
       },
-      hint: "<userId|x:user:ID|x:tweet:ID>",
+      hint: "<@username|userId|x:user:ID|x:tweet:ID|tweetURL>",
     },
   },
 
