@@ -41,7 +41,7 @@ describe("X plugin", () => {
       if (!looksLikeId) return;
       expect(looksLikeId("@wanglinfang2")).toBe(true);
       expect(looksLikeId("@elonmusk")).toBe(true);
-      expect(looksLikeId("@a")).toBe(true);
+      expect(looksLikeId("@abcd")).toBe(true);
       expect(looksLikeId("@user_name")).toBe(true);
     });
 
