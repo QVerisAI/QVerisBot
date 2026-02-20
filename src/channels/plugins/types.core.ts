@@ -12,7 +12,9 @@ export type ChannelId = ChatChannelId | (string & {});
 export type ChannelOutboundTargetMode = "explicit" | "implicit" | "heartbeat";
 
 /** Agent tool type using the same TSchema resolution as pi-agent-core (avoids CJS/ESM typebox mismatch). */
-export type ChannelAgentTool = AgentTool;
+export type ChannelAgentTool = AgentTool & {
+  ownerOnly?: boolean;
+};
 
 export type ChannelAgentToolFactory = (params: { cfg?: OpenClawConfig }) => ChannelAgentTool[];
 
@@ -314,6 +316,11 @@ export type ChannelMessageActionContext = {
   cfg: OpenClawConfig;
   params: Record<string, unknown>;
   accountId?: string | null;
+  /**
+   * Trusted sender id from inbound context. This is server-injected and must
+   * never be sourced from tool/model-controlled params.
+   */
+  requesterSenderId?: string | null;
   gateway?: {
     url?: string;
     token?: string;

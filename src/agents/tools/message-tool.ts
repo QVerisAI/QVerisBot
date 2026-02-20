@@ -434,6 +434,7 @@ type MessageToolOptions = {
   /** Sender ID of the control message. When originating from X, x-reply only allowed to this user's tweets. */
   originatingSenderId?: string;
   requireExplicitTarget?: boolean;
+  requesterSenderId?: string;
 };
 
 function resolveMessageToolSchemaActions(params: {
@@ -682,6 +683,7 @@ export function createMessageTool(options?: MessageToolOptions): AnyAgentTool {
         action,
         params,
         defaultAccountId: accountId ?? undefined,
+        requesterSenderId: options?.requesterSenderId,
         gateway,
         toolContext,
         sessionKey: options?.agentSessionKey,
