@@ -110,55 +110,111 @@ On **Permissions**, click **Batch import** and paste:
 }
 ```
 
-## 多账号配置
+![Configure permissions](../images/feishu-step4-permissions.png)
 
-```json
+### 5. Enable bot capability
+
+In **App Capability** > **Bot**:
+
+1. Enable bot capability
+2. Set the bot name
+
+![Enable bot capability](../images/feishu-step5-bot-capability.png)
+
+### 6. Configure event subscription
+
+⚠️ **Important:** before setting event subscription, make sure:
+
+1. You already ran `openclaw channels add` for Feishu
+2. The gateway is running (`openclaw gateway status`)
+
+In **Event Subscription**:
+
+1. Choose **Use long connection to receive events** (WebSocket)
+2. Add the event: `im.message.receive_v1`
+
+⚠️ If the gateway is not running, the long-connection setup may fail to save.
+
+![Configure event subscription](../images/feishu-step6-event-subscription.png)
+
+### 7. Publish the app
+
+1. Create a version in **Version Management & Release**
+2. Submit for review and publish
+3. Wait for admin approval (enterprise apps usually auto-approve)
+
+---
+
+## Step 2: Configure OpenClaw
+
+### Configure with the wizard (recommended)
+
+```bash
+openclaw channels add
+```
+
+Choose **Feishu** and paste your App ID + App Secret.
+
+### Configure via config file
+
+Edit `~/.openclaw/openclaw.json`:
+
+```json5
 {
-  "channels": {
-    "feishu": {
-      "accounts": {
-        "default": {
-          "appId": "cli_xxx",
-          "appSecret": "xxx",
-          "eventMode": "websocket"
-        }
-      }
-    }
-  }
+  channels: {
+    feishu: {
+      enabled: true,
+      dmPolicy: "pairing",
+      accounts: {
+        main: {
+          appId: "cli_xxx",
+          appSecret: "xxx",
+          botName: "My AI assistant",
+        },
+      },
+    },
+  },
 }
 ```
 
-## 入站（用户 → OpenClaw）
+If you use `connectionMode: "webhook"`, set `verificationToken`. The Feishu webhook server binds to `127.0.0.1` by default; set `webhookHost` only if you intentionally need a different bind address.
 
-- **消息类型**：`text` 直接进入对话；`image/file/audio/media(video)` 会触发下载
-- **媒体下载**：下载后落在本地 `~/.openclaw/media/inbound/`，并写入上下文：
-  - `MediaPath`：本地文件路径
-  - `MediaType`：推断出的 mime
-  - `Body`：若原消息无文本，会用占位符（例如 `<media:image>`）触发 agent
-- **大小限制**：`channels.feishu.mediaMaxMb`（默认 20MB）
+### Configure via environment variables
 
-## 出站（OpenClaw → 飞书）
+```bash
+export FEISHU_APP_ID="cli_xxx"
+export FEISHU_APP_SECRET="xxx"
+```
 
-当回复 payload 里包含 `mediaUrl/mediaUrls` 时：
+### Lark (global) domain
 
-- **图片**：默认发 `image`（可预览）
-  - 可选开启 **图片双写发送**：先发 `image`，再发 `file` 附件（便于下载/保真）
-    - 配置：`channels.feishu.imageDoubleSend: true`
-- **音频**：OPUS/OGG 优先发 `audio`；否则按 `file` 附件发送
-- **视频**：mp4 优先发 `media`；否则按 `file` 附件发送
-- **其他文件**：按 `file` 附件发送
+If your tenant is on Lark (international), set the domain to `lark` (or a full domain string). You can set it at `channels.feishu.domain` or per account (`channels.feishu.accounts.<id>.domain`).
 
-## 相关配置项（常用）
+```json5
+{
+  channels: {
+    feishu: {
+      domain: "lark",
+      accounts: {
+        main: {
+          appId: "cli_xxx",
+          appSecret: "xxx",
+        },
+      },
+    },
+  },
+}
+```
 
-- **`channels.feishu.eventMode`**：`"websocket"`（推荐）或 `"webhook"`
-- **`channels.feishu.mediaMaxMb`**：入站下载与出站抓取媒体的大小上限（MB）
-- **`channels.feishu.imageDoubleSend`**：是否启用图片双写发送
-- **`channels.feishu.groups.<chatId>.requireMention`**：群聊是否要求 @ 机器人（默认由通用 group policy 决定）
+---
 
-## 进一步阅读
+## Step 3: Start + test
 
-- 渠道总览：`/channels`
-- 配置总览：`/cli/config`
+### 1. Start the gateway
+
+```bash
+openclaw gateway
+```
 
 ### 2. Send a test message
 
@@ -457,23 +513,28 @@ Full configuration: [Gateway configuration](/gateway/configuration)
 
 Key options:
 
-| Setting                                           | Description                     | Default   |
-| ------------------------------------------------- | ------------------------------- | --------- |
-| `channels.feishu.enabled`                         | Enable/disable channel          | `true`    |
-| `channels.feishu.domain`                          | API domain (`feishu` or `lark`) | `feishu`  |
-| `channels.feishu.accounts.<id>.appId`             | App ID                          | -         |
-| `channels.feishu.accounts.<id>.appSecret`         | App Secret                      | -         |
-| `channels.feishu.accounts.<id>.domain`            | Per-account API domain override | `feishu`  |
-| `channels.feishu.dmPolicy`                        | DM policy                       | `pairing` |
-| `channels.feishu.allowFrom`                       | DM allowlist (open_id list)     | -         |
-| `channels.feishu.groupPolicy`                     | Group policy                    | `open`    |
-| `channels.feishu.groupAllowFrom`                  | Group allowlist                 | -         |
-| `channels.feishu.groups.<chat_id>.requireMention` | Require @mention                | `true`    |
-| `channels.feishu.groups.<chat_id>.enabled`        | Enable group                    | `true`    |
-| `channels.feishu.textChunkLimit`                  | Message chunk size              | `2000`    |
-| `channels.feishu.mediaMaxMb`                      | Media size limit                | `30`      |
-| `channels.feishu.streaming`                       | Enable streaming card output    | `true`    |
-| `channels.feishu.blockStreaming`                  | Enable block streaming          | `true`    |
+| Setting                                           | Description                     | Default          |
+| ------------------------------------------------- | ------------------------------- | ---------------- |
+| `channels.feishu.enabled`                         | Enable/disable channel          | `true`           |
+| `channels.feishu.domain`                          | API domain (`feishu` or `lark`) | `feishu`         |
+| `channels.feishu.connectionMode`                  | Event transport mode            | `websocket`      |
+| `channels.feishu.verificationToken`               | Required for webhook mode       | -                |
+| `channels.feishu.webhookPath`                     | Webhook route path              | `/feishu/events` |
+| `channels.feishu.webhookHost`                     | Webhook bind host               | `127.0.0.1`      |
+| `channels.feishu.webhookPort`                     | Webhook bind port               | `3000`           |
+| `channels.feishu.accounts.<id>.appId`             | App ID                          | -                |
+| `channels.feishu.accounts.<id>.appSecret`         | App Secret                      | -                |
+| `channels.feishu.accounts.<id>.domain`            | Per-account API domain override | `feishu`         |
+| `channels.feishu.dmPolicy`                        | DM policy                       | `pairing`        |
+| `channels.feishu.allowFrom`                       | DM allowlist (open_id list)     | -                |
+| `channels.feishu.groupPolicy`                     | Group policy                    | `open`           |
+| `channels.feishu.groupAllowFrom`                  | Group allowlist                 | -                |
+| `channels.feishu.groups.<chat_id>.requireMention` | Require @mention                | `true`           |
+| `channels.feishu.groups.<chat_id>.enabled`        | Enable group                    | `true`           |
+| `channels.feishu.textChunkLimit`                  | Message chunk size              | `2000`           |
+| `channels.feishu.mediaMaxMb`                      | Media size limit                | `30`             |
+| `channels.feishu.streaming`                       | Enable streaming card output    | `true`           |
+| `channels.feishu.blockStreaming`                  | Enable block streaming          | `true`           |
 
 ---
 

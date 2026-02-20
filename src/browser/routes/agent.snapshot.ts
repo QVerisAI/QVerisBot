@@ -6,6 +6,7 @@ import {
   DEFAULT_AI_SNAPSHOT_EFFICIENT_MAX_CHARS,
   DEFAULT_AI_SNAPSHOT_MAX_CHARS,
 } from "../constants.js";
+import { withBrowserNavigationPolicy } from "../navigation-guard.js";
 import {
   DEFAULT_BROWSER_SCREENSHOT_MAX_BYTES,
   DEFAULT_BROWSER_SCREENSHOT_MAX_SIDE,
@@ -18,6 +19,7 @@ import {
   readBody,
   requirePwAi,
   resolveProfileContext,
+  withPlaywrightRouteContext,
 } from "./agent.shared.js";
 import type { BrowserRouteRegistrar } from "./types.js";
 import { jsonError, toBoolean, toNumber, toStringOrEmpty } from "./utils.js";
@@ -37,21 +39,22 @@ export function registerBrowserAgentSnapshotRoutes(
     if (!url) {
       return jsonError(res, 400, "url is required");
     }
-    try {
-      const tab = await profileCtx.ensureTabAvailable(targetId);
-      const pw = await requirePwAi(res, "navigate");
-      if (!pw) {
-        return;
-      }
-      const result = await pw.navigateViaPlaywright({
-        cdpUrl: profileCtx.profile.cdpUrl,
-        targetId: tab.targetId,
-        url,
-      });
-      res.json({ ok: true, targetId: tab.targetId, ...result });
-    } catch (err) {
-      handleRouteError(ctx, res, err);
-    }
+    await withPlaywrightRouteContext({
+      req,
+      res,
+      ctx,
+      targetId,
+      feature: "navigate",
+      run: async ({ cdpUrl, tab, pw }) => {
+        const result = await pw.navigateViaPlaywright({
+          cdpUrl,
+          targetId: tab.targetId,
+          url,
+          ...withBrowserNavigationPolicy(ctx.state().resolved.ssrfPolicy),
+        });
+        res.json({ ok: true, targetId: tab.targetId, ...result });
+      },
+    });
   });
 
   app.post("/pdf", async (req, res) => {

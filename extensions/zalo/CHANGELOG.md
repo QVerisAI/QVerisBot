@@ -6,6 +6,12 @@
 
 - Version alignment with core OpenClaw release numbers.
 
+## 2026.2.19
+
+### Changes
+
+- Version alignment with core OpenClaw release numbers.
+
 ## 2026.2.18
 
 ### Changes
