@@ -341,7 +341,8 @@ export function attachGatewayWsMessageHandler(params: {
           isControlUi && configSnapshot.gateway?.controlUi?.allowInsecureAuth === true;
         const disableControlUiDeviceAuth =
           isControlUi && configSnapshot.gateway?.controlUi?.dangerouslyDisableDeviceAuth === true;
-        const allowControlUiBypass = allowInsecureControlUi || disableControlUiDeviceAuth;
+        // `allowInsecureAuth` must not bypass secure-context/device-auth requirements.
+        const allowControlUiBypass = disableControlUiDeviceAuth;
         const device = disableControlUiDeviceAuth ? null : deviceRaw;
 
         const hasDeviceTokenCandidate = Boolean(connectParams.auth?.token && device);
@@ -350,6 +351,7 @@ export function attachGatewayWsMessageHandler(params: {
           connectAuth: connectParams.auth,
           req: upgradeReq,
           trustedProxies,
+          allowTailscaleHeaderAuth: true,
           rateLimiter: hasDeviceTokenCandidate ? undefined : rateLimiter,
           clientIp,
           rateLimitScope: AUTH_RATE_LIMIT_SCOPE_SHARED_SECRET,
@@ -427,8 +429,11 @@ export function attachGatewayWsMessageHandler(params: {
           const canSkipDevice = sharedAuthOk;
 
           if (isControlUi && !allowControlUiBypass) {
-            const errorMessage = "control ui requires HTTPS or localhost (secure context)";
-            markHandshakeFailure("control-ui-insecure-auth");
+            const errorMessage =
+              "control ui requires device identity (use HTTPS or localhost secure context)";
+            markHandshakeFailure("control-ui-insecure-auth", {
+              insecureAuthConfigured: allowInsecureControlUi,
+            });
             sendHandshakeErrorResponse(ErrorCodes.INVALID_REQUEST, errorMessage);
             close(1008, errorMessage);
             return;
