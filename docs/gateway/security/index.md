@@ -30,6 +30,14 @@ OpenClaw is both a product and an experiment: you’re wiring frontier-model beh
 
 Start with the smallest access that still works, then widen it as you gain confidence.
 
+## Deployment assumption (important)
+
+OpenClaw assumes the host and config boundary are trusted:
+
+- If someone can modify Gateway host state/config (`~/.openclaw`, including `openclaw.json`), treat them as a trusted operator.
+- Running one Gateway for multiple mutually untrusted/adversarial operators is **not a recommended setup**.
+- For mixed-trust teams, split trust boundaries with separate gateways (or at minimum separate OS users/hosts).
+
 ## Hardened baseline in 60 seconds
 
 Use this baseline first, then selectively re-enable tools per trusted agent:
@@ -66,6 +74,7 @@ If more than one person can DM your bot:
 - Set `session.dmScope: "per-channel-peer"` (or `"per-account-channel-peer"` for multi-account channels).
 - Keep `dmPolicy: "pairing"` or strict allowlists.
 - Never combine shared DMs with broad tool access.
+- This hardens cooperative/shared inboxes, but is not designed as hostile co-tenant isolation when users share host/config write access.
 
 ### What the audit checks (high level)
 
@@ -118,7 +127,7 @@ High-signal `checkId` values you will most likely see in real deployments (not e
 | `gateway.http.no_auth`                        | warn/critical | Gateway HTTP APIs reachable with `auth.mode="none"`                     | `gateway.auth.mode`, `gateway.http.endpoints.*`               | no       |
 | `gateway.tools_invoke_http.dangerous_allow`   | warn/critical | Re-enables dangerous tools over HTTP API                                | `gateway.tools.allow`                                         | no       |
 | `gateway.tailscale_funnel`                    | critical      | Public internet exposure                                                | `gateway.tailscale.mode`                                      | no       |
-| `gateway.control_ui.insecure_auth`            | critical      | Token-only over HTTP, no device identity                                | `gateway.controlUi.allowInsecureAuth`                         | no       |
+| `gateway.control_ui.insecure_auth`            | critical      | Insecure-auth toggle enabled                                            | `gateway.controlUi.allowInsecureAuth`                         | no       |
 | `gateway.control_ui.device_auth_disabled`     | critical      | Disables device identity check                                          | `gateway.controlUi.dangerouslyDisableDeviceAuth`              | no       |
 | `hooks.token_too_short`                       | warn          | Easier brute force on hook ingress                                      | `hooks.token`                                                 | no       |
 | `hooks.request_session_key_enabled`           | warn/critical | External caller can choose sessionKey                                   | `hooks.allowRequestSessionKey`                                | no       |
@@ -134,9 +143,9 @@ High-signal `checkId` values you will most likely see in real deployments (not e
 ## Control UI over HTTP
 
 The Control UI needs a **secure context** (HTTPS or localhost) to generate device
-identity. If you enable `gateway.controlUi.allowInsecureAuth`, the UI falls back
-to **token-only auth** and skips device pairing when device identity is omitted. This is a security
-downgrade—prefer HTTPS (Tailscale Serve) or open the UI on `127.0.0.1`.
+identity. `gateway.controlUi.allowInsecureAuth` does **not** bypass secure-context,
+device-identity, or device-pairing checks. Prefer HTTPS (Tailscale Serve) or open
+the UI on `127.0.0.1`.
 
 For break-glass scenarios only, `gateway.controlUi.dangerouslyDisableDeviceAuth`
 disables device identity checks entirely. This is a severe security downgrade;
@@ -284,6 +293,8 @@ By default, OpenClaw routes **all DMs into the main session** so your assistant 
 ```
 
 This prevents cross-user context leakage while keeping group chats isolated.
+
+This is a messaging-context boundary, not a host-admin boundary. If users are mutually adversarial and share the same Gateway host/config, run separate gateways per trust boundary instead.
 
 ### Secure DM mode (recommended)
 
@@ -521,12 +532,19 @@ Rotation checklist (token/password):
 ### 0.6) Tailscale Serve identity headers
 
 When `gateway.auth.allowTailscale` is `true` (default for Serve), OpenClaw
-accepts Tailscale Serve identity headers (`tailscale-user-login`) as
-authentication. OpenClaw verifies the identity by resolving the
+accepts Tailscale Serve identity headers (`tailscale-user-login`) for Control
+UI/WebSocket authentication. OpenClaw verifies the identity by resolving the
 `x-forwarded-for` address through the local Tailscale daemon (`tailscale whois`)
 and matching it to the header. This only triggers for requests that hit loopback
 and include `x-forwarded-for`, `x-forwarded-proto`, and `x-forwarded-host` as
 injected by Tailscale.
+HTTP API endpoints (for example `/v1/*`, `/tools/invoke`, and `/api/channels/*`)
+still require token/password auth.
+
+**Trust assumption:** tokenless Serve auth assumes the gateway host is trusted.
+Do not treat this as protection against hostile same-host processes. If untrusted
+local code may run on the gateway host, disable `gateway.auth.allowTailscale`
+and require token/password auth.
 
 **Security rule:** do not forward these headers from your own reverse proxy. If
 you terminate TLS or proxy in front of the gateway, disable
