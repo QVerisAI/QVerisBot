@@ -452,7 +452,13 @@ function resolveMessageToolSchemaActions(params: {
       channel: currentChannel,
       currentChannelId: params.currentChannelId,
     });
-    const withSend = new Set<string>(["send", ...scopedActions]);
+    // Include cross-channel actions (e.g. x-quote, x-reply from X plugin) so
+    // the LLM can select them directly — they are auto-routed to the owning plugin.
+    const crossActions = listCrossChannelActions({
+      cfg: params.cfg,
+      excludeChannel: currentChannel,
+    });
+    const withSend = new Set<string>(["send", ...scopedActions, ...crossActions]);
     return Array.from(withSend);
   }
   const actions = listChannelMessageActions(params.cfg);

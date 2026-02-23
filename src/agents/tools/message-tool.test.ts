@@ -171,7 +171,8 @@ describe("message tool schema scoping", () => {
     expect(buttonItemProps.style).toBeDefined();
     expect(actionEnum).toContain("send");
     expect(actionEnum).toContain("react");
-    expect(actionEnum).not.toContain("poll");
+    // Cross-channel actions from other plugins are included so the LLM can select them
+    expect(actionEnum).toContain("poll");
   });
 
   it("shows discord components when scoped to discord", () => {
@@ -193,7 +194,68 @@ describe("message tool schema scoping", () => {
     expect(properties.buttons).toBeUndefined();
     expect(actionEnum).toContain("send");
     expect(actionEnum).toContain("poll");
-    expect(actionEnum).not.toContain("react");
+    // Cross-channel actions from other plugins are included
+    expect(actionEnum).toContain("react");
+  });
+
+  it("includes cross-channel actions from X plugin when scoped to feishu", () => {
+    const feishuPlugin: ChannelPlugin = {
+      id: "feishu",
+      meta: {
+        id: "feishu",
+        label: "Feishu",
+        selectionLabel: "Feishu",
+        docsPath: "/channels/feishu",
+        blurb: "Feishu test plugin.",
+      },
+      capabilities: { chatTypes: ["direct", "group"] },
+      config: {
+        listAccountIds: () => ["default"],
+        resolveAccount: () => ({}),
+      },
+      actions: {
+        listActions: () => ["send"] as const,
+      },
+    };
+
+    const xPlugin: ChannelPlugin = {
+      id: "x",
+      meta: {
+        id: "x",
+        label: "X (Twitter)",
+        selectionLabel: "X (Twitter)",
+        docsPath: "/channels/x",
+        blurb: "X test plugin.",
+      },
+      capabilities: { chatTypes: ["direct"] },
+      config: {
+        listAccountIds: () => ["default"],
+        resolveAccount: () => ({}),
+      },
+      actions: {
+        listActions: () => ["x-quote", "x-reply", "x-post", "x-like"] as const,
+      },
+    };
+
+    setActivePluginRegistry(
+      createTestRegistry([
+        { pluginId: "feishu", source: "test", plugin: feishuPlugin },
+        { pluginId: "x", source: "test", plugin: xPlugin },
+      ]),
+    );
+
+    const tool = createMessageTool({
+      config: {} as never,
+      currentChannelProvider: "feishu",
+    });
+    const properties = getToolProperties(tool);
+    const actionEnum = getActionEnum(properties);
+
+    expect(actionEnum).toContain("send");
+    expect(actionEnum).toContain("x-quote");
+    expect(actionEnum).toContain("x-reply");
+    expect(actionEnum).toContain("x-post");
+    expect(actionEnum).toContain("x-like");
   });
 });
 
