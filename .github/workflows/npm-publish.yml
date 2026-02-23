@@ -28,6 +28,9 @@ jobs:
         uses: ./.github/actions/setup-node-env
         with:
           install-bun: "false"
+          # Publish should stay resilient to manifest-only release changes.
+          # Keep CI strict in other workflows; only relax lockfile here.
+          frozen-lockfile: "false"
 
       - name: Verify tag is on main
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
