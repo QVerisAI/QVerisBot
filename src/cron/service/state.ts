@@ -2,6 +2,7 @@ import type { CronConfig } from "../../config/types.cron.js";
 import type { HeartbeatRunResult } from "../../infra/heartbeat-wake.js";
 import type {
   CronDeliveryMode,
+  CronDeliveryStatus,
   CronJob,
   CronJobCreate,
   CronJobPatch,
@@ -20,6 +21,9 @@ export type CronEvent = {
   status?: CronRunStatus;
   error?: string;
   summary?: string;
+  delivered?: boolean;
+  deliveryStatus?: CronDeliveryStatus;
+  deliveryError?: string;
   sessionId?: string;
   sessionKey?: string;
   nextRunAtMs?: number;
@@ -71,7 +75,11 @@ export type CronServiceDeps = {
   wakeNowHeartbeatBusyMaxWaitMs?: number;
   /** WakeMode=now: delay between runHeartbeatOnce retries while busy. */
   wakeNowHeartbeatBusyRetryDelayMs?: number;
-  runIsolatedAgentJob: (params: { job: CronJob; message: string }) => Promise<
+  runIsolatedAgentJob: (params: {
+    job: CronJob;
+    message: string;
+    abortSignal?: AbortSignal;
+  }) => Promise<
     {
       summary?: string;
       /** Last non-empty agent text output (not truncated). */

@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { CronRunStatus, CronRunTelemetry } from "./types.js";
+import type { CronDeliveryStatus, CronRunStatus, CronRunTelemetry } from "./types.js";
 
 export type CronRunLogEntry = {
   ts: number;
@@ -9,6 +9,9 @@ export type CronRunLogEntry = {
   status?: CronRunStatus;
   error?: string;
   summary?: string;
+  delivered?: boolean;
+  deliveryStatus?: CronDeliveryStatus;
+  deliveryError?: string;
   sessionId?: string;
   sessionKey?: string;
   runAtMs?: number;
@@ -23,6 +26,10 @@ export function resolveCronRunLogPath(params: { storePath: string; jobId: string
 }
 
 const writesByPath = new Map<string, Promise<void>>();
+
+export function getPendingCronRunLogWriteCountForTests() {
+  return writesByPath.size;
+}
 
 async function pruneIfNeeded(filePath: string, opts: { maxBytes: number; keepLines: number }) {
   const stat = await fs.stat(filePath).catch(() => null);
@@ -60,7 +67,13 @@ export async function appendCronRunLog(
       });
     });
   writesByPath.set(resolved, next);
-  await next;
+  try {
+    await next;
+  } finally {
+    if (writesByPath.get(resolved) === next) {
+      writesByPath.delete(resolved);
+    }
+  }
 }
 
 export async function readCronRunLogEntries(
@@ -127,6 +140,20 @@ export async function readCronRunLogEntries(
             }
           : undefined,
       };
+      if (typeof obj.delivered === "boolean") {
+        entry.delivered = obj.delivered;
+      }
+      if (
+        obj.deliveryStatus === "delivered" ||
+        obj.deliveryStatus === "not-delivered" ||
+        obj.deliveryStatus === "unknown" ||
+        obj.deliveryStatus === "not-requested"
+      ) {
+        entry.deliveryStatus = obj.deliveryStatus;
+      }
+      if (typeof obj.deliveryError === "string") {
+        entry.deliveryError = obj.deliveryError;
+      }
       if (typeof obj.sessionId === "string" && obj.sessionId.trim().length > 0) {
         entry.sessionId = obj.sessionId;
       }

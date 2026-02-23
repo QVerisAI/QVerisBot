@@ -38,7 +38,7 @@ OpenClaw will offer the local install path automatically.
 
 Details: [Plugins](/tools/plugin)
 
-## Onboarding
+## Quick setup (beginner)
 
 1. Install the Microsoft Teams plugin.
 2. Create an **Azure Bot** (App ID + client secret + tenant ID).
@@ -236,7 +236,7 @@ This is often easier than hand-editing JSON manifests.
 2. Find the bot in Teams and send a DM
 3. Check gateway logs for incoming activity
 
-## Onboarding (minimal)
+## Setup (minimal text-only)
 
 1. **Install the Microsoft Teams plugin**
    - From npm: `openclaw plugins install @openclaw/msteams`
@@ -469,6 +469,8 @@ Key settings (see `/gateway/configuration` for shared channel patterns):
 - `channels.msteams.teams.<teamId>.channels.<conversationId>.requireMention`: per-channel override.
 - `channels.msteams.teams.<teamId>.channels.<conversationId>.tools`: per-channel tool policy overrides (`allow`/`deny`/`alsoAllow`).
 - `channels.msteams.teams.<teamId>.channels.<conversationId>.toolsBySender`: per-channel per-sender tool policy overrides (`"*"` wildcard supported).
+- `toolsBySender` keys should use explicit prefixes:
+  `id:`, `e164:`, `username:`, `name:` (legacy unprefixed keys still map to `id:` only).
 - `channels.msteams.sharePointSiteId`: SharePoint site ID for file uploads in group chats/channels (see [Sending files in group chats](#sending-files-in-group-chats)).
 
 ## Routing & Sessions

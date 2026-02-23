@@ -8,6 +8,7 @@ import {
   InboundDebounceSchema,
   NativeCommandsSettingSchema,
   QueueSchema,
+  TypingModeSchema,
   TtsConfigSchema,
 } from "./zod-schema.core.js";
 import { sensitive } from "./zod-schema.sensitive.js";
@@ -50,19 +51,19 @@ export const SessionSchema = z
     resetByChannel: z.record(z.string(), SessionResetConfigSchema).optional(),
     store: z.string().optional(),
     typingIntervalSeconds: z.number().int().positive().optional(),
-    typingMode: z
-      .union([
-        z.literal("never"),
-        z.literal("instant"),
-        z.literal("thinking"),
-        z.literal("message"),
-      ])
-      .optional(),
+    typingMode: TypingModeSchema.optional(),
     mainKey: z.string().optional(),
     sendPolicy: SessionSendPolicySchema.optional(),
     agentToAgent: z
       .object({
         maxPingPongTurns: z.number().int().min(0).max(5).optional(),
+      })
+      .strict()
+      .optional(),
+    threadBindings: z
+      .object({
+        enabled: z.boolean().optional(),
+        ttlHours: z.number().nonnegative().optional(),
       })
       .strict()
       .optional(),
@@ -168,4 +169,6 @@ export const CommandsSchema = z
   })
   .strict()
   .optional()
-  .default({ native: "auto", nativeSkills: "auto", restart: true, ownerDisplay: "raw" });
+  .default(
+    () => ({ native: "auto", nativeSkills: "auto", restart: true, ownerDisplay: "raw" }) as const,
+  );
