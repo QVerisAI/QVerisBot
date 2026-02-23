@@ -4,9 +4,6 @@
   "private": true,
   "description": "OpenClaw iMessage channel plugin",
   "type": "module",
-  "devDependencies": {
-    "openclaw": "workspace:*"
-  },
   "openclaw": {
     "extensions": [
       "./index.ts"
