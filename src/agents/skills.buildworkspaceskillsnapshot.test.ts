@@ -6,6 +6,11 @@ import { writeSkill } from "./skills.e2e-test-helpers.js";
 import { buildWorkspaceSkillSnapshot, buildWorkspaceSkillsPrompt } from "./skills.js";
 
 const tempDirs = createTrackedTempDirs();
+const disablePluginsConfig = {
+  plugins: {
+    enabled: false,
+  },
+} as const;
 
 afterEach(async () => {
   await tempDirs.cleanup();
@@ -16,6 +21,7 @@ describe("buildWorkspaceSkillSnapshot", () => {
     const workspaceDir = await tempDirs.make("openclaw-");
 
     const snapshot = buildWorkspaceSkillSnapshot(workspaceDir, {
+      config: disablePluginsConfig,
       managedSkillsDir: path.join(workspaceDir, ".managed"),
       bundledSkillsDir: path.join(workspaceDir, ".bundled"),
     });
@@ -39,6 +45,7 @@ describe("buildWorkspaceSkillSnapshot", () => {
     });
 
     const snapshot = buildWorkspaceSkillSnapshot(workspaceDir, {
+      config: disablePluginsConfig,
       managedSkillsDir: path.join(workspaceDir, ".managed"),
       bundledSkillsDir: path.join(workspaceDir, ".bundled"),
     });
@@ -70,6 +77,9 @@ describe("buildWorkspaceSkillSnapshot", () => {
           maxSkillsInPrompt: 1,
           maxSkillsPromptChars: 200,
         },
+      },
+      plugins: {
+        enabled: false,
       },
     } as const;
     const opts = {
@@ -113,6 +123,9 @@ describe("buildWorkspaceSkillSnapshot", () => {
             maxSkillsPromptChars: 1500,
           },
         },
+        plugins: {
+          enabled: false,
+        },
       },
       managedSkillsDir: path.join(workspaceDir, ".managed"),
       bundledSkillsDir: path.join(workspaceDir, ".bundled"),
@@ -145,6 +158,9 @@ describe("buildWorkspaceSkillSnapshot", () => {
             maxCandidatesPerRoot: 5,
             maxSkillsLoadedPerSource: 5,
           },
+        },
+        plugins: {
+          enabled: false,
         },
       },
       managedSkillsDir: path.join(workspaceDir, ".managed"),
@@ -179,6 +195,9 @@ describe("buildWorkspaceSkillSnapshot", () => {
           limits: {
             maxSkillFileBytes: 1000,
           },
+        },
+        plugins: {
+          enabled: false,
         },
       },
       managedSkillsDir: path.join(workspaceDir, ".managed"),
@@ -219,6 +238,9 @@ describe("buildWorkspaceSkillSnapshot", () => {
             maxSkillsLoadedPerSource: 30,
           },
         },
+        plugins: {
+          enabled: false,
+        },
       },
       managedSkillsDir: path.join(workspaceDir, ".managed"),
       bundledSkillsDir: path.join(workspaceDir, ".bundled"),
@@ -248,6 +270,9 @@ describe("buildWorkspaceSkillSnapshot", () => {
           limits: {
             maxSkillFileBytes: 1000,
           },
+        },
+        plugins: {
+          enabled: false,
         },
       },
       managedSkillsDir: path.join(workspaceDir, ".managed"),

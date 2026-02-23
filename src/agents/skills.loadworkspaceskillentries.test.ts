@@ -5,6 +5,11 @@ import { afterEach, describe, expect, it } from "vitest";
 import { loadWorkspaceSkillEntries } from "./skills.js";
 
 const tempDirs: string[] = [];
+const disablePluginsConfig = {
+  plugins: {
+    enabled: false,
+  },
+} as const;
 
 async function createTempWorkspaceDir() {
   const workspaceDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-"));
@@ -55,6 +60,7 @@ describe("loadWorkspaceSkillEntries", () => {
     await fs.mkdir(managedDir, { recursive: true });
 
     const entries = loadWorkspaceSkillEntries(workspaceDir, {
+      config: disablePluginsConfig,
       managedSkillsDir: managedDir,
       bundledSkillsDir: path.join(workspaceDir, ".bundled"),
     });
@@ -68,6 +74,7 @@ describe("loadWorkspaceSkillEntries", () => {
     const entries = loadWorkspaceSkillEntries(workspaceDir, {
       config: {
         plugins: {
+          allow: ["open-prose"],
           entries: { "open-prose": { enabled: true } },
         },
       },

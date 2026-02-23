@@ -14,7 +14,13 @@ import {
  * Prefers common interface names (en0, eth0) then falls back to any external IPv4.
  */
 export function pickPrimaryLanIPv4(): string | undefined {
-  const nets = os.networkInterfaces();
+  let nets: ReturnType<typeof os.networkInterfaces>;
+  try {
+    nets = os.networkInterfaces();
+  } catch {
+    // Some restricted runtime/sandbox environments can throw here.
+    return undefined;
+  }
   const preferredNames = ["en0", "eth0"];
   for (const name of preferredNames) {
     const list = nets[name];

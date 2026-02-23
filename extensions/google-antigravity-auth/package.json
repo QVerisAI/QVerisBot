@@ -4,9 +4,6 @@
   "private": true,
   "description": "OpenClaw Google Antigravity OAuth provider plugin",
   "type": "module",
-  "devDependencies": {
-    "openclaw": "workspace:*"
-  },
   "openclaw": {
     "extensions": [
       "./index.ts"

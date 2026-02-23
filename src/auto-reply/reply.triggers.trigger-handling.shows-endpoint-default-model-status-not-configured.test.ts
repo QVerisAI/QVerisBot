@@ -58,7 +58,7 @@ describe("trigger handling", () => {
       );
     });
   });
-  it("restarts by default", async () => {
+  it("restarts when explicitly enabled", async () => {
     await withTempHome(async (home) => {
       const runEmbeddedPiAgentMock = getRunEmbeddedPiAgentMock();
       const res = await getReplyFromConfig(
@@ -69,7 +69,12 @@ describe("trigger handling", () => {
           CommandAuthorized: true,
         },
         {},
-        makeCfg(home),
+        {
+          ...makeCfg(home),
+          commands: {
+            restart: true,
+          },
+        } as OpenClawConfig,
       );
       const text = Array.isArray(res) ? res[0]?.text : res?.text;
       expect(text?.startsWith("⚙️ Restarting") || text?.startsWith("⚠️ Restart failed")).toBe(true);

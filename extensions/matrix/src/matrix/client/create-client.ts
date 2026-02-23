@@ -1,11 +1,6 @@
 import fs from "node:fs";
 import type { IStorageProvider, ICryptoStorageProvider } from "@vector-im/matrix-bot-sdk";
-import {
-  LogService,
-  MatrixClient,
-  SimpleFsStorageProvider,
-  RustSdkCryptoStorageProvider,
-} from "@vector-im/matrix-bot-sdk";
+import type { MatrixClient } from "@vector-im/matrix-bot-sdk";
 import { ensureMatrixSdkLoggingConfigured } from "./logging.js";
 import {
   maybeMigrateLegacyStorage,
@@ -13,25 +8,23 @@ import {
   writeStorageMeta,
 } from "./storage.js";
 
-function sanitizeUserIdList(input: unknown, label: string): string[] {
+function sanitizeUserIdList(
+  input: unknown,
+  label: string,
+  warn: (message: string) => void,
+): string[] {
   if (input == null) {
     return [];
   }
   if (!Array.isArray(input)) {
-    LogService.warn(
-      "MatrixClientLite",
-      `Expected ${label} list to be an array, got ${typeof input}`,
-    );
+    warn(`Expected ${label} list to be an array, got ${typeof input}`);
     return [];
   }
   const filtered = input.filter(
     (entry): entry is string => typeof entry === "string" && entry.trim().length > 0,
   );
   if (filtered.length !== input.length) {
-    LogService.warn(
-      "MatrixClientLite",
-      `Dropping ${input.length - filtered.length} invalid ${label} entries from sync payload`,
-    );
+    warn(`Dropping ${input.length - filtered.length} invalid ${label} entries from sync payload`);
   }
   return filtered;
 }
@@ -44,7 +37,12 @@ export async function createMatrixClient(params: {
   localTimeoutMs?: number;
   accountId?: string | null;
 }): Promise<MatrixClient> {
-  ensureMatrixSdkLoggingConfigured();
+  await ensureMatrixSdkLoggingConfigured();
+  const { LogService, MatrixClient, SimpleFsStorageProvider, RustSdkCryptoStorageProvider } =
+    await import("@vector-im/matrix-bot-sdk");
+  const warn = (message: string, err?: unknown) => {
+    LogService.warn("MatrixClientLite", message, err);
+  };
   const env = process.env;
 
   // Create storage provider
@@ -68,11 +66,7 @@ export async function createMatrixClient(params: {
       const { StoreType } = await import("@matrix-org/matrix-sdk-crypto-nodejs");
       cryptoStorage = new RustSdkCryptoStorageProvider(storagePaths.cryptoPath, StoreType.Sqlite);
     } catch (err) {
-      LogService.warn(
-        "MatrixClientLite",
-        "Failed to initialize crypto storage, E2EE disabled:",
-        err,
-      );
+      warn("Failed to initialize crypto storage, E2EE disabled:", err);
     }
   }
 
@@ -94,8 +88,8 @@ export async function createMatrixClient(params: {
       changedDeviceLists,
       leftDeviceLists,
     ) => {
-      const safeChanged = sanitizeUserIdList(changedDeviceLists, "changed device list");
-      const safeLeft = sanitizeUserIdList(leftDeviceLists, "left device list");
+      const safeChanged = sanitizeUserIdList(changedDeviceLists, "changed device list", warn);
+      const safeLeft = sanitizeUserIdList(leftDeviceLists, "left device list", warn);
       try {
         return await originalUpdateSyncData(
           toDeviceMessages,
@@ -107,11 +101,7 @@ export async function createMatrixClient(params: {
       } catch (err) {
         const message = typeof err === "string" ? err : err instanceof Error ? err.message : "";
         if (message.includes("Expect value to be String")) {
-          LogService.warn(
-            "MatrixClientLite",
-            "Ignoring malformed device list entries during crypto sync",
-            message,
-          );
+          warn("Ignoring malformed device list entries during crypto sync", message);
           return;
         }
         throw err;

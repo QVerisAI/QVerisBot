@@ -9,9 +9,6 @@
     "@twurple/chat": "^8.0.3",
     "zod": "^4.3.6"
   },
-  "devDependencies": {
-    "openclaw": "workspace:*"
-  },
   "openclaw": {
     "extensions": [
       "./index.ts"

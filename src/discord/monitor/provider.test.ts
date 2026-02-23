@@ -133,7 +133,11 @@ vi.mock("../accounts.js", () => ({
 }));
 
 vi.mock("../probe.js", () => ({
-  fetchDiscordApplicationId: async () => "app-1",
+  probeDiscordApplicationId: async () => ({
+    id: "app-1",
+    status: 200,
+    elapsedMs: 1,
+  }),
 }));
 
 vi.mock("../token.js", () => ({

@@ -4,9 +4,6 @@
   "private": true,
   "description": "OpenClaw Slack channel plugin",
   "type": "module",
-  "devDependencies": {
-    "openclaw": "workspace:*"
-  },
   "openclaw": {
     "extensions": [
       "./index.ts"
