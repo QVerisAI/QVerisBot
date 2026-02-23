@@ -185,7 +185,9 @@ export const SandboxBrowserSchema = z
     enabled: z.boolean().optional(),
     image: z.string().optional(),
     containerPrefix: z.string().optional(),
+    network: z.string().optional(),
     cdpPort: z.number().int().positive().optional(),
+    cdpSourceRange: z.string().optional(),
     vncPort: z.number().int().positive().optional(),
     noVncPort: z.number().int().positive().optional(),
     headless: z.boolean().optional(),
@@ -194,6 +196,16 @@ export const SandboxBrowserSchema = z
     autoStart: z.boolean().optional(),
     autoStartTimeoutMs: z.number().int().positive().optional(),
     binds: z.array(z.string()).optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.network?.trim().toLowerCase() === "host") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["network"],
+        message:
+          'Sandbox security: browser network mode "host" is blocked. Use "bridge" or a custom bridge network instead.',
+      });
+    }
   })
   .strict()
   .optional();
@@ -338,6 +350,15 @@ const ToolExecApplyPatchSchema = z
   .strict()
   .optional();
 
+const ToolExecSafeBinProfileSchema = z
+  .object({
+    minPositional: z.number().int().nonnegative().optional(),
+    maxPositional: z.number().int().nonnegative().optional(),
+    allowedValueFlags: z.array(z.string()).optional(),
+    deniedFlags: z.array(z.string()).optional(),
+  })
+  .strict();
+
 const ToolExecBaseShape = {
   host: z.enum(["sandbox", "gateway", "node"]).optional(),
   security: z.enum(["deny", "allowlist", "full"]).optional(),
@@ -345,6 +366,8 @@ const ToolExecBaseShape = {
   node: z.string().optional(),
   pathPrepend: z.array(z.string()).optional(),
   safeBins: z.array(z.string()).optional(),
+  safeBinTrustedDirs: z.array(z.string()).optional(),
+  safeBinProfiles: z.record(z.string(), ToolExecSafeBinProfileSchema).optional(),
   backgroundMs: z.number().int().positive().optional(),
   timeoutSec: z.number().int().positive().optional(),
   cleanupMs: z.number().int().positive().optional(),
@@ -431,13 +454,17 @@ export const AgentSandboxSchema = z
   .strict()
   .optional();
 
+const CommonToolPolicyFields = {
+  profile: ToolProfileSchema,
+  allow: z.array(z.string()).optional(),
+  alsoAllow: z.array(z.string()).optional(),
+  deny: z.array(z.string()).optional(),
+  byProvider: z.record(z.string(), ToolPolicyWithProfileSchema).optional(),
+};
+
 export const AgentToolsSchema = z
   .object({
-    profile: ToolProfileSchema,
-    allow: z.array(z.string()).optional(),
-    alsoAllow: z.array(z.string()).optional(),
-    deny: z.array(z.string()).optional(),
-    byProvider: z.record(z.string(), ToolPolicyWithProfileSchema).optional(),
+    ...CommonToolPolicyFields,
     elevated: z
       .object({
         enabled: z.boolean().optional(),
@@ -477,7 +504,13 @@ export const MemorySearchSchema = z
       .strict()
       .optional(),
     provider: z
-      .union([z.literal("openai"), z.literal("local"), z.literal("gemini"), z.literal("voyage")])
+      .union([
+        z.literal("openai"),
+        z.literal("local"),
+        z.literal("gemini"),
+        z.literal("voyage"),
+        z.literal("mistral"),
+      ])
       .optional(),
     remote: z
       .object({
@@ -503,6 +536,7 @@ export const MemorySearchSchema = z
         z.literal("gemini"),
         z.literal("local"),
         z.literal("voyage"),
+        z.literal("mistral"),
         z.literal("none"),
       ])
       .optional(),
@@ -632,11 +666,7 @@ export const AgentEntrySchema = z
 
 export const ToolsSchema = z
   .object({
-    profile: ToolProfileSchema,
-    allow: z.array(z.string()).optional(),
-    alsoAllow: z.array(z.string()).optional(),
-    deny: z.array(z.string()).optional(),
-    byProvider: z.record(z.string(), ToolPolicyWithProfileSchema).optional(),
+    ...CommonToolPolicyFields,
     web: ToolsWebSchema,
     media: ToolsMediaSchema,
     links: ToolsLinksSchema,

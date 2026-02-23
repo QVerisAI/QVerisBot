@@ -553,6 +553,12 @@ function resolveSiteName(url: string | undefined): string | undefined {
   }
 }
 
+async function throwWebSearchApiError(res: Response, providerLabel: string): Promise<never> {
+  const detailResult = await readResponseText(res, { maxBytes: 64_000 });
+  const detail = detailResult.text;
+  throw new Error(`${providerLabel} API error (${res.status}): ${detail || res.statusText}`);
+}
+
 async function runPerplexitySearch(params: {
   query: string;
   apiKey: string;
@@ -593,9 +599,7 @@ async function runPerplexitySearch(params: {
   });
 
   if (!res.ok) {
-    const detailResult = await readResponseText(res, { maxBytes: 64_000 });
-    const detail = detailResult.text;
-    throw new Error(`Perplexity API error (${res.status}): ${detail || res.statusText}`);
+    return throwWebSearchApiError(res, "Perplexity");
   }
 
   const data = (await res.json()) as PerplexitySearchResponse;
@@ -695,9 +699,7 @@ async function runGrokSearch(params: {
   });
 
   if (!res.ok) {
-    const detailResult = await readResponseText(res, { maxBytes: 64_000 });
-    const detail = detailResult.text;
-    throw new Error(`xAI API error (${res.status}): ${detail || res.statusText}`);
+    return throwWebSearchApiError(res, "xAI");
   }
 
   const data = (await res.json()) as GrokSearchResponse;

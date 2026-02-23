@@ -28,7 +28,7 @@ Status: legacy external CLI integration. Gateway spawns `imsg rpc` and communica
   </Card>
 </CardGroup>
 
-## Onboarding
+## Quick setup
 
 <Tabs>
   <Tab title="Local Mac (fast path)">
@@ -158,6 +158,7 @@ imsg send <handle> "test"
     Group sender allowlist: `channels.imessage.groupAllowFrom`.
 
     Runtime fallback: if `groupAllowFrom` is unset, iMessage group sender checks fall back to `allowFrom` when available.
+    Runtime note: if `channels.imessage` is completely missing, runtime falls back to `groupPolicy="allowlist"` and logs a warning (even if `channels.defaults.groupPolicy` is set).
 
     Mention gating for groups:
 
@@ -358,7 +359,7 @@ imsg send <handle> "test"
   </Accordion>
 </AccordionGroup>
 
-## Configuration
+## Configuration reference pointers
 
 - [Configuration reference - iMessage](/gateway/configuration-reference#imessage)
 - [Gateway configuration](/gateway/configuration)

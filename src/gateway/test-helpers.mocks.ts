@@ -4,6 +4,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { Mock, vi } from "vitest";
+import type { GetReplyOptions } from "../auto-reply/types.js";
 import type { ChannelPlugin, ChannelOutboundAdapter } from "../channels/plugins/types.js";
 import { applyPluginAutoEnable } from "../config/plugin-auto-enable.js";
 import type { AgentBinding } from "../config/types.agents.js";
@@ -201,8 +202,9 @@ export const testTailnetIPv4 = hoisted.testTailnetIPv4;
 export const testTailscaleWhois = hoisted.testTailscaleWhois;
 export const piSdkMock = hoisted.piSdkMock;
 export const cronIsolatedRun = hoisted.cronIsolatedRun;
-export const agentCommand: Mock<() => void> = hoisted.agentCommand;
-export const getReplyFromConfig: Mock<() => void> = hoisted.getReplyFromConfig;
+export const agentCommand: Mock<(...args: unknown[]) => unknown> = hoisted.agentCommand;
+export const getReplyFromConfig: Mock<(ctx: unknown, opts?: GetReplyOptions) => Promise<unknown>> =
+  hoisted.getReplyFromConfig;
 
 export const testState = {
   agentConfig: undefined as Record<string, unknown> | undefined,
