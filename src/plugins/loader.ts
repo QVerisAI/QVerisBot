@@ -179,9 +179,6 @@ function recordPluginError(params: {
   logger: PluginLogger;
   registry: PluginRegistry;
   record: PluginRecord;
-  seenIds: Map<string, PluginRecord["origin"]>;
-  pluginId: string;
-  origin: PluginRecord["origin"];
   error: unknown;
   logPrefix: string;
   diagnosticMessagePrefix: string;
@@ -191,7 +188,6 @@ function recordPluginError(params: {
   params.record.status = "error";
   params.record.error = errorText;
   params.registry.plugins.push(params.record);
-  params.seenIds.set(params.pluginId, params.origin);
   params.registry.diagnostics.push({
     level: "error",
     pluginId: params.record.id,
@@ -536,9 +532,6 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
         logger,
         registry,
         record,
-        seenIds,
-        pluginId,
-        origin: candidate.origin,
         error: err,
         logPrefix: `[plugins] ${record.id} failed to load from ${record.source}: `,
         diagnosticMessagePrefix: "failed to load plugin: ",
@@ -660,9 +653,6 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
         logger,
         registry,
         record,
-        seenIds,
-        pluginId,
-        origin: candidate.origin,
         error: err,
         logPrefix: `[plugins] ${record.id} failed during register from ${record.source}: `,
         diagnosticMessagePrefix: "plugin failed during register: ",

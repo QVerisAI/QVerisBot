@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { Type } from "@sinclair/typebox";
 import type { OpenClawConfig } from "../../config/config.js";
 import type { AnyAgentTool } from "./common.js";
@@ -258,8 +259,7 @@ export function createQverisTools(options?: {
   const searchLimit = resolveSearchLimit(config);
 
   // Generate a session ID tied to clawdbot session key
-  const sessionId =
-    options?.agentSessionKey ?? `clawdbot-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const sessionId = options?.agentSessionKey ?? `clawdbot-${Date.now()}-${randomUUID()}`;
 
   const searchTool: AnyAgentTool = {
     label: "QVeris Search",

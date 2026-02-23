@@ -21,6 +21,12 @@ const resolveTestSkillDirs = (workspaceDir: string) => ({
   bundledSkillsDir: path.join(workspaceDir, ".bundled"),
 });
 
+const disablePluginsConfig = {
+  plugins: {
+    enabled: false,
+  },
+} as const;
+
 const makeWorkspace = async () => {
   const workspaceDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-"));
   tempDirs.push(workspaceDir);
@@ -96,6 +102,7 @@ describe("buildWorkspaceSkillCommandSpecs", () => {
 
     const commands = buildWorkspaceSkillCommandSpecs(workspaceDir, {
       ...resolveTestSkillDirs(workspaceDir),
+      config: disablePluginsConfig,
       reservedNames: new Set(["help"]),
     });
 
@@ -154,7 +161,10 @@ describe("buildWorkspaceSkillsPrompt", () => {
   it("returns empty prompt when skills dirs are missing", async () => {
     const workspaceDir = await makeWorkspace();
 
-    const prompt = buildWorkspaceSkillsPrompt(workspaceDir, resolveTestSkillDirs(workspaceDir));
+    const prompt = buildWorkspaceSkillsPrompt(workspaceDir, {
+      ...resolveTestSkillDirs(workspaceDir),
+      config: disablePluginsConfig,
+    });
 
     expect(prompt).toBe("");
   });

@@ -47,7 +47,14 @@ describe("setupChannels", () => {
     setDefaultChannelPluginRegistryForTests();
   });
   it("QuickStart uses single-select (no multiselect) and doesn't prompt for Telegram token when WhatsApp is chosen", async () => {
-    const select = vi.fn(async () => "whatsapp");
+    let quickstartSelectionCount = 0;
+    const select = vi.fn(async ({ message }: { message: string }) => {
+      if (message === "Select channel (QuickStart)") {
+        quickstartSelectionCount += 1;
+        return quickstartSelectionCount === 1 ? "whatsapp" : "__skip__";
+      }
+      throw new Error(`unexpected select prompt: ${message}`);
+    });
     const multiselect = vi.fn(async () => {
       throw new Error("unexpected multiselect");
     });
@@ -109,9 +116,11 @@ describe("setupChannels", () => {
   });
 
   it("prompts for configured channel action and skips configuration when told to skip", async () => {
+    let quickstartSelectionCount = 0;
     const select = vi.fn(async ({ message }: { message: string }) => {
       if (message === "Select channel (QuickStart)") {
-        return "telegram";
+        quickstartSelectionCount += 1;
+        return quickstartSelectionCount === 1 ? "telegram" : "__skip__";
       }
       if (message.includes("already configured")) {
         return "skip";
@@ -154,14 +163,14 @@ describe("setupChannels", () => {
     expect(text).not.toHaveBeenCalled();
   });
 
-  it("adds disabled hint to channel selection when a channel is disabled", async () => {
+  it("adds configured hint to channel selection when a channel is already configured", async () => {
     let selectionCount = 0;
     const select = vi.fn(async ({ message, options }: { message: string; options: unknown[] }) => {
       if (message === "Select a channel") {
         selectionCount += 1;
         const opts = options as Array<{ value: string; hint?: string }>;
         const telegram = opts.find((opt) => opt.value === "telegram");
-        expect(telegram?.hint).toContain("disabled");
+        expect(telegram?.hint).toContain("configured");
         return selectionCount === 1 ? "telegram" : "__done__";
       }
       if (message.includes("already configured")) {
@@ -182,10 +191,16 @@ describe("setupChannels", () => {
 
     await setupChannels(
       {
+        plugins: {
+          entries: {
+            telegram: {
+              enabled: false,
+            },
+          },
+        },
         channels: {
           telegram: {
             botToken: "token",
-            enabled: false,
           },
         },
       } as OpenClawConfig,
