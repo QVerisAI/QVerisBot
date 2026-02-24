@@ -18,6 +18,25 @@ import { resolveWhatsAppAccount } from "../../web/accounts.js";
 import { normalizeWhatsAppTarget } from "../../whatsapp/normalize.js";
 import type { CronDeliveryMode, CronOrigin } from "../types.js";
 
+export type DeliveryTargetResolution =
+  | {
+      ok: true;
+      channel: Exclude<OutboundChannel, "none">;
+      to: string;
+      accountId?: string;
+      threadId?: string | number;
+      mode: "explicit" | "implicit";
+    }
+  | {
+      ok: false;
+      channel?: Exclude<OutboundChannel, "none">;
+      to?: string;
+      accountId?: string;
+      threadId?: string | number;
+      mode: "explicit" | "implicit";
+      error: Error;
+    };
+
 export async function resolveDeliveryTarget(
   cfg: OpenClawConfig,
   agentId: string,
@@ -32,14 +51,7 @@ export async function resolveDeliveryTarget(
     /** Delivery mode: "origin" (default) or "current" */
     deliveryMode?: CronDeliveryMode;
   },
-): Promise<{
-  channel?: Exclude<OutboundChannel, "none">;
-  to?: string;
-  accountId?: string;
-  threadId?: string | number;
-  mode: "explicit" | "implicit";
-  error?: Error;
-}> {
+): Promise<DeliveryTargetResolution> {
   const origin = options?.origin;
   const deliveryMode = options?.deliveryMode ?? "origin";
 
@@ -172,23 +184,29 @@ export async function resolveDeliveryTarget(
 
   if (!channel) {
     return {
+      ok: false,
       channel: undefined,
       to: undefined,
       accountId,
       threadId,
       mode,
-      error: channelResolutionError,
+      error:
+        channelResolutionError ??
+        new Error("Channel is required when delivery.channel=last has no previous channel."),
     };
   }
 
   if (!toCandidate) {
     return {
+      ok: false,
       channel,
       to: undefined,
       accountId,
       threadId,
       mode,
-      error: channelResolutionError,
+      error:
+        channelResolutionError ??
+        new Error(`No delivery target resolved for channel "${channel}". Set delivery.to.`),
     };
   }
 
@@ -221,12 +239,23 @@ export async function resolveDeliveryTarget(
     mode,
     allowFrom: allowFromOverride,
   });
+  if (!docked.ok) {
+    return {
+      ok: false,
+      channel,
+      to: undefined,
+      accountId,
+      threadId,
+      mode,
+      error: docked.error,
+    };
+  }
   return {
+    ok: true,
     channel,
-    to: docked.ok ? docked.to : undefined,
+    to: docked.to,
     accountId,
     threadId,
     mode,
-    error: docked.ok ? channelResolutionError : docked.error,
   };
 }

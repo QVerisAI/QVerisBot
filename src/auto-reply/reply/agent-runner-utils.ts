@@ -22,12 +22,17 @@ export function buildThreadingToolContext(params: {
   hasRepliedRef: { value: boolean } | undefined;
 }): ChannelThreadingToolContext {
   const { sessionCtx, config, hasRepliedRef } = params;
+  const currentMessageId = sessionCtx.MessageSidFull ?? sessionCtx.MessageSid;
   if (!config) {
-    return {};
+    return {
+      currentMessageId,
+    };
   }
   const rawProvider = sessionCtx.Provider?.trim().toLowerCase();
   if (!rawProvider) {
-    return {};
+    return {
+      currentMessageId,
+    };
   }
   const provider = normalizeChannelId(rawProvider) ?? normalizeAnyChannelId(rawProvider);
   // Fallback for unrecognized/plugin channels (e.g., BlueBubbles before plugin registry init)
@@ -41,6 +46,7 @@ export function buildThreadingToolContext(params: {
   const baseContext = {
     currentChannelId: sessionCtx.To?.trim() || undefined,
     currentChannelProvider: provider ?? (rawProvider as ChannelId),
+    currentMessageId,
     hasRepliedRef,
     originatingChannel: originatingChannel || undefined,
     originatingSenderId: originatingSenderId || undefined,
@@ -57,6 +63,7 @@ export function buildThreadingToolContext(params: {
         From: sessionCtx.From,
         To: sessionCtx.To,
         ChatType: sessionCtx.ChatType,
+        CurrentMessageId: currentMessageId,
         ReplyToId: sessionCtx.ReplyToId,
         ThreadLabel: sessionCtx.ThreadLabel,
         MessageThreadId: sessionCtx.MessageThreadId,
@@ -67,6 +74,7 @@ export function buildThreadingToolContext(params: {
     ...baseContext,
     ...context,
     currentChannelProvider: provider!, // guaranteed non-null since dock exists
+    currentMessageId: context.currentMessageId ?? currentMessageId,
   };
 }
 

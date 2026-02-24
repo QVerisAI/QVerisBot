@@ -92,6 +92,10 @@ export function isSafeBinUsage(params: {
   return validateSafeBinArgv(argv, profile);
 }
 
+function isPathScopedExecutableToken(token: string): boolean {
+  return token.includes("/") || token.includes("\\");
+}
+
 export type ExecAllowlistEvaluation = {
   allowlistSatisfied: boolean;
   allowlistMatches: ExecAllowlistEntry[];
@@ -122,6 +126,14 @@ function evaluateSegments(
   const segmentSatisfiedBy: ExecSegmentSatisfiedBy[] = [];
 
   const satisfied = segments.every((segment) => {
+    if (segment.resolution?.policyBlocked === true) {
+      segmentSatisfiedBy.push(null);
+      return false;
+    }
+    const effectiveArgv =
+      segment.resolution?.effectiveArgv && segment.resolution.effectiveArgv.length > 0
+        ? segment.resolution.effectiveArgv
+        : segment.argv;
     const candidatePath = resolveAllowlistCandidatePath(segment.resolution, params.cwd);
     const candidateResolution =
       candidatePath && segment.resolution
@@ -132,17 +144,26 @@ function evaluateSegments(
       matches.push(match);
     }
     const safe = isSafeBinUsage({
-      argv: segment.argv,
+      argv: effectiveArgv,
       resolution: segment.resolution,
       safeBins: params.safeBins,
       safeBinProfiles: params.safeBinProfiles,
       platform: params.platform,
       trustedSafeBinDirs: params.trustedSafeBinDirs,
     });
-    const skillAllow =
-      allowSkills && segment.resolution?.executableName
-        ? params.skillBins?.has(segment.resolution.executableName)
-        : false;
+    const rawExecutable = segment.resolution?.rawExecutable?.trim() ?? "";
+    const executableName = segment.resolution?.executableName;
+    const usesExplicitPath = isPathScopedExecutableToken(rawExecutable);
+    let skillAllow = false;
+    if (
+      allowSkills &&
+      segment.resolution?.resolvedPath &&
+      rawExecutable.length > 0 &&
+      !usesExplicitPath &&
+      executableName
+    ) {
+      skillAllow = Boolean(params.skillBins?.has(executableName));
+    }
     const by: ExecSegmentSatisfiedBy = match
       ? "allowlist"
       : safe

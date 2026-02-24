@@ -21,6 +21,7 @@ import {
 } from "../../config/commands.js";
 import type { OpenClawConfig, ReplyToMode } from "../../config/config.js";
 import { loadConfig } from "../../config/config.js";
+import { isDangerousNameMatchingEnabled } from "../../config/dangerous-name-matching.js";
 import {
   GROUP_POLICY_BLOCKED_LABEL,
   resolveOpenProviderRuntimeGroupPolicy,
@@ -583,6 +584,7 @@ export async function monitorDiscordProvider(opts: MonitorDiscordOpts = {}) {
         accountId: account.accountId,
         runtime,
         botUserId,
+        allowNameMatching: isDangerousNameMatchingEnabled(discordCfg),
         guildEntries,
         logger,
       }),
@@ -594,6 +596,7 @@ export async function monitorDiscordProvider(opts: MonitorDiscordOpts = {}) {
         accountId: account.accountId,
         runtime,
         botUserId,
+        allowNameMatching: isDangerousNameMatchingEnabled(discordCfg),
         guildEntries,
         logger,
       }),
