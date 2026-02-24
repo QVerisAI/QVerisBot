@@ -1239,7 +1239,12 @@
               },
               {
                 "group": "Technical reference",
-                "pages": ["reference/wizard", "reference/token-use", "channels/grammy"]
+                "pages": [
+                  "reference/wizard",
+                  "reference/token-use",
+                  "reference/prompt-caching",
+                  "channels/grammy"
+                ]
               },
               {
                 "group": "Concept internals",

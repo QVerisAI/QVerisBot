@@ -11,8 +11,10 @@ import {
   resolveExecApprovals,
   resolveExecApprovalsFromFile,
 } from "../infra/exec-approvals.js";
+import { detectCommandObfuscation } from "../infra/exec-obfuscation-detect.js";
 import { buildNodeShellCommand } from "../infra/node-shell.js";
-import { requestExecApprovalDecision } from "./bash-tools.exec-approval-request.js";
+import { logInfo } from "../logger.js";
+import { requestExecApprovalDecisionForHost } from "./bash-tools.exec-approval-request.js";
 import {
   DEFAULT_APPROVAL_TIMEOUT_MS,
   createApprovalSlug,
@@ -133,12 +135,20 @@ export async function executeNodeHostCommand(
       // Fall back to requiring approval if node approvals cannot be fetched.
     }
   }
-  const requiresAsk = requiresExecApproval({
-    ask: hostAsk,
-    security: hostSecurity,
-    analysisOk,
-    allowlistSatisfied,
-  });
+  const obfuscation = detectCommandObfuscation(params.command);
+  if (obfuscation.detected) {
+    logInfo(
+      `exec: obfuscation detected (node=${nodeQuery ?? "default"}): ${obfuscation.reasons.join(", ")}`,
+    );
+    params.warnings.push(`⚠️ Obfuscated command detected: ${obfuscation.reasons.join("; ")}`);
+  }
+  const requiresAsk =
+    requiresExecApproval({
+      ask: hostAsk,
+      security: hostSecurity,
+      analysisOk,
+      allowlistSatisfied,
+    }) || obfuscation.detected;
   const invokeTimeoutMs = Math.max(
     10_000,
     (typeof params.timeoutSec === "number" ? params.timeoutSec : params.defaultTimeoutSec) * 1000 +
@@ -178,10 +188,10 @@ export async function executeNodeHostCommand(
     void (async () => {
       let decision: string | null = null;
       try {
-        decision = await requestExecApprovalDecision({
-          id: approvalId,
+        decision = await requestExecApprovalDecisionForHost({
+          approvalId,
           command: params.command,
-          cwd: params.workdir,
+          workdir: params.workdir,
           host: "node",
           security: hostSecurity,
           ask: hostAsk,
@@ -203,7 +213,9 @@ export async function executeNodeHostCommand(
       if (decision === "deny") {
         deniedReason = "user-denied";
       } else if (!decision) {
-        if (askFallback === "full") {
+        if (obfuscation.detected) {
+          deniedReason = "approval-timeout (obfuscation-detected)";
+        } else if (askFallback === "full") {
           approvedByAsk = true;
           approvalDecision = "allow-once";
         } else if (askFallback === "allowlist") {

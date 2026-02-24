@@ -5,6 +5,7 @@ import { makePathEnv, makeTempDir } from "./exec-approvals-test-helpers.js";
 import {
   analyzeArgvCommand,
   analyzeShellCommand,
+  buildEnforcedShellCommand,
   buildSafeBinsShellCommand,
   evaluateExecAllowlist,
   evaluateShellAllowlist,
@@ -130,6 +131,27 @@ describe("exec approvals safe shell command builder", () => {
     // SafeBins segment is fully quoted and pinned to its resolved absolute path.
     expect(res.command).toMatch(/'[^']*\/head' '-n' '5'/);
   });
+
+  it("enforces canonical planned argv for every approved segment", () => {
+    if (process.platform === "win32") {
+      return;
+    }
+    const analysis = analyzeShellCommand({
+      command: "env rg -n needle",
+      cwd: "/tmp",
+      env: { PATH: "/usr/bin:/bin" },
+      platform: process.platform,
+    });
+    expect(analysis.ok).toBe(true);
+    const res = buildEnforcedShellCommand({
+      command: "env rg -n needle",
+      segments: analysis.segments,
+      platform: process.platform,
+    });
+    expect(res.ok).toBe(true);
+    expect(res.command).toMatch(/'(?:[^']*\/)?rg' '-n' 'needle'/);
+    expect(res.command).not.toContain("'env'");
+  });
 });
 
 describe("exec approvals command resolution", () => {
@@ -202,7 +224,7 @@ describe("exec approvals command resolution", () => {
     }
   });
 
-  it("unwraps env wrapper argv to resolve the effective executable", () => {
+  it("unwraps transparent env wrapper argv to resolve the effective executable", () => {
     const dir = makeTempDir();
     const binDir = path.join(dir, "bin");
     fs.mkdirSync(binDir, { recursive: true });
@@ -212,12 +234,53 @@ describe("exec approvals command resolution", () => {
     fs.chmodSync(exe, 0o755);
 
     const resolution = resolveCommandResolutionFromArgv(
-      ["/usr/bin/env", "FOO=bar", "rg", "-n", "needle"],
+      ["/usr/bin/env", "rg", "-n", "needle"],
       undefined,
       makePathEnv(binDir),
     );
     expect(resolution?.resolvedPath).toBe(exe);
     expect(resolution?.executableName).toBe(exeName);
+  });
+
+  it("blocks semantic env wrappers from allowlist/safeBins auto-resolution", () => {
+    const resolution = resolveCommandResolutionFromArgv([
+      "/usr/bin/env",
+      "FOO=bar",
+      "rg",
+      "-n",
+      "needle",
+    ]);
+    expect(resolution?.policyBlocked).toBe(true);
+    expect(resolution?.rawExecutable).toBe("/usr/bin/env");
+  });
+
+  it("fails closed for env -S even when env itself is allowlisted", () => {
+    const dir = makeTempDir();
+    const binDir = path.join(dir, "bin");
+    fs.mkdirSync(binDir, { recursive: true });
+    const envName = process.platform === "win32" ? "env.exe" : "env";
+    const envPath = path.join(binDir, envName);
+    fs.writeFileSync(envPath, process.platform === "win32" ? "" : "#!/bin/sh\n");
+    if (process.platform !== "win32") {
+      fs.chmodSync(envPath, 0o755);
+    }
+
+    const analysis = analyzeArgvCommand({
+      argv: [envPath, "-S", 'sh -c "echo pwned"'],
+      cwd: dir,
+      env: makePathEnv(binDir),
+    });
+    const allowlistEval = evaluateExecAllowlist({
+      analysis,
+      allowlist: [{ pattern: envPath }],
+      safeBins: normalizeSafeBins([]),
+      cwd: dir,
+    });
+
+    expect(analysis.ok).toBe(true);
+    expect(analysis.segments[0]?.resolution?.policyBlocked).toBe(true);
+    expect(allowlistEval.allowlistSatisfied).toBe(false);
+    expect(allowlistEval.segmentSatisfiedBy).toEqual([null]);
   });
 
   it("unwraps env wrapper with shell inner executable", () => {
@@ -563,6 +626,59 @@ describe("exec approvals allowlist evaluation", () => {
       cwd: "/tmp",
     });
     expect(result.allowlistSatisfied).toBe(true);
+  });
+
+  it("does not satisfy auto-allow skills for explicit relative paths", () => {
+    const analysis = {
+      ok: true,
+      segments: [
+        {
+          raw: "./skill-bin",
+          argv: ["./skill-bin", "--help"],
+          resolution: {
+            rawExecutable: "./skill-bin",
+            resolvedPath: "/tmp/skill-bin",
+            executableName: "skill-bin",
+          },
+        },
+      ],
+    };
+    const result = evaluateExecAllowlist({
+      analysis,
+      allowlist: [],
+      safeBins: new Set(),
+      skillBins: new Set(["skill-bin"]),
+      autoAllowSkills: true,
+      cwd: "/tmp",
+    });
+    expect(result.allowlistSatisfied).toBe(false);
+    expect(result.segmentSatisfiedBy).toEqual([null]);
+  });
+
+  it("does not satisfy auto-allow skills when command resolution is missing", () => {
+    const analysis = {
+      ok: true,
+      segments: [
+        {
+          raw: "skill-bin --help",
+          argv: ["skill-bin", "--help"],
+          resolution: {
+            rawExecutable: "skill-bin",
+            executableName: "skill-bin",
+          },
+        },
+      ],
+    };
+    const result = evaluateExecAllowlist({
+      analysis,
+      allowlist: [],
+      safeBins: new Set(),
+      skillBins: new Set(["skill-bin"]),
+      autoAllowSkills: true,
+      cwd: "/tmp",
+    });
+    expect(result.allowlistSatisfied).toBe(false);
+    expect(result.segmentSatisfiedBy).toEqual([null]);
   });
 });
 

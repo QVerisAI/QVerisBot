@@ -63,11 +63,23 @@ const ENV_OPTIONS_WITH_VALUE = new Set([
   "--ignore-signal",
   "--block-signal",
 ]);
+const ENV_INLINE_VALUE_PREFIXES = [
+  "-u",
+  "-c",
+  "-s",
+  "--unset=",
+  "--chdir=",
+  "--split-string=",
+  "--default-signal=",
+  "--ignore-signal=",
+  "--block-signal=",
+] as const;
 const ENV_FLAG_OPTIONS = new Set(["-i", "--ignore-environment", "-0", "--null"]);
 const NICE_OPTIONS_WITH_VALUE = new Set(["-n", "--adjustment", "--priority"]);
 const STDBUF_OPTIONS_WITH_VALUE = new Set(["-i", "--input", "-o", "--output", "-e", "--error"]);
 const TIMEOUT_FLAG_OPTIONS = new Set(["--foreground", "--preserve-status", "-v", "--verbose"]);
 const TIMEOUT_OPTIONS_WITH_VALUE = new Set(["-k", "--kill-after", "-s", "--signal"]);
+const TRANSPARENT_DISPATCH_WRAPPERS = new Set(["nice", "nohup", "stdbuf", "timeout"]);
 
 type ShellWrapperKind = "posix" | "cmd" | "powershell";
 
@@ -123,6 +135,15 @@ function findShellWrapperSpec(baseExecutable: string): ShellWrapperSpec | null {
 
 export function isEnvAssignment(token: string): boolean {
   return /^[A-Za-z_][A-Za-z0-9_]*=.*/.test(token);
+}
+
+function hasEnvInlineValuePrefix(lower: string): boolean {
+  for (const prefix of ENV_INLINE_VALUE_PREFIXES) {
+    if (lower.startsWith(prefix)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 type WrapperScanDirective = "continue" | "consume-next" | "stop" | "invalid";
@@ -191,17 +212,7 @@ export function unwrapEnvInvocation(argv: string[]): string[] | null {
       if (ENV_OPTIONS_WITH_VALUE.has(flag)) {
         return lower.includes("=") ? "continue" : "consume-next";
       }
-      if (
-        lower.startsWith("-u") ||
-        lower.startsWith("-c") ||
-        lower.startsWith("-s") ||
-        lower.startsWith("--unset=") ||
-        lower.startsWith("--chdir=") ||
-        lower.startsWith("--split-string=") ||
-        lower.startsWith("--default-signal=") ||
-        lower.startsWith("--ignore-signal=") ||
-        lower.startsWith("--block-signal=")
-      ) {
+      if (hasEnvInlineValuePrefix(lower)) {
         return "continue";
       }
       return "invalid";
@@ -209,14 +220,54 @@ export function unwrapEnvInvocation(argv: string[]): string[] | null {
   });
 }
 
-function unwrapNiceInvocation(argv: string[]): string[] | null {
-  return scanWrapperInvocation(argv, {
-    separators: new Set(["--"]),
-    onToken: (token, lower) => {
-      if (!token.startsWith("-") || token === "-") {
-        return "stop";
+function envInvocationUsesModifiers(argv: string[]): boolean {
+  let idx = 1;
+  let expectsOptionValue = false;
+  while (idx < argv.length) {
+    const token = argv[idx]?.trim() ?? "";
+    if (!token) {
+      idx += 1;
+      continue;
+    }
+    if (expectsOptionValue) {
+      return true;
+    }
+    if (token === "--" || token === "-") {
+      idx += 1;
+      break;
+    }
+    if (isEnvAssignment(token)) {
+      return true;
+    }
+    if (!token.startsWith("-") || token === "-") {
+      break;
+    }
+    const lower = token.toLowerCase();
+    const [flag] = lower.split("=", 2);
+    if (ENV_FLAG_OPTIONS.has(flag)) {
+      return true;
+    }
+    if (ENV_OPTIONS_WITH_VALUE.has(flag)) {
+      if (lower.includes("=")) {
+        return true;
       }
-      const [flag] = lower.split("=", 2);
+      expectsOptionValue = true;
+      idx += 1;
+      continue;
+    }
+    if (hasEnvInlineValuePrefix(lower)) {
+      return true;
+    }
+    // Unknown env flags are treated conservatively as modifiers.
+    return true;
+  }
+
+  return false;
+}
+
+function unwrapNiceInvocation(argv: string[]): string[] | null {
+  return unwrapDashOptionInvocation(argv, {
+    onFlag: (flag, lower) => {
       if (/^-\d+$/.test(lower)) {
         return "continue";
       }
@@ -243,7 +294,13 @@ function unwrapNohupInvocation(argv: string[]): string[] | null {
   });
 }
 
-function unwrapStdbufInvocation(argv: string[]): string[] | null {
+function unwrapDashOptionInvocation(
+  argv: string[],
+  params: {
+    onFlag: (flag: string, lowerToken: string) => WrapperScanDirective;
+    adjustCommandIndex?: (commandIndex: number, argv: string[]) => number | null;
+  },
+): string[] | null {
   return scanWrapperInvocation(argv, {
     separators: new Set(["--"]),
     onToken: (token, lower) => {
@@ -251,22 +308,26 @@ function unwrapStdbufInvocation(argv: string[]): string[] | null {
         return "stop";
       }
       const [flag] = lower.split("=", 2);
-      if (STDBUF_OPTIONS_WITH_VALUE.has(flag)) {
-        return lower.includes("=") ? "continue" : "consume-next";
+      return params.onFlag(flag, lower);
+    },
+    adjustCommandIndex: params.adjustCommandIndex,
+  });
+}
+
+function unwrapStdbufInvocation(argv: string[]): string[] | null {
+  return unwrapDashOptionInvocation(argv, {
+    onFlag: (flag, lower) => {
+      if (!STDBUF_OPTIONS_WITH_VALUE.has(flag)) {
+        return "invalid";
       }
-      return "invalid";
+      return lower.includes("=") ? "continue" : "consume-next";
     },
   });
 }
 
 function unwrapTimeoutInvocation(argv: string[]): string[] | null {
-  return scanWrapperInvocation(argv, {
-    separators: new Set(["--"]),
-    onToken: (token, lower) => {
-      if (!token.startsWith("-") || token === "-") {
-        return "stop";
-      }
-      const [flag] = lower.split("=", 2);
+  return unwrapDashOptionInvocation(argv, {
+    onFlag: (flag, lower) => {
       if (TIMEOUT_FLAG_OPTIONS.has(flag)) {
         return "continue";
       }
@@ -287,6 +348,13 @@ export type DispatchWrapperUnwrapResult =
   | { kind: "not-wrapper" }
   | { kind: "blocked"; wrapper: string }
   | { kind: "unwrapped"; wrapper: string; argv: string[] };
+
+export type DispatchWrapperExecutionPlan = {
+  argv: string[];
+  wrappers: string[];
+  policyBlocked: boolean;
+  blockedWrapper?: string;
+};
 
 function blockDispatchWrapper(wrapper: string): DispatchWrapperUnwrapResult {
   return { kind: "blocked", wrapper };
@@ -334,42 +402,95 @@ export function unwrapDispatchWrappersForResolution(
   argv: string[],
   maxDepth = MAX_DISPATCH_WRAPPER_DEPTH,
 ): string[] {
+  const plan = resolveDispatchWrapperExecutionPlan(argv, maxDepth);
+  return plan.argv;
+}
+
+function isSemanticDispatchWrapperUsage(wrapper: string, argv: string[]): boolean {
+  if (wrapper === "env") {
+    return envInvocationUsesModifiers(argv);
+  }
+  return !TRANSPARENT_DISPATCH_WRAPPERS.has(wrapper);
+}
+
+export function resolveDispatchWrapperExecutionPlan(
+  argv: string[],
+  maxDepth = MAX_DISPATCH_WRAPPER_DEPTH,
+): DispatchWrapperExecutionPlan {
   let current = argv;
+  const wrappers: string[] = [];
   for (let depth = 0; depth < maxDepth; depth += 1) {
     const unwrap = unwrapKnownDispatchWrapperInvocation(current);
+    if (unwrap.kind === "blocked") {
+      return {
+        argv: current,
+        wrappers,
+        policyBlocked: true,
+        blockedWrapper: unwrap.wrapper,
+      };
+    }
     if (unwrap.kind !== "unwrapped" || unwrap.argv.length === 0) {
       break;
     }
+    wrappers.push(unwrap.wrapper);
+    if (isSemanticDispatchWrapperUsage(unwrap.wrapper, current)) {
+      return {
+        argv: current,
+        wrappers,
+        policyBlocked: true,
+        blockedWrapper: unwrap.wrapper,
+      };
+    }
     current = unwrap.argv;
   }
-  return current;
+  return { argv: current, wrappers, policyBlocked: false };
+}
+
+function hasEnvManipulationBeforeShellWrapperInternal(
+  argv: string[],
+  depth: number,
+  envManipulationSeen: boolean,
+): boolean {
+  if (depth >= MAX_DISPATCH_WRAPPER_DEPTH) {
+    return false;
+  }
+
+  const token0 = argv[0]?.trim();
+  if (!token0) {
+    return false;
+  }
+
+  const dispatchUnwrap = unwrapKnownDispatchWrapperInvocation(argv);
+  if (dispatchUnwrap.kind === "blocked") {
+    return false;
+  }
+  if (dispatchUnwrap.kind === "unwrapped") {
+    const nextEnvManipulationSeen =
+      envManipulationSeen || (dispatchUnwrap.wrapper === "env" && envInvocationUsesModifiers(argv));
+    return hasEnvManipulationBeforeShellWrapperInternal(
+      dispatchUnwrap.argv,
+      depth + 1,
+      nextEnvManipulationSeen,
+    );
+  }
+
+  const wrapper = findShellWrapperSpec(normalizeExecutableToken(token0));
+  if (!wrapper) {
+    return false;
+  }
+  const payload = extractShellWrapperPayload(argv, wrapper);
+  if (!payload) {
+    return false;
+  }
+  return envManipulationSeen;
+}
+
+export function hasEnvManipulationBeforeShellWrapper(argv: string[]): boolean {
+  return hasEnvManipulationBeforeShellWrapperInternal(argv, 0, false);
 }
 
 function extractPosixShellInlineCommand(argv: string[]): string | null {
-  for (let i = 1; i < argv.length; i += 1) {
-    const token = argv[i]?.trim();
-    if (!token) {
-      continue;
-    }
-    const lower = token.toLowerCase();
-    if (lower === "--") {
-      break;
-    }
-    if (POSIX_INLINE_COMMAND_FLAGS.has(lower)) {
-      const cmd = argv[i + 1]?.trim();
-      return cmd ? cmd : null;
-    }
-    if (/^-[^-]*c[^-]*$/i.test(token)) {
-      const commandIndex = lower.indexOf("c");
-      const inline = token.slice(commandIndex + 1).trim();
-      if (inline) {
-        return inline;
-      }
-      const cmd = argv[i + 1]?.trim();
-      return cmd ? cmd : null;
-    }
-  }
-  return null;
+  return extractInlineCommandByFlags(argv, POSIX_INLINE_COMMAND_FLAGS, { allowCombinedC: true });
 }
 
 function extractCmdInlineCommand(argv: string[]): string | null {
@@ -389,6 +510,14 @@ function extractCmdInlineCommand(argv: string[]): string | null {
 }
 
 function extractPowerShellInlineCommand(argv: string[]): string | null {
+  return extractInlineCommandByFlags(argv, POWERSHELL_INLINE_COMMAND_FLAGS);
+}
+
+function extractInlineCommandByFlags(
+  argv: string[],
+  flags: ReadonlySet<string>,
+  options: { allowCombinedC?: boolean } = {},
+): string | null {
   for (let i = 1; i < argv.length; i += 1) {
     const token = argv[i]?.trim();
     if (!token) {
@@ -398,7 +527,16 @@ function extractPowerShellInlineCommand(argv: string[]): string | null {
     if (lower === "--") {
       break;
     }
-    if (POWERSHELL_INLINE_COMMAND_FLAGS.has(lower)) {
+    if (flags.has(lower)) {
+      const cmd = argv[i + 1]?.trim();
+      return cmd ? cmd : null;
+    }
+    if (options.allowCombinedC && /^-[^-]*c[^-]*$/i.test(token)) {
+      const commandIndex = lower.indexOf("c");
+      const inline = token.slice(commandIndex + 1).trim();
+      if (inline) {
+        return inline;
+      }
       const cmd = argv[i + 1]?.trim();
       return cmd ? cmd : null;
     }

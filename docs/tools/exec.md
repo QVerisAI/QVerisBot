@@ -29,7 +29,7 @@ Background sessions are scoped per agent; `process` only sees sessions from the 
 
 Notes:
 
-- `host` defaults to `sandbox` when sandbox runtime is active, and defaults to `gateway` otherwise.
+- `host` defaults to `sandbox`.
 - `elevated` is ignored when sandboxing is off (exec already runs on the host).
 - `gateway`/`node` approvals are controlled by `~/.openclaw/exec-approvals.json`.
 - `node` requires a paired node (companion app or headless node host).
@@ -49,7 +49,7 @@ Notes:
 
 - `tools.exec.notifyOnExit` (default: true): when true, backgrounded exec sessions enqueue a system event and request a heartbeat on exit.
 - `tools.exec.approvalRunningNoticeMs` (default: 10000): emit a single “running” notice when an approval-gated exec runs longer than this (0 disables).
-- `tools.exec.host` (default: runtime-aware: `sandbox` when sandbox runtime is active, `gateway` otherwise)
+- `tools.exec.host` (default: `sandbox`)
 - `tools.exec.security` (default: `deny` for sandbox, `allowlist` for gateway + node when unset)
 - `tools.exec.ask` (default: `on-miss`)
 - `tools.exec.node` (default: unset)
@@ -122,11 +122,14 @@ running after `tools.exec.approvalRunningNoticeMs`, a single `Exec running` noti
 
 ## Allowlist + safe bins
 
-Allowlist enforcement matches **resolved binary paths only** (no basename matches). When
+Manual allowlist enforcement matches **resolved binary paths only** (no basename matches). When
 `security=allowlist`, shell commands are auto-allowed only if every pipeline segment is
 allowlisted or a safe bin. Chaining (`;`, `&&`, `||`) and redirections are rejected in
 allowlist mode unless every top-level segment satisfies the allowlist (including safe bins).
 Redirections remain unsupported.
+
+`autoAllowSkills` is a separate convenience path in exec approvals. It is not the same as
+manual path allowlist entries. For strict explicit trust, keep `autoAllowSkills` disabled.
 
 Use the two controls for different jobs:
 

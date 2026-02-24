@@ -25,6 +25,12 @@ Exec approvals are enforced locally on the execution host:
 - **gateway host** → `openclaw` process on the gateway machine
 - **node host** → node runner (macOS companion app or headless node host)
 
+Trust model note:
+
+- Gateway-authenticated callers are trusted operators for that Gateway.
+- Paired nodes extend that trusted operator capability onto the node host.
+- Exec approvals reduce accidental execution risk, but are not a per-user auth boundary.
+
 macOS split:
 
 - **node host service** forwards `system.run` to the **macOS app** over local IPC.
@@ -119,6 +125,12 @@ When **Auto-allow skill CLIs** is enabled, executables referenced by known skill
 are treated as allowlisted on nodes (macOS node or headless node host). This uses
 `skills.bins` over the Gateway RPC to fetch the skill bin list. Disable this if you want strict manual allowlists.
 
+Important trust notes:
+
+- This is an **implicit convenience allowlist**, separate from manual path allowlist entries.
+- It is intended for trusted operator environments where Gateway and node are in the same trust boundary.
+- If you require strict explicit trust, keep `autoAllowSkills: false` and use manual path allowlist entries only.
+
 ## Safe bins (stdin-only)
 
 `tools.exec.safeBins` defines a small list of **stdin-only** binaries (for example `jq`)
@@ -131,17 +143,20 @@ Custom safe bins must define an explicit profile in `tools.exec.safeBinProfiles.
 Validation is deterministic from argv shape only (no host filesystem existence checks), which
 prevents file-existence oracle behavior from allow/deny differences.
 File-oriented options are denied for default safe bins (for example `sort -o`, `sort --output`,
-`sort --files0-from`, `sort --compress-program`, `wc --files0-from`, `jq -f/--from-file`,
+`sort --files0-from`, `sort --compress-program`, `sort --random-source`,
+`sort --temporary-directory`/`-T`, `wc --files0-from`, `jq -f/--from-file`,
 `grep -f/--file`).
 Safe bins also enforce explicit per-binary flag policy for options that break stdin-only
 behavior (for example `sort -o/--output/--compress-program` and grep recursive flags).
+Long options are validated fail-closed in safe-bin mode: unknown flags and ambiguous
+abbreviations are rejected.
 Denied flags by safe-bin profile:
 
 <!-- SAFE_BIN_DENIED_FLAGS:START -->
 
 - `grep`: `--dereference-recursive`, `--directories`, `--exclude-from`, `--file`, `--recursive`, `-R`, `-d`, `-f`, `-r`
 - `jq`: `--argfile`, `--from-file`, `--library-path`, `--rawfile`, `--slurpfile`, `-L`, `-f`
-- `sort`: `--compress-program`, `--files0-from`, `--output`, `-o`
+- `sort`: `--compress-program`, `--files0-from`, `--output`, `--random-source`, `--temporary-directory`, `-T`, `-o`
 - `wc`: `--files0-from`
 <!-- SAFE_BIN_DENIED_FLAGS:END -->
 
