@@ -78,13 +78,24 @@ export async function resolveDeliveryTarget(
       accountId: origin.accountId,
       mode: "explicit",
     });
+    if (docked.ok) {
+      return {
+        ok: true,
+        channel: origin.channel,
+        to: docked.to,
+        accountId: origin.accountId,
+        threadId: origin.threadId,
+        mode: "explicit",
+      };
+    }
     return {
+      ok: false,
       channel: origin.channel,
-      to: docked.ok ? docked.to : undefined,
+      to: undefined,
       accountId: origin.accountId,
       threadId: origin.threadId,
       mode: "explicit",
-      error: docked.ok ? undefined : docked.error,
+      error: docked.error,
     };
   }
 
