@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
+import type { OpenClawConfig } from "../config/config.js";
 import { createOpenClawCodingTools } from "./pi-tools.js";
 import { createHostSandboxFsBridge } from "./test-helpers/host-sandbox-fs-bridge.js";
 import { expectReadWriteEditTools, getTextContent } from "./test-helpers/pi-tools-fs-helpers.js";
@@ -60,6 +61,31 @@ describe("workspace path resolution", () => {
     });
   });
 
+  it("allows deletion edits with empty newText", async () => {
+    await withTempDir("openclaw-ws-", async (workspaceDir) => {
+      await withTempDir("openclaw-cwd-", async (otherDir) => {
+        const testFile = "delete.txt";
+        await fs.writeFile(path.join(workspaceDir, testFile), "hello world", "utf8");
+
+        const cwdSpy = vi.spyOn(process, "cwd").mockReturnValue(otherDir);
+        try {
+          const tools = createOpenClawCodingTools({ workspaceDir });
+          const { editTool } = expectReadWriteEditTools(tools);
+
+          await editTool.execute("ws-edit-delete", {
+            path: testFile,
+            oldText: " world",
+            newText: "",
+          });
+
+          expect(await fs.readFile(path.join(workspaceDir, testFile), "utf8")).toBe("hello");
+        } finally {
+          cwdSpy.mockRestore();
+        }
+      });
+    });
+  });
+
   it("defaults exec cwd to workspaceDir when workdir is omitted", async () => {
     await withTempDir("openclaw-ws-", async (workspaceDir) => {
       const tools = createOpenClawCodingTools({
@@ -110,6 +136,19 @@ describe("workspace path resolution", () => {
         ]);
         expect(resolvedOutput).toBe(resolvedOverride);
       });
+    });
+  });
+
+  it("rejects @-prefixed absolute paths outside workspace when workspaceOnly is enabled", async () => {
+    await withTempDir("openclaw-ws-", async (workspaceDir) => {
+      const cfg: OpenClawConfig = { tools: { fs: { workspaceOnly: true } } };
+      const tools = createOpenClawCodingTools({ workspaceDir, config: cfg });
+      const { readTool } = expectReadWriteEditTools(tools);
+
+      const outsideAbsolute = path.resolve(path.parse(workspaceDir).root, "outside-openclaw.txt");
+      await expect(
+        readTool.execute("ws-read-at-prefix", { path: `@${outsideAbsolute}` }),
+      ).rejects.toThrow(/Path escapes sandbox root/i);
     });
   });
 });
