@@ -194,8 +194,104 @@ Runtime: **Node ≥22**.
 - **Voice Wake + Talk Mode** — always-on speech for macOS/iOS/Android
 - **Live Canvas** — agent-driven visual workspace
 - **LLM Proxy Support** — HTTP proxy for API calls in network-restricted environments
+- **[One-command bot migration](#migrating-your-bot)** — export a tuned bot's knowledge, memory, and skills to a portable bundle and import it on any machine or OS without copying credentials
 
 [QVeris AI](https://qveris.ai) · [Docs](https://docs.openclaw.ai) · [DeepWiki](https://deepwiki.com/QVerisAI/QVerisBot) · [Source Guide](docs/qverisbot-from-source.md) · [Discord](https://discord.gg/clawd)
+
+---
+
+## Migrating Your Bot
+
+When you move a tuned bot to a new machine or operating system (for example, from macOS to Linux), a simple directory copy breaks because it carries absolute paths and gateway credentials that only make sense on the source host.
+
+`qverisbot migrate` solves this by exporting only the **portable experience** — knowledge, memory, skills, and recent session summaries — while actively stripping secrets and rebuilding system-specific state on the target.
+
+### What is exported
+
+| Content                                            | Included | Notes                                          |
+| :------------------------------------------------- | :------: | :--------------------------------------------- |
+| Agent workspace files (AGENTS.md, MEMORY.md, etc.) |    ✅    | Secrets redacted before packing                |
+| Managed skills (`~/.openclaw/agents/*/skills/`)    |    ✅    | Redacted                                       |
+| Personal skills (`~/.openclaw/skills/`)            |    ✅    | Redacted                                       |
+| Recent session summaries (last 200)                |    ✅    | Previews redacted; included for context/memory |
+| API keys, gateway tokens, provider credentials     |    ❌    | Never exported                                 |
+| Session raw transcripts                            |    ❌    | Summaries only                                 |
+| Machine-specific config (`openclaw.json`)          |    ❌    | Re-generated on target via `qverisbot onboard` |
+
+### Export
+
+```bash
+# Export to an auto-named bundle in the current directory
+qverisbot migrate export
+
+# Export to a specific path
+qverisbot migrate export --output ~/my-bot-backup.tar.gz
+
+# Export a specific agent only
+qverisbot migrate export --agent my-agent-id
+
+# Export without session summaries
+qverisbot migrate export --sessions-scope none
+```
+
+The resulting `.tar.gz` bundle is self-contained and safe to share or store in version control (no secrets inside).
+
+### Import
+
+```bash
+# Import from a local bundle
+qverisbot migrate import ./my-bot-backup.tar.gz
+
+# Import from a remote URL (HTTPS)
+qverisbot migrate import https://your-host.example.com/bot-bundle.tar.gz
+
+# Import without resetting existing sessions
+qverisbot migrate import ./my-bot-backup.tar.gz --no-reset-sessions
+
+# Dry-run — show what would be placed without touching the filesystem
+qverisbot migrate import ./my-bot-backup.tar.gz --dry-run
+```
+
+After import, re-run `qverisbot onboard` (or `qverisbot gateway restart`) on the target machine to regenerate gateway credentials and service definitions for the new environment.
+
+### Doctor — diagnose migration issues
+
+If a bot behaves unexpectedly after moving hosts, run the migration doctor:
+
+```bash
+qverisbot migrate doctor
+
+# Check a specific bundle file before importing
+qverisbot migrate doctor --bundle ./my-bot-backup.tar.gz
+
+# Output machine-readable JSON for scripting
+qverisbot migrate doctor --json
+```
+
+The doctor reports:
+
+- **Foreign OS path poison** — workspace or session config containing `/Users/` on Linux, `/home/` on macOS, or Windows paths on a POSIX host.
+- **Gateway token drift** — running gateway token differs from the value in config (causes "token mismatch" errors in Web UI and channels).
+- **Bundle validation** — manifest version compatibility and content integrity before an import.
+
+### Recommended cross-OS migration flow
+
+```bash
+# On the source machine
+qverisbot migrate export --output bot-bundle.tar.gz
+
+# Transfer the bundle (scp, rsync, cloud storage, etc.)
+scp bot-bundle.tar.gz user@new-host:~/
+
+# On the target machine — set up fresh credentials first
+qverisbot onboard
+
+# Then import the tuned experience on top
+qverisbot migrate import ~/bot-bundle.tar.gz
+
+# Verify everything is clean
+qverisbot migrate doctor
+```
 
 ---
 
@@ -294,6 +390,7 @@ QVerisBot is built on OpenClaw. For deep architecture, channel internals, platfo
 ## QVerisBot-specific docs
 
 - **Source setup + Feishu guide:** `docs/qverisbot-from-source.md`
+- **Bot migration (cross-OS):** see [Migrating Your Bot](#migrating-your-bot) above — `qverisbot migrate export|import|doctor`
 - **QVeris AI integrations:** https://qveris.ai/integrations
 - **QVeris dashboard / API keys:** https://qveris.ai/dashboard
 
