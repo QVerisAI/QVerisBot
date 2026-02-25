@@ -55,9 +55,9 @@ describe("context-filter", () => {
     const maxTurns = resolveMaxRecentTurns({
       config: {
         session: {},
-      },
+      } satisfies OpenClawConfig,
       sessionKey: "unknown:dm:user",
-    } satisfies OpenClawConfig);
+    });
     expect(maxTurns).toBe(100);
   });
 

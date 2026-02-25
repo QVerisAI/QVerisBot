@@ -6,7 +6,7 @@ import {
   resolveGatewaySystemdServiceName,
 } from "./constants.js";
 import { execFileUtf8 } from "./exec-file.js";
-import { formatLine, toPosixPath } from "./output.js";
+import { formatLine, toPosixPath, writeFormattedLines } from "./output.js";
 import { resolveHomeDir } from "./paths.js";
 import { parseKeyValueOutput } from "./runtime-parse.js";
 import type { GatewayServiceRuntime } from "./service-runtime.js";
