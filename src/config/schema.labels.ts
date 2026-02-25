@@ -450,6 +450,8 @@ export const FIELD_LABELS: Record<string, string> = {
   "session.scope": "Session Scope",
   "session.dmScope": "DM Session Scope",
   "session.identityLinks": "Session Identity Links",
+  "session.transcriptRetentionDays": "Session Transcript Retention (days)",
+  "session.maxRecentTurns": "Session Max Recent Turns",
   "session.resetTriggers": "Session Reset Triggers",
   "session.idleMinutes": "Session Idle Minutes",
   "session.reset": "Session Reset Policy",

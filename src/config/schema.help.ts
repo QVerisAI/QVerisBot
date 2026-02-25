@@ -947,6 +947,10 @@ export const FIELD_HELP: Record<string, string> = {
     'DM session scoping: "main" keeps continuity, while "per-peer", "per-channel-peer", and "per-account-channel-peer" increase isolation. Use isolated modes for shared inboxes or multi-account deployments.',
   "session.identityLinks":
     "Maps canonical identities to provider-prefixed peer IDs so equivalent users resolve to one DM thread (example: telegram:123456). Use this when the same human appears across multiple channels or accounts.",
+  "session.transcriptRetentionDays":
+    "Limits loaded context to messages from the most recent N days before each run (default: 7). Use this to keep long-lived sessions fresh without forcing full session resets.",
+  "session.maxRecentTurns":
+    "Caps loaded context to the most recent N user turns when channel-specific history limits are unset (default: 100). Combine with transcriptRetentionDays to bound prompt size while preserving recent continuity.",
   "session.resetTriggers":
     "Lists message triggers that force a session reset when matched in inbound content. Use sparingly for explicit reset phrases so context is not dropped unexpectedly during normal conversation.",
   "session.idleMinutes":

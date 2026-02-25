@@ -103,6 +103,10 @@ export type SessionConfig = {
   dmScope?: DmScope;
   /** Map platform-prefixed identities (e.g. "telegram:123") to canonical DM peers. */
   identityLinks?: Record<string, string[]>;
+  /** Context loading retention window (days). Default: 7. */
+  transcriptRetentionDays?: number;
+  /** Context loading cap by user turns when channel historyLimit is unset. Default: 100. */
+  maxRecentTurns?: number;
   resetTriggers?: string[];
   idleMinutes?: number;
   reset?: SessionResetConfig;
