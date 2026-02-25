@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.SystemClock
+import android.util.Log
 import androidx.core.content.ContextCompat
 import ai.openclaw.android.chat.ChatController
 import ai.openclaw.android.chat.ChatMessage
@@ -163,6 +164,12 @@ class NodeRuntime(context: Context) {
     isForeground = { _isForeground.value },
     cameraEnabled = { cameraEnabled.value },
     locationEnabled = { locationMode.value != LocationMode.Off },
+    onCanvasA2uiPush = {
+      _canvasA2uiHydrated.value = true
+      _canvasRehydratePending.value = false
+      _canvasRehydrateErrorText.value = null
+    },
+    onCanvasA2uiReset = { _canvasA2uiHydrated.value = false },
   )
 
   private lateinit var gatewayEventHandler: GatewayEventHandler
@@ -174,6 +181,8 @@ class NodeRuntime(context: Context) {
 
   private val _isConnected = MutableStateFlow(false)
   val isConnected: StateFlow<Boolean> = _isConnected.asStateFlow()
+  private val _nodeConnected = MutableStateFlow(false)
+  val nodeConnected: StateFlow<Boolean> = _nodeConnected.asStateFlow()
 
   private val _statusText = MutableStateFlow("Offline")
   val statusText: StateFlow<String> = _statusText.asStateFlow()
@@ -194,6 +203,13 @@ class NodeRuntime(context: Context) {
   private val _screenRecordActive = MutableStateFlow(false)
   val screenRecordActive: StateFlow<Boolean> = _screenRecordActive.asStateFlow()
 
+  private val _canvasA2uiHydrated = MutableStateFlow(false)
+  val canvasA2uiHydrated: StateFlow<Boolean> = _canvasA2uiHydrated.asStateFlow()
+  private val _canvasRehydratePending = MutableStateFlow(false)
+  val canvasRehydratePending: StateFlow<Boolean> = _canvasRehydratePending.asStateFlow()
+  private val _canvasRehydrateErrorText = MutableStateFlow<String?>(null)
+  val canvasRehydrateErrorText: StateFlow<String?> = _canvasRehydrateErrorText.asStateFlow()
+
   private val _serverName = MutableStateFlow<String?>(null)
   val serverName: StateFlow<String?> = _serverName.asStateFlow()
 
@@ -207,8 +223,9 @@ class NodeRuntime(context: Context) {
   val isForeground: StateFlow<Boolean> = _isForeground.asStateFlow()
 
   private var lastAutoA2uiUrl: String? = null
+  private var didAutoRequestCanvasRehydrate = false
+  private val canvasRehydrateSeq = AtomicLong(0)
   private var operatorConnected = false
-  private var nodeConnected = false
   private var operatorStatusText: String = "Offline"
   private var nodeStatusText: String = "Offline"
 
@@ -254,14 +271,23 @@ class NodeRuntime(context: Context) {
       identityStore = identityStore,
       deviceAuthStore = deviceAuthStore,
       onConnected = { _, _, _ ->
-        nodeConnected = true
+        _nodeConnected.value = true
         nodeStatusText = "Connected"
+        didAutoRequestCanvasRehydrate = false
+        _canvasA2uiHydrated.value = false
+        _canvasRehydratePending.value = false
+        _canvasRehydrateErrorText.value = null
         updateStatus()
         maybeNavigateToA2uiOnConnect()
+        requestCanvasRehydrate(source = "node_connect", force = false)
       },
       onDisconnected = { message ->
-        nodeConnected = false
+        _nodeConnected.value = false
         nodeStatusText = message
+        didAutoRequestCanvasRehydrate = false
+        _canvasA2uiHydrated.value = false
+        _canvasRehydratePending.value = false
+        _canvasRehydrateErrorText.value = null
         updateStatus()
         showLocalCanvasOnDisconnect()
       },
@@ -304,9 +330,9 @@ class NodeRuntime(context: Context) {
     _isConnected.value = operatorConnected
     _statusText.value =
       when {
-        operatorConnected && nodeConnected -> "Connected"
-        operatorConnected && !nodeConnected -> "Connected (node offline)"
-        !operatorConnected && nodeConnected -> "Connected (operator offline)"
+        operatorConnected && _nodeConnected.value -> "Connected"
+        operatorConnected && !_nodeConnected.value -> "Connected (node offline)"
+        !operatorConnected && _nodeConnected.value -> "Connected (operator offline)"
         operatorStatusText.isNotBlank() && operatorStatusText != "Offline" -> operatorStatusText
         else -> nodeStatusText
       }
@@ -328,7 +354,61 @@ class NodeRuntime(context: Context) {
 
   private fun showLocalCanvasOnDisconnect() {
     lastAutoA2uiUrl = null
+    _canvasA2uiHydrated.value = false
+    _canvasRehydratePending.value = false
+    _canvasRehydrateErrorText.value = null
     canvas.navigate("")
+  }
+
+  fun requestCanvasRehydrate(source: String = "manual", force: Boolean = true) {
+    scope.launch {
+      if (!_nodeConnected.value) {
+        _canvasRehydratePending.value = false
+        _canvasRehydrateErrorText.value = "Node offline. Reconnect and retry."
+        return@launch
+      }
+      if (!force && didAutoRequestCanvasRehydrate) return@launch
+      didAutoRequestCanvasRehydrate = true
+      val requestId = canvasRehydrateSeq.incrementAndGet()
+      _canvasRehydratePending.value = true
+      _canvasRehydrateErrorText.value = null
+
+      val sessionKey = resolveMainSessionKey()
+      val prompt =
+        "Restore canvas now for session=$sessionKey source=$source. " +
+          "If existing A2UI state exists, replay it immediately. " +
+          "If not, create and render a compact mobile-friendly dashboard in Canvas."
+      val sent =
+        nodeSession.sendNodeEvent(
+          event = "agent.request",
+          payloadJson =
+            buildJsonObject {
+              put("message", JsonPrimitive(prompt))
+              put("sessionKey", JsonPrimitive(sessionKey))
+              put("thinking", JsonPrimitive("low"))
+              put("deliver", JsonPrimitive(false))
+            }.toString(),
+        )
+      if (!sent) {
+        if (!force) {
+          didAutoRequestCanvasRehydrate = false
+        }
+        if (canvasRehydrateSeq.get() == requestId) {
+          _canvasRehydratePending.value = false
+          _canvasRehydrateErrorText.value = "Failed to request restore. Tap to retry."
+        }
+        Log.w("OpenClawCanvas", "canvas rehydrate request failed ($source): transport unavailable")
+        return@launch
+      }
+      scope.launch {
+        delay(20_000)
+        if (canvasRehydrateSeq.get() != requestId) return@launch
+        if (!_canvasRehydratePending.value) return@launch
+        if (_canvasA2uiHydrated.value) return@launch
+        _canvasRehydratePending.value = false
+        _canvasRehydrateErrorText.value = "No canvas update yet. Tap to retry."
+      }
+    }
   }
 
   val instanceId: StateFlow<String> = prefs.instanceId
@@ -345,7 +425,10 @@ class NodeRuntime(context: Context) {
   val manualPort: StateFlow<Int> = prefs.manualPort
   val manualTls: StateFlow<Boolean> = prefs.manualTls
   val gatewayToken: StateFlow<String> = prefs.gatewayToken
+  val onboardingCompleted: StateFlow<Boolean> = prefs.onboardingCompleted
   fun setGatewayToken(value: String) = prefs.setGatewayToken(value)
+  fun setGatewayPassword(value: String) = prefs.setGatewayPassword(value)
+  fun setOnboardingCompleted(value: Boolean) = prefs.setOnboardingCompleted(value)
   val lastDiscoveredStableId: StateFlow<String> = prefs.lastDiscoveredStableId
   val canvasDebugStatusEnabled: StateFlow<Boolean> = prefs.canvasDebugStatusEnabled
 
@@ -531,6 +614,15 @@ class NodeRuntime(context: Context) {
     prefs.setTalkEnabled(value)
   }
 
+  fun logGatewayDebugSnapshot(source: String = "manual") {
+    val flowToken = gatewayToken.value.trim()
+    val loadedToken = prefs.loadGatewayToken().orEmpty()
+    Log.i(
+      "OpenClawGatewayDebug",
+      "source=$source manualEnabled=${manualEnabled.value} host=${manualHost.value} port=${manualPort.value} tls=${manualTls.value} flowTokenLen=${flowToken.length} loadTokenLen=${loadedToken.length} connected=${isConnected.value} status=${statusText.value}",
+    )
+  }
+
   fun refreshGatewayConnection() {
     val endpoint = connectedEndpoint ?: return
     val token = prefs.loadGatewayToken()
@@ -639,10 +731,10 @@ class NodeRuntime(context: Context) {
           contextJson = contextJson,
         )
 
-      val connected = nodeConnected
+      val connected = _nodeConnected.value
       var error: String? = null
       if (connected) {
-        try {
+        val sent =
           nodeSession.sendNodeEvent(
             event = "agent.request",
             payloadJson =
@@ -654,8 +746,8 @@ class NodeRuntime(context: Context) {
                 put("key", JsonPrimitive(actionId))
               }.toString(),
           )
-        } catch (e: Throwable) {
-          error = e.message ?: "send failed"
+        if (!sent) {
+          error = "send failed"
         }
       } else {
         error = "gateway not connected"
