@@ -14,6 +14,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
   private val runtime: NodeRuntime = (app as NodeApp).runtime
 
   val canvas: CanvasController = runtime.canvas
+  val canvasCurrentUrl: StateFlow<String?> = runtime.canvas.currentUrl
+  val canvasA2uiHydrated: StateFlow<Boolean> = runtime.canvasA2uiHydrated
+  val canvasRehydratePending: StateFlow<Boolean> = runtime.canvasRehydratePending
+  val canvasRehydrateErrorText: StateFlow<String?> = runtime.canvasRehydrateErrorText
   val camera: CameraCaptureManager = runtime.camera
   val screenRecorder: ScreenRecordManager = runtime.screenRecorder
   val sms: SmsManager = runtime.sms
@@ -22,6 +26,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
   val discoveryStatusText: StateFlow<String> = runtime.discoveryStatusText
 
   val isConnected: StateFlow<Boolean> = runtime.isConnected
+  val isNodeConnected: StateFlow<Boolean> = runtime.nodeConnected
   val statusText: StateFlow<String> = runtime.statusText
   val serverName: StateFlow<String?> = runtime.serverName
   val remoteAddress: StateFlow<String?> = runtime.remoteAddress
@@ -53,6 +58,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
   val manualPort: StateFlow<Int> = runtime.manualPort
   val manualTls: StateFlow<Boolean> = runtime.manualTls
   val gatewayToken: StateFlow<String> = runtime.gatewayToken
+  val onboardingCompleted: StateFlow<Boolean> = runtime.onboardingCompleted
   val canvasDebugStatusEnabled: StateFlow<Boolean> = runtime.canvasDebugStatusEnabled
 
   val chatSessionKey: StateFlow<String> = runtime.chatSessionKey
@@ -110,6 +116,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     runtime.setGatewayToken(value)
   }
 
+  fun setGatewayPassword(value: String) {
+    runtime.setGatewayPassword(value)
+  }
+
+  fun setOnboardingCompleted(value: Boolean) {
+    runtime.setOnboardingCompleted(value)
+  }
+
   fun setCanvasDebugStatusEnabled(value: Boolean) {
     runtime.setCanvasDebugStatusEnabled(value)
   }
@@ -128,6 +142,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
   fun setTalkEnabled(enabled: Boolean) {
     runtime.setTalkEnabled(enabled)
+  }
+
+  fun logGatewayDebugSnapshot(source: String = "manual") {
+    runtime.logGatewayDebugSnapshot(source)
   }
 
   fun refreshGatewayConnection() {
@@ -156,6 +174,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
   fun handleCanvasA2UIActionFromWebView(payloadJson: String) {
     runtime.handleCanvasA2UIActionFromWebView(payloadJson)
+  }
+
+  fun requestCanvasRehydrate(source: String = "screen_tab") {
+    runtime.requestCanvasRehydrate(source = source, force = true)
   }
 
   fun loadChat(sessionKey: String) {

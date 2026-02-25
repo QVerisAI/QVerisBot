@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../config/config.js";
+import { createEmptyPluginRegistry } from "../plugins/registry.js";
+import { setActivePluginRegistry } from "../plugins/runtime.js";
 import type { WizardPrompter } from "../wizard/prompts.js";
 import { setDefaultChannelPluginRegistryForTests } from "./channel-test-helpers.js";
 import { setupChannels } from "./onboard-channels.js";
@@ -26,14 +28,6 @@ function createUnexpectedPromptGuards() {
   };
 }
 
-vi.mock("node:fs/promises", () => ({
-  default: {
-    access: vi.fn(async () => {
-      throw new Error("ENOENT");
-    }),
-  },
-}));
-
 vi.mock("../channel-web.js", () => ({
   loginWeb: vi.fn(async () => {}),
 }));
@@ -41,6 +35,15 @@ vi.mock("../channel-web.js", () => ({
 vi.mock("./onboard-helpers.js", () => ({
   detectBinary: vi.fn(async () => false),
 }));
+
+vi.mock("./onboarding/plugin-install.js", async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...(actual as Record<string, unknown>),
+    // Allow tests to simulate an empty plugin registry during onboarding.
+    reloadOnboardingPluginRegistry: vi.fn(() => {}),
+  };
+});
 
 describe("setupChannels", () => {
   beforeEach(() => {
@@ -86,6 +89,47 @@ describe("setupChannels", () => {
       expect.objectContaining({ message: "Select channel (QuickStart)" }),
     );
     expect(multiselect).not.toHaveBeenCalled();
+  });
+
+  it("continues Telegram onboarding even when plugin registry is empty (avoids 'plugin not available' block)", async () => {
+    // Simulate missing registry entries (the scenario reported in #25545).
+    setActivePluginRegistry(createEmptyPluginRegistry());
+    // Avoid accidental env-token configuration changing the prompt path.
+    process.env.TELEGRAM_BOT_TOKEN = "";
+
+    const note = vi.fn(async (_message?: string, _title?: string) => {});
+    let quickstartSelectionCount = 0;
+    const select = vi.fn(async ({ message }: { message: string }) => {
+      if (message === "Select channel (QuickStart)") {
+        quickstartSelectionCount += 1;
+        return quickstartSelectionCount === 1 ? "telegram" : "__skip__";
+      }
+      return "__done__";
+    });
+    const text = vi.fn(async () => "123:token");
+
+    const prompter = createPrompter({
+      note,
+      select: select as unknown as WizardPrompter["select"],
+      text: text as unknown as WizardPrompter["text"],
+    });
+
+    const runtime = createExitThrowingRuntime();
+
+    await setupChannels({} as OpenClawConfig, runtime, prompter, {
+      skipConfirm: true,
+      quickstartDefaults: true,
+    });
+
+    // The new flow should not stop setup with a hard "plugin not available" note.
+    const sawHardStop = note.mock.calls.some((call) => {
+      const message = call[0];
+      const title = call[1];
+      return (
+        title === "Channel setup" && String(message).trim() === "telegram plugin not available."
+      );
+    });
+    expect(sawHardStop).toBe(false);
   });
 
   it("shows explicit dmScope config command in channel primer", async () => {
