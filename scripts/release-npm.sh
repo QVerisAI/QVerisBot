@@ -190,10 +190,12 @@ else
   echo "==> Push branch: $CURRENT_BRANCH"
   git push origin "$CURRENT_BRANCH"
   if [[ "$CREATE_AND_PUSH_TAG" -eq 1 ]]; then
+    # Use refs/tags/ prefix to avoid ambiguity when a branch has the same name as the tag
+    TAG_REF="refs/tags/$TAG"
     if [[ "$TAG_FORCE_PUSH" -eq 1 ]]; then
-      git push -f origin "$TAG"
+      git push -f origin "$TAG_REF"
     else
-      git push origin "$TAG"
+      git push origin "$TAG_REF"
     fi
   fi
   if [[ "$LOCAL_PUBLISH" -eq 0 && "$CREATE_AND_PUSH_TAG" -eq 1 ]]; then
