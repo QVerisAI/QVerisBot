@@ -9,9 +9,13 @@ import { jsonResult, readNumberParam, readStringParam } from "./common.js";
 // ============================================================================
 
 const DEFAULT_QVERIS_BASE_URL = "https://qveris.ai/api/v1";
-const DEFAULT_TIMEOUT_SECONDS = 60;
+const DEFAULT_SEARCH_TIMEOUT_SECONDS = 5;
+const DEFAULT_EXECUTE_TIMEOUT_SECONDS = 60;
 const DEFAULT_MAX_RESPONSE_SIZE = 20480;
 const DEFAULT_SEARCH_LIMIT = 10;
+
+// Short-TTL cache for search results — avoids redundant API calls within a session
+const DEFAULT_SEARCH_CACHE_TTL_MS = 90_000; // 90 seconds
 
 // ============================================================================
 // Types
@@ -71,6 +75,15 @@ interface QverisExecutionResponse {
   credits_used?: number;
 }
 
+/** Structured error returned to the model instead of throwing */
+interface QverisErrorResult {
+  success: false;
+  error_type: "timeout" | "http_error" | "network_error" | "json_parse_error";
+  status?: number;
+  detail: string;
+  retry_hint?: string;
+}
+
 // ============================================================================
 // Config Resolution
 // ============================================================================
@@ -98,8 +111,14 @@ function resolveQverisBaseUrl(config?: QverisConfig): string {
   return config?.baseUrl?.trim() || DEFAULT_QVERIS_BASE_URL;
 }
 
-function resolveTimeoutSeconds(config?: QverisConfig): number {
-  return config?.timeoutSeconds ?? DEFAULT_TIMEOUT_SECONDS;
+function resolveSearchTimeoutSeconds(config?: QverisConfig): number {
+  // searchTimeoutSeconds takes precedence; fall back to legacy timeoutSeconds
+  return config?.searchTimeoutSeconds ?? config?.timeoutSeconds ?? DEFAULT_SEARCH_TIMEOUT_SECONDS;
+}
+
+function resolveExecuteTimeoutSeconds(config?: QverisConfig): number {
+  // executeTimeoutSeconds takes precedence; fall back to legacy timeoutSeconds
+  return config?.executeTimeoutSeconds ?? config?.timeoutSeconds ?? DEFAULT_EXECUTE_TIMEOUT_SECONDS;
 }
 
 function resolveMaxResponseSize(config?: QverisConfig): number {
@@ -108,6 +127,95 @@ function resolveMaxResponseSize(config?: QverisConfig): number {
 
 function resolveSearchLimit(config?: QverisConfig): number {
   return config?.searchLimit ?? DEFAULT_SEARCH_LIMIT;
+}
+
+// ============================================================================
+// Error Classification
+// ============================================================================
+
+/**
+ * Classifies a caught error from a QVeris API call into a structured result
+ * so the model receives a consistent error format rather than an exception trace.
+ */
+export function classifyQverisError(err: unknown): QverisErrorResult {
+  // AbortError from AbortController timeout
+  if (err instanceof DOMException && err.name === "AbortError") {
+    return {
+      success: false,
+      error_type: "timeout",
+      detail: "Request timed out",
+      retry_hint: "Increase timeout_seconds or retry with a simpler query.",
+    };
+  }
+  // Node fetch AbortError arrives as a plain Error with name === 'AbortError'
+  if (err instanceof Error && err.name === "AbortError") {
+    return {
+      success: false,
+      error_type: "timeout",
+      detail: "Request timed out",
+      retry_hint: "Increase timeout_seconds or retry with a simpler query.",
+    };
+  }
+  if (err instanceof Error) {
+    // Preserve HTTP status codes encoded in the message from qverisSearch/qverisExecute
+    const httpMatch = err.message.match(/\((\d{3})\)/);
+    if (httpMatch) {
+      const status = Number(httpMatch[1]);
+      const isClientError = status >= 400 && status < 500;
+      return {
+        success: false,
+        error_type: "http_error",
+        status,
+        detail: err.message,
+        retry_hint: isClientError
+          ? "Check tool_id, search_id, and params_to_tool structure."
+          : "QVeris service error — retry in a moment.",
+      };
+    }
+    return {
+      success: false,
+      error_type: "network_error",
+      detail: err.message,
+      retry_hint: "Check network connectivity and retry.",
+    };
+  }
+  return {
+    success: false,
+    error_type: "network_error",
+    detail: String(err),
+    retry_hint: "Check network connectivity and retry.",
+  };
+}
+
+// ============================================================================
+// In-Memory Search Cache
+// ============================================================================
+
+interface SearchCacheEntry {
+  value: ReturnType<typeof jsonResult>;
+  expiresAt: number;
+}
+
+function makeSearchCache() {
+  const store = new Map<string, SearchCacheEntry>();
+
+  function read(key: string): SearchCacheEntry["value"] | undefined {
+    const entry = store.get(key);
+    if (!entry) {
+      return undefined;
+    }
+    if (Date.now() > entry.expiresAt) {
+      store.delete(key);
+      return undefined;
+    }
+    return entry.value;
+  }
+
+  function write(key: string, value: SearchCacheEntry["value"], ttlMs: number) {
+    store.set(key, { value, expiresAt: Date.now() + ttlMs });
+  }
+
+  return { read, write };
 }
 
 // ============================================================================
@@ -222,12 +330,20 @@ const QverisExecuteSchema = Type.Object({
   }),
   params_to_tool: Type.String({
     description:
-      'A JSON stringified dictionary of parameters to pass to the tool. Keys are param names and values can be of any type. Example: \'{"city": "London", "units": "metric"}\'.',
+      'JSON dictionary of parameters to pass to the tool. IMPORTANT: Use the sample_parameters from the qveris_search results as your template — copy its structure and replace values with the actual data needed. Example: \'{"city": "London", "units": "metric"}\'.',
   }),
   max_response_size: Type.Optional(
     Type.Number({
       description:
         "Maximum size of response data in bytes. If tool generates data longer than this, it will be truncated. Default: 20480 (20KB).",
+    }),
+  ),
+  timeout_seconds: Type.Optional(
+    Type.Number({
+      description:
+        "Override timeout in seconds for this execution. Short tasks (data queries, search): default 10s. Long tasks (image/video generation, multimodal processing): set 60-120s. Default: 60.",
+      minimum: 1,
+      maximum: 300,
     }),
   ),
 });
@@ -254,9 +370,13 @@ export function createQverisTools(options?: {
   }
 
   const baseUrl = resolveQverisBaseUrl(config);
-  const timeoutSeconds = resolveTimeoutSeconds(config);
+  const searchTimeoutSeconds = resolveSearchTimeoutSeconds(config);
+  const executeTimeoutSeconds = resolveExecuteTimeoutSeconds(config);
   const maxResponseSize = resolveMaxResponseSize(config);
   const searchLimit = resolveSearchLimit(config);
+
+  // Session-scoped search cache — avoids redundant API calls within a conversation
+  const searchCache = makeSearchCache();
 
   // Generate a session ID tied to clawdbot session key
   const sessionId = options?.agentSessionKey ?? `clawdbot-${Date.now()}-${randomUUID()}`;
@@ -271,18 +391,31 @@ export function createQverisTools(options?: {
       const params = args as Record<string, unknown>;
       const query = readStringParam(params, "query", { required: true });
       const limit = readNumberParam(params, "limit", { integer: true }) ?? searchLimit;
+      const normalizedLimit = Math.min(Math.max(1, limit), 100);
 
-      const result = await qverisSearch({
-        query,
-        sessionId,
-        limit: Math.min(Math.max(1, limit), 100),
-        apiKey,
-        baseUrl,
-        timeoutSeconds,
-      });
+      // Check cache first
+      const cacheKey = `${query}:${normalizedLimit}`;
+      const cached = searchCache.read(cacheKey);
+      if (cached) {
+        return { ...cached, cached: true } as ReturnType<typeof jsonResult>;
+      }
+
+      let result: QverisSearchResponse;
+      try {
+        result = await qverisSearch({
+          query,
+          sessionId,
+          limit: normalizedLimit,
+          apiKey,
+          baseUrl,
+          timeoutSeconds: searchTimeoutSeconds,
+        });
+      } catch (err) {
+        return jsonResult(classifyQverisError(err));
+      }
 
       // Return simplified result for the model
-      return jsonResult({
+      const payload = jsonResult({
         query: result.query,
         total: result.total,
         search_id: result.search_id,
@@ -291,6 +424,7 @@ export function createQverisTools(options?: {
           tool_id: tool.tool_id,
           name: tool.name,
           description: tool.description,
+          provider_description: tool.provider_description,
           params: tool.params?.map((p) => ({
             name: p.name,
             type: p.type,
@@ -303,6 +437,9 @@ export function createQverisTools(options?: {
           stats: tool.stats,
         })),
       });
+
+      searchCache.write(cacheKey, payload, DEFAULT_SEARCH_CACHE_TTL_MS);
+      return payload;
     },
   };
 
@@ -319,28 +456,37 @@ export function createQverisTools(options?: {
       const paramsToToolRaw = readStringParam(params, "params_to_tool", { required: true });
       const maxSize =
         readNumberParam(params, "max_response_size", { integer: true }) ?? maxResponseSize;
+      const timeoutOverride = readNumberParam(params, "timeout_seconds");
 
-      // Parse params_to_tool JSON
+      // Parse params_to_tool JSON; return structured error instead of throwing
       let toolParams: Record<string, unknown>;
       try {
         toolParams = JSON.parse(paramsToToolRaw) as Record<string, unknown>;
       } catch (parseError) {
-        throw new Error(
-          `Invalid JSON in params_to_tool: ${parseError instanceof Error ? parseError.message : "Unknown parse error"}`,
-          { cause: parseError },
-        );
+        return jsonResult({
+          success: false,
+          error_type: "json_parse_error",
+          detail: `Invalid JSON in params_to_tool: ${parseError instanceof Error ? parseError.message : "Unknown parse error"}`,
+          retry_hint:
+            "Use sample_parameters from the qveris_search result as a template and ensure valid JSON.",
+        } satisfies QverisErrorResult);
       }
 
-      const result = await qverisExecute({
-        toolId,
-        searchId,
-        sessionId,
-        parameters: toolParams,
-        maxResponseSize: maxSize,
-        apiKey,
-        baseUrl,
-        timeoutSeconds,
-      });
+      let result: QverisExecutionResponse;
+      try {
+        result = await qverisExecute({
+          toolId,
+          searchId,
+          sessionId,
+          parameters: toolParams,
+          maxResponseSize: maxSize,
+          apiKey,
+          baseUrl,
+          timeoutSeconds: timeoutOverride ?? executeTimeoutSeconds,
+        });
+      } catch (err) {
+        return jsonResult(classifyQverisError(err));
+      }
 
       return jsonResult({
         execution_id: result.execution_id,

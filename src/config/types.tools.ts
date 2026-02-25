@@ -606,15 +606,18 @@ export type ToolsConfig = {
     apiKey?: string;
     /** QVeris API base URL (default: https://qveris.ai/api/v1). */
     baseUrl?: string;
-    /** Timeout in seconds for QVeris requests (default: 60). */
+    /**
+     * @deprecated Use searchTimeoutSeconds / executeTimeoutSeconds instead.
+     * Kept for backwards compatibility; overridden by the specific fields when present.
+     */
     timeoutSeconds?: number;
+    /** Timeout in seconds for qveris_search requests (default: 5). */
+    searchTimeoutSeconds?: number;
+    /** Timeout in seconds for qveris_execute requests (default: 60). */
+    executeTimeoutSeconds?: number;
     /** Max response size in bytes (default: 20480). */
     maxResponseSize?: number;
     /** Default search result limit (default: 10). */
     searchLimit?: number;
-    /** Enable pre-search optimization for short queries (default: true). */
-    preSearchEnabled?: boolean;
-    /** Byte threshold for pre-search (default: 100). */
-    preSearchByteThreshold?: number;
   };
 };

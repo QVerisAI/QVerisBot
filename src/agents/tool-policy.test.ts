@@ -61,6 +61,28 @@ describe("tool-policy", () => {
     expect(resolveToolProfilePolicy("nope")).toBeUndefined();
   });
 
+  it("includes qveris tools in coding profile", () => {
+    const coding = resolveToolProfilePolicy("coding");
+    expect(coding?.allow).toContain("qveris_search");
+    expect(coding?.allow).toContain("qveris_execute");
+  });
+
+  it("includes qveris tools in messaging profile", () => {
+    const messaging = resolveToolProfilePolicy("messaging");
+    expect(messaging?.allow).toContain("qveris_search");
+    expect(messaging?.allow).toContain("qveris_execute");
+  });
+
+  it("includes qveris tools in group:web and group:openclaw", () => {
+    const webGroup = TOOL_GROUPS["group:web"];
+    expect(webGroup).toContain("qveris_search");
+    expect(webGroup).toContain("qveris_execute");
+
+    const openclawGroup = TOOL_GROUPS["group:openclaw"];
+    expect(openclawGroup).toContain("qveris_search");
+    expect(openclawGroup).toContain("qveris_execute");
+  });
+
   it("includes core tool groups in group:openclaw", () => {
     const group = TOOL_GROUPS["group:openclaw"];
     expect(group).toContain("browser");

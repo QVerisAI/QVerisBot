@@ -985,6 +985,7 @@ async function runQverisSearch(params: {
   apiKey: string;
   baseUrl: string;
   timeoutSeconds: number;
+  sessionId?: string;
 }): Promise<{ data: unknown; elapsedMs: number }> {
   const endpoint = `${params.baseUrl.replace(/\/$/, "")}/tools/execute?tool_id=${encodeURIComponent(params.toolId)}`;
 
@@ -1001,6 +1002,7 @@ async function runQverisSearch(params: {
           q: params.query,
         },
         max_response_size: 20480,
+        ...(params.sessionId ? { session_id: params.sessionId } : {}),
       }),
       signal: withTimeout(undefined, params.timeoutSeconds * 1000),
     });
@@ -1234,6 +1236,7 @@ async function runWebSearch(params: {
   perplexityModel?: string;
   qverisBaseUrl?: string;
   qverisToolId?: string;
+  qverisSessionId?: string;
   grokModel?: string;
   grokInlineCitations?: boolean;
   geminiModel?: string;
@@ -1267,6 +1270,7 @@ async function runWebSearch(params: {
       apiKey: params.apiKey,
       baseUrl: params.qverisBaseUrl ?? DEFAULT_QVERIS_BASE_URL,
       timeoutSeconds: params.timeoutSeconds,
+      sessionId: params.qverisSessionId,
     });
 
     const payload = {
@@ -1460,6 +1464,7 @@ async function runWebSearch(params: {
 export function createWebSearchTool(options?: {
   config?: OpenClawConfig;
   sandboxed?: boolean;
+  agentSessionKey?: string;
 }): AnyAgentTool | null {
   const search = resolveSearchConfig(options?.config);
   if (!resolveSearchEnabled({ search, sandboxed: options?.sandboxed })) {
@@ -1574,6 +1579,7 @@ export function createWebSearchTool(options?: {
         perplexityModel: resolvePerplexityModel(perplexityConfig),
         qverisBaseUrl: resolveQverisBaseUrl(qverisSearchConfig, options?.config?.tools),
         qverisToolId: resolveQverisToolId(qverisSearchConfig),
+        qverisSessionId: options?.agentSessionKey,
         grokModel: resolveGrokModel(grokConfig),
         grokInlineCitations: resolveGrokInlineCitations(grokConfig),
         geminiModel: resolveGeminiModel(geminiConfig),
