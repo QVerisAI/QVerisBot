@@ -28,14 +28,6 @@ function createUnexpectedPromptGuards() {
   };
 }
 
-vi.mock("node:fs/promises", () => ({
-  default: {
-    access: vi.fn(async () => {
-      throw new Error("ENOENT");
-    }),
-  },
-}));
-
 vi.mock("../channel-web.js", () => ({
   loginWeb: vi.fn(async () => {}),
 }));
@@ -106,9 +98,11 @@ describe("setupChannels", () => {
     process.env.TELEGRAM_BOT_TOKEN = "";
 
     const note = vi.fn(async (_message?: string, _title?: string) => {});
+    let quickstartSelectionCount = 0;
     const select = vi.fn(async ({ message }: { message: string }) => {
       if (message === "Select channel (QuickStart)") {
-        return "telegram";
+        quickstartSelectionCount += 1;
+        return quickstartSelectionCount === 1 ? "telegram" : "__skip__";
       }
       return "__done__";
     });
