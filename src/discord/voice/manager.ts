@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { EventEmitter } from "node:events";
 import fs from "node:fs/promises";
 import { createRequire } from "node:module";
 import path from "node:path";
@@ -390,7 +391,10 @@ export class DiscordVoiceManager {
         decryptionFailureTolerance ?? "default"
       }`,
     );
-    const connection = joinVoiceChannel({
+    // tsgo can't bridge DiscordGatewayAdapterCreator across the @buape/carbon module boundary,
+    // so we stage the options object (avoiding excess-property checks on fresh literals)
+    // and use a double-cast to satisfy the call signature.
+    const joinOpts = {
       channelId,
       guildId,
       adapterCreator,
@@ -398,7 +402,10 @@ export class DiscordVoiceManager {
       selfMute: false,
       daveEncryption,
       decryptionFailureTolerance,
-    });
+    };
+    const connection = joinVoiceChannel(
+      joinOpts as unknown as Parameters<typeof joinVoiceChannel>[0],
+    );
 
     try {
       await entersState(connection, VoiceConnectionStatus.Ready, PLAYBACK_READY_TIMEOUT_MS);
@@ -430,7 +437,7 @@ export class DiscordVoiceManager {
     let speakingHandler: ((userId: string) => void) | undefined;
     let disconnectedHandler: (() => Promise<void>) | undefined;
     let destroyedHandler: (() => void) | undefined;
-    let playerErrorHandler: ((err: Error) => void) | undefined;
+    let playerErrorHandler: ((err: unknown) => void) | undefined;
     const clearSessionIfCurrent = () => {
       const active = this.sessions.get(guildId);
       if (active?.connection === connection) {
@@ -453,16 +460,22 @@ export class DiscordVoiceManager {
       decryptRecoveryInFlight: false,
       stop: () => {
         if (speakingHandler) {
-          connection.receiver.speaking.off("start", speakingHandler);
+          (connection.receiver.speaking as unknown as EventEmitter).off("start", speakingHandler);
         }
         if (disconnectedHandler) {
-          connection.off(VoiceConnectionStatus.Disconnected, disconnectedHandler);
+          (connection as unknown as EventEmitter).off(
+            VoiceConnectionStatus.Disconnected,
+            disconnectedHandler,
+          );
         }
         if (destroyedHandler) {
-          connection.off(VoiceConnectionStatus.Destroyed, destroyedHandler);
+          (connection as unknown as EventEmitter).off(
+            VoiceConnectionStatus.Destroyed,
+            destroyedHandler,
+          );
         }
         if (playerErrorHandler) {
-          player.off("error", playerErrorHandler);
+          (player as unknown as EventEmitter).off("error", playerErrorHandler);
         }
         player.stop();
         connection.destroy();
@@ -489,7 +502,7 @@ export class DiscordVoiceManager {
     destroyedHandler = () => {
       clearSessionIfCurrent();
     };
-    playerErrorHandler = (err: Error) => {
+    playerErrorHandler = (err: unknown) => {
       logger.warn(`discord voice: playback error: ${formatErrorMessage(err)}`);
     };
 
