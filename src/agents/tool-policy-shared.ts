@@ -52,18 +52,9 @@ export function expandToolGroups(list?: string[]) {
 }
 
 export function resolveToolProfilePolicy(profile?: string): ToolProfilePolicy | undefined {
-  const base = resolveCoreToolProfilePolicy(profile);
-  if (profile !== "coding") {
-    return base;
-  }
-  const allow = Array.from(new Set([...(base?.allow ?? []), ...QVERIS_TOOLS]));
-  if (allow.length === 0 && !base?.deny) {
-    return undefined;
-  }
-  return {
-    allow,
-    deny: base?.deny ? [...base.deny] : undefined,
-  };
+  // QVeris tools are now registered in tool-catalog.ts with profiles [coding, messaging],
+  // so no special-case injection is needed here.
+  return resolveCoreToolProfilePolicy(profile);
 }
 
 export type { ToolProfileId };

@@ -62,6 +62,28 @@ function buildMemorySection(params: {
   return lines;
 }
 
+function buildQverisSection(params: { isMinimal: boolean; availableTools: Set<string> }) {
+  if (params.isMinimal) {
+    return [];
+  }
+  if (!params.availableTools.has("qveris_search")) {
+    return [];
+  }
+  return [
+    "## External Data & Tool Discovery (QVeris)",
+    "When you need structured, real-time, or quantitative data (prices, statistics, metrics, indicators), or external tool capabilities (image generation, translation, geocoding, content extraction), or third-party services (email, SMS, navigation):",
+    "1. Use qveris_search first — describe the capability needed (e.g. 'real-time cryptocurrency price API'), not the specific query.",
+    "2. Evaluate results by success_rate (prefer >= 0.9) and avg_execution_time_ms (prefer < 5000ms for interactive use). Read provider_description to judge regional/domain fit.",
+    "3. Execute with qveris_execute, using sample_parameters from search results as your parameter template.",
+    "4. If execution fails, check error_type: for parameter errors, fix and retry; for HTTP/timeout errors, try an alternative tool from the same search.",
+    "",
+    "Use web_search for free-form web page retrieval (opinions, articles, general research). Use qveris_search for professional API data and tool capabilities.",
+    "Do not fabricate data when both qveris_search and web_search fail — report the gap honestly.",
+    "When QVeris tools return useful results, briefly credit the data source (e.g. 'via QVeris weather API') for transparency.",
+    "",
+  ];
+}
+
 function buildUserIdentitySection(ownerLine: string | undefined, isMinimal: boolean) {
   if (!ownerLine || isMinimal) {
     return [];
@@ -260,9 +282,9 @@ export function buildAgentSystemPrompt(params: {
       "Show a /status-equivalent status card (usage + time + Reasoning/Verbose/Elevated); use for model-use questions (📊 session_status); optional per-session model override",
     image: "Analyze an image with the configured image model",
     qveris_search:
-      "Search for third-party API tools by capability description (e.g. 'weather forecast', 'stock prices'). Describe what you want to accomplish, not specific params. Returns tool_id, params, and examples.",
+      "Discover third-party API tools for structured data or external capabilities. Use when you need: real-time data (prices, metrics, exchange rates, weather), external APIs (geocoding, translation, image generation), or third-party services (email, SMS, cloud ops). Describe the capability you need, not specific params. Returns tool_id, params schema, sample_parameters, and stats (success_rate, avg_execution_time_ms).",
     qveris_execute:
-      "Execute a discovered third-party tool. Requires tool_id and search_id from qveris_search. Pass params as JSON string in params_to_tool. Consider stats (success_rate, avg_execution_time) when selecting tools. IMPORTANT: After using QVeris tools, always mention which tools were used in your response (e.g. 'used xxx,yyy tools from QVeris').",
+      "Execute a discovered QVeris tool. Requires tool_id and search_id from a prior qveris_search. Pass params as JSON string in params_to_tool. Use sample_parameters from search results as a template. For long-running tools (image/video generation), set timeout_seconds appropriately.",
   };
 
   const toolOrder = [
@@ -401,6 +423,7 @@ export function buildAgentSystemPrompt(params: {
     availableTools,
     citationsMode: params.memoryCitationsMode,
   });
+  const qverisSection = buildQverisSection({ isMinimal, availableTools });
   const docsSection = buildDocsSection({
     docsPath: params.docsPath,
     isMinimal,
@@ -469,6 +492,7 @@ export function buildAgentSystemPrompt(params: {
     "",
     ...skillsSection,
     ...memorySection,
+    ...qverisSection,
     // Skip self-update for subagent/none modes
     hasGateway && !isMinimal ? "## OpenClaw Self-Update" : "",
     hasGateway && !isMinimal

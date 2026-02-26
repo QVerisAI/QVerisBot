@@ -597,11 +597,14 @@ export const FIELD_HELP: Record<string, string> = {
   "tools.qveris.apiKey":
     "QVeris API key (fallback: QVERIS_API_KEY env var). Required for QVeris tools and web_search via QVeris.",
   "tools.qveris.baseUrl": "QVeris API base URL override.",
-  "tools.qveris.timeoutSeconds": "Timeout in seconds for QVeris tool requests.",
+  "tools.qveris.timeoutSeconds":
+    "Deprecated: use searchTimeoutSeconds / executeTimeoutSeconds instead. Fallback timeout in seconds for QVeris tool requests.",
+  "tools.qveris.searchTimeoutSeconds":
+    "Timeout in seconds for qveris_search requests (default: 5). Search is a lightweight index lookup.",
+  "tools.qveris.executeTimeoutSeconds":
+    "Timeout in seconds for qveris_execute requests (default: 60). Long-running tools (image/video generation) may need 60-120s.",
   "tools.qveris.maxResponseSize": "Max response size in bytes for QVeris tool calls.",
   "tools.qveris.searchLimit": "Max number of tools to search when using QVeris.",
-  "tools.qveris.preSearchEnabled": "Enable pre-search optimization for QVeris tool discovery.",
-  "tools.qveris.preSearchByteThreshold": "Byte threshold for QVeris pre-search optimization.",
   "tools.web.fetch.enabled": "Enable the web_fetch tool (lightweight HTTP fetch).",
   "tools.web.fetch.maxChars": "Max characters returned by web_fetch (truncated).",
   "tools.web.fetch.maxCharsCap":

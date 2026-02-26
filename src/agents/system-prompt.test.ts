@@ -155,6 +155,38 @@ describe("buildAgentSystemPrompt", () => {
     expect(prompt).not.toContain("## Skills");
   });
 
+  it("includes QVeris routing section when qveris_search is in toolNames", () => {
+    const prompt = buildAgentSystemPrompt({
+      workspaceDir: "/tmp/openclaw",
+      toolNames: ["qveris_search", "qveris_execute"],
+    });
+
+    expect(prompt).toContain("## External Data & Tool Discovery (QVeris)");
+    expect(prompt).toContain("qveris_search first");
+    expect(prompt).toContain("sample_parameters");
+    expect(prompt).toContain("error_type");
+    expect(prompt).toContain("Use web_search for free-form web page retrieval");
+  });
+
+  it("omits QVeris routing section when qveris_search is not available", () => {
+    const prompt = buildAgentSystemPrompt({
+      workspaceDir: "/tmp/openclaw",
+      toolNames: ["web_search", "read"],
+    });
+
+    expect(prompt).not.toContain("## External Data & Tool Discovery (QVeris)");
+  });
+
+  it("omits QVeris routing section in minimal prompt mode", () => {
+    const prompt = buildAgentSystemPrompt({
+      workspaceDir: "/tmp/openclaw",
+      promptMode: "minimal",
+      toolNames: ["qveris_search", "qveris_execute"],
+    });
+
+    expect(prompt).not.toContain("## External Data & Tool Discovery (QVeris)");
+  });
+
   it("includes safety guardrails in full prompts", () => {
     const prompt = buildAgentSystemPrompt({
       workspaceDir: "/tmp/openclaw",
