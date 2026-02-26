@@ -334,21 +334,40 @@ function isLaunchctlNotLoaded(res: { stdout: string; stderr: string; code: numbe
   );
 }
 
-function formatLaunchctlBootstrapFailure(detail: string): string {
-  const trimmed = detail.trim();
-  const lower = trimmed.toLowerCase();
-  const isGuiDomainBootstrapIssue =
-    lower.includes("domain does not support specified action") ||
-    lower.includes("bootstrap failed: 125");
-  if (!isGuiDomainBootstrapIssue) {
-    return `launchctl bootstrap failed: ${trimmed}`;
+function isUnsupportedGuiDomain(detail: string): boolean {
+  const normalized = detail.toLowerCase();
+  return (
+    normalized.includes("domain does not support specified action") ||
+    normalized.includes("bootstrap failed: 125")
+  );
+}
+
+const RESTART_PID_WAIT_TIMEOUT_MS = 10_000;
+const RESTART_PID_WAIT_INTERVAL_MS = 200;
+
+async function sleepMs(ms: number): Promise<void> {
+  await new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+async function waitForPidExit(pid: number): Promise<void> {
+  if (!Number.isFinite(pid) || pid <= 1) {
+    return;
   }
-  return [
-    `launchctl bootstrap failed: ${trimmed}`,
-    "This usually means launchctl is not running in a logged-in macOS GUI session.",
-    "Common causes include running as the wrong user (including sudo).",
-    "See troubleshooting: https://docs.openclaw.ai/gateway",
-  ].join("\n");
+  const deadline = Date.now() + RESTART_PID_WAIT_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    try {
+      process.kill(pid, 0);
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code === "ESRCH" || code === "EPERM") {
+        return;
+      }
+      return;
+    }
+    await sleepMs(RESTART_PID_WAIT_INTERVAL_MS);
+  }
 }
 
 export async function stopLaunchAgent({
@@ -365,6 +384,24 @@ export async function stopLaunchAgent({
     throw new Error(`launchctl bootout failed: ${res.stderr || res.stdout}`.trim());
   }
   stdout.write(`${formatLine("Stopped LaunchAgent", `${domain}/${label}`)}\n`);
+}
+
+// DRY helper: formats a launchctl bootstrap failure for the install context.
+// Produces actionable guidance for unsupported GUI-domain errors; falls back
+// to a plain error message for other failures.
+function formatLaunchctlBootstrapFailure(rawOutput: string): string {
+  const domain = resolveGuiDomain();
+  const detail = rawOutput.trim();
+  if (isUnsupportedGuiDomain(detail)) {
+    return [
+      `launchctl bootstrap failed: ${detail}`,
+      `LaunchAgent install requires a logged-in macOS GUI session for this user (${domain}).`,
+      "This usually means you are running from SSH/headless context or as the wrong user (including sudo).",
+      "Fix: sign in to the macOS desktop as the target user and rerun `openclaw gateway install --force`.",
+      "Headless deployments should use a dedicated logged-in user session or a custom LaunchDaemon (not shipped): https://docs.openclaw.ai/gateway",
+    ].join("\n");
+  }
+  return `launchctl bootstrap failed: ${detail}`;
 }
 
 export async function installLaunchAgent({
@@ -433,15 +470,46 @@ export async function installLaunchAgent({
 export async function restartLaunchAgent({
   stdout,
   env,
-}: {
-  stdout: NodeJS.WritableStream;
-  env?: Record<string, string | undefined>;
-}): Promise<void> {
+}: GatewayServiceControlArgs): Promise<void> {
+  const serviceEnv = env ?? process.env;
   const domain = resolveGuiDomain();
-  const label = resolveLaunchAgentLabel({ env });
-  const res = await execLaunchctl(["kickstart", "-k", `${domain}/${label}`]);
-  if (res.code !== 0) {
-    throw new Error(`launchctl kickstart failed: ${res.stderr || res.stdout}`.trim());
+  const label = resolveLaunchAgentLabel({ env: serviceEnv });
+  const plistPath = resolveLaunchAgentPlistPath(serviceEnv);
+
+  const runtime = await execLaunchctl(["print", `${domain}/${label}`]);
+  const previousPid =
+    runtime.code === 0
+      ? parseLaunchctlPrint(runtime.stdout || runtime.stderr || "").pid
+      : undefined;
+
+  const stop = await execLaunchctl(["bootout", `${domain}/${label}`]);
+  if (stop.code !== 0 && !isLaunchctlNotLoaded(stop)) {
+    throw new Error(`launchctl bootout failed: ${stop.stderr || stop.stdout}`.trim());
+  }
+  if (typeof previousPid === "number") {
+    await waitForPidExit(previousPid);
+  }
+
+  const boot = await execLaunchctl(["bootstrap", domain, plistPath]);
+  if (boot.code !== 0) {
+    const detail = (boot.stderr || boot.stdout).trim();
+    if (isUnsupportedGuiDomain(detail)) {
+      throw new Error(
+        [
+          `launchctl bootstrap failed: ${detail}`,
+          `LaunchAgent restart requires a logged-in macOS GUI session for this user (${domain}).`,
+          "This usually means you are running from SSH/headless context or as the wrong user (including sudo).",
+          "Fix: sign in to the macOS desktop as the target user and rerun `openclaw gateway restart`.",
+          "Headless deployments should use a dedicated logged-in user session or a custom LaunchDaemon (not shipped): https://docs.openclaw.ai/gateway",
+        ].join("\n"),
+      );
+    }
+    throw new Error(`launchctl bootstrap failed: ${detail}`);
+  }
+
+  const start = await execLaunchctl(["kickstart", "-k", `${domain}/${label}`]);
+  if (start.code !== 0) {
+    throw new Error(`launchctl kickstart failed: ${start.stderr || start.stdout}`.trim());
   }
   try {
     stdout.write(`${formatLine("Restarted LaunchAgent", `${domain}/${label}`)}\n`);
