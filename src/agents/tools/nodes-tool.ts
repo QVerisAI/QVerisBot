@@ -18,6 +18,7 @@ import {
 } from "../../cli/nodes-screen.js";
 import { parseDurationMs } from "../../cli/parse-duration.js";
 import type { OpenClawConfig } from "../../config/config.js";
+import { formatExecCommand } from "../../infra/system-run-command.js";
 import { imageMimeFromFormat } from "../../media/mime.js";
 import { resolveSessionAgentId } from "../agent-scope.js";
 import { resolveImageSanitizationLimits } from "../image-sanitization.js";
@@ -185,7 +186,7 @@ export function createNodesTool(options?: {
             const node = readStringParam(params, "node", { required: true });
             const nodeId = await resolveNodeId(gatewayOpts, node);
             const facingRaw =
-              typeof params.facing === "string" ? params.facing.toLowerCase() : "both";
+              typeof params.facing === "string" ? params.facing.toLowerCase() : "front";
             const facings: CameraFacing[] =
               facingRaw === "both"
                 ? ["front", "back"]
@@ -197,11 +198,11 @@ export function createNodesTool(options?: {
             const maxWidth =
               typeof params.maxWidth === "number" && Number.isFinite(params.maxWidth)
                 ? params.maxWidth
-                : undefined;
+                : 1600;
             const quality =
               typeof params.quality === "number" && Number.isFinite(params.quality)
                 ? params.quality
-                : undefined;
+                : 0.95;
             const delayMs =
               typeof params.delayMs === "number" && Number.isFinite(params.delayMs)
                 ? params.delayMs
@@ -473,7 +474,7 @@ export function createNodesTool(options?: {
             // Node requires approval – create a pending approval request on
             // the gateway and wait for the user to approve/deny via the UI.
             const APPROVAL_TIMEOUT_MS = 120_000;
-            const cmdText = command.join(" ");
+            const cmdText = formatExecCommand(command);
             const approvalId = crypto.randomUUID();
             const approvalResult = await callGatewayTool(
               "exec.approval.request",
@@ -481,6 +482,7 @@ export function createNodesTool(options?: {
               {
                 id: approvalId,
                 command: cmdText,
+                commandArgv: command,
                 cwd,
                 nodeId,
                 host: "node",

@@ -44,6 +44,7 @@ export async function resolveDeliveryTarget(
     channel?: "last" | ChannelId;
     to?: string;
     sessionKey?: string;
+    accountId?: string;
   },
   options?: {
     /** Origin context from when the job was created */
@@ -181,6 +182,11 @@ export async function resolveDeliveryTarget(
     if (boundAccounts && boundAccounts.length > 0) {
       accountId = boundAccounts[0];
     }
+  }
+
+  // Explicit delivery account should override inferred session/binding account.
+  if (jobPayload.accountId) {
+    accountId = jobPayload.accountId;
   }
 
   // Carry threadId when it was explicitly set (from :topic: parsing or config)

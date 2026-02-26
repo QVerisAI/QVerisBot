@@ -246,6 +246,11 @@ export type {
 } from "./persistent-dedupe.js";
 export { formatErrorMessage } from "../infra/errors.js";
 export {
+  formatUtcTimestamp,
+  formatZonedTimestamp,
+  resolveTimezone,
+} from "../infra/format-time/format-datetime.js";
+export {
   DEFAULT_WEBHOOK_BODY_TIMEOUT_MS,
   DEFAULT_WEBHOOK_MAX_BODY_BYTES,
   RequestBodyLimitError,
@@ -378,6 +383,7 @@ export type { OutboundDeliveryResult } from "../infra/outbound/deliver.js";
 export {
   resolveDmAllowState,
   resolveDmGroupAccessDecision,
+  resolveDmGroupAccessWithLists,
   resolveEffectiveAllowFromLists,
 } from "../security/dm-policy-shared.js";
 export type { HookEntry } from "../hooks/types.js";
