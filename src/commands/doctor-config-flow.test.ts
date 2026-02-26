@@ -26,14 +26,14 @@ type DiscordGuildRule = {
 };
 
 type DiscordAccountRule = {
-  allowFrom: string[];
-  dm: { allowFrom: string[]; groupChannels: string[] };
-  execApprovals: { approvers: string[] };
-  guilds: Record<string, DiscordGuildRule>;
+  allowFrom?: string[];
+  dm?: { allowFrom: string[]; groupChannels: string[] };
+  execApprovals?: { approvers: string[] };
+  guilds?: Record<string, DiscordGuildRule>;
 };
 
 type RepairedDiscordPolicy = {
-  allowFrom: string[];
+  allowFrom?: string[];
   dm: { allowFrom: string[]; groupChannels: string[] };
   execApprovals: { approvers: string[] };
   guilds: Record<string, DiscordGuildRule>;
@@ -186,18 +186,20 @@ describe("doctor config flow", () => {
       const cfg = result.cfg as unknown as {
         channels: {
           telegram: {
-            allowFrom: string[];
-            groupAllowFrom: string[];
+            allowFrom?: string[];
+            groupAllowFrom?: string[];
             groups: Record<
               string,
               { allowFrom: string[]; topics: Record<string, { allowFrom: string[] }> }
             >;
-            accounts: Record<string, { allowFrom: string[] }>;
+            accounts: Record<string, { allowFrom?: string[]; groupAllowFrom?: string[] }>;
           };
         };
       };
-      expect(cfg.channels.telegram.allowFrom).toEqual(["111"]);
-      expect(cfg.channels.telegram.groupAllowFrom).toEqual(["222"]);
+      expect(cfg.channels.telegram.allowFrom).toBeUndefined();
+      expect(cfg.channels.telegram.groupAllowFrom).toBeUndefined();
+      expect(cfg.channels.telegram.accounts.default.allowFrom).toEqual(["111"]);
+      expect(cfg.channels.telegram.accounts.default.groupAllowFrom).toEqual(["222"]);
       expect(cfg.channels.telegram.groups["-100123"].allowFrom).toEqual(["333"]);
       expect(cfg.channels.telegram.groups["-100123"].topics["99"].allowFrom).toEqual(["444"]);
       expect(cfg.channels.telegram.accounts.alerts.allowFrom).toEqual(["444"]);
@@ -262,7 +264,8 @@ describe("doctor config flow", () => {
         channels: { discord: RepairedDiscordPolicy };
       };
 
-      expect(cfg.channels.discord.allowFrom).toEqual(["123"]);
+      expect(cfg.channels.discord.allowFrom).toBeUndefined();
+      expect(cfg.channels.discord.accounts.default.allowFrom).toEqual(["123"]);
       expect(cfg.channels.discord.dm.allowFrom).toEqual(["456"]);
       expect(cfg.channels.discord.dm.groupChannels).toEqual(["789"]);
       expect(cfg.channels.discord.execApprovals.approvers).toEqual(["321"]);
@@ -270,18 +273,16 @@ describe("doctor config flow", () => {
       expect(cfg.channels.discord.guilds["100"].roles).toEqual(["222"]);
       expect(cfg.channels.discord.guilds["100"].channels.general.users).toEqual(["333"]);
       expect(cfg.channels.discord.guilds["100"].channels.general.roles).toEqual(["444"]);
-      expect(cfg.channels.discord.accounts.work.allowFrom).toEqual(["555"]);
-      expect(cfg.channels.discord.accounts.work.dm.allowFrom).toEqual(["666"]);
-      expect(cfg.channels.discord.accounts.work.dm.groupChannels).toEqual(["777"]);
-      expect(cfg.channels.discord.accounts.work.execApprovals.approvers).toEqual(["888"]);
-      expect(cfg.channels.discord.accounts.work.guilds["200"].users).toEqual(["999"]);
-      expect(cfg.channels.discord.accounts.work.guilds["200"].roles).toEqual(["1010"]);
-      expect(cfg.channels.discord.accounts.work.guilds["200"].channels.help.users).toEqual([
-        "1111",
-      ]);
-      expect(cfg.channels.discord.accounts.work.guilds["200"].channels.help.roles).toEqual([
-        "1212",
-      ]);
+      const work = cfg.channels.discord.accounts.work;
+      expect(work.allowFrom).toEqual(["555"]);
+      expect(work.dm!.allowFrom).toEqual(["666"]);
+      expect(work.dm!.groupChannels).toEqual(["777"]);
+      expect(work.execApprovals!.approvers).toEqual(["888"]);
+      const guilds = work.guilds!;
+      expect(guilds["200"].users).toEqual(["999"]);
+      expect(guilds["200"].roles).toEqual(["1010"]);
+      expect(guilds["200"].channels.help.users).toEqual(["1111"]);
+      expect(guilds["200"].channels.help.roles).toEqual(["1212"]);
     });
   });
 

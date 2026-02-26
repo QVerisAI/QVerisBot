@@ -72,11 +72,35 @@ export {
   unbindThreadBindingsBySessionKey,
 } from "../discord/monitor/thread-bindings.js";
 export type {
+  AcpRuntimeCapabilities,
+  AcpRuntimeControl,
+  AcpRuntimeDoctorReport,
+  AcpRuntime,
+  AcpRuntimeEnsureInput,
+  AcpRuntimeEvent,
+  AcpRuntimeHandle,
+  AcpRuntimePromptMode,
+  AcpRuntimeSessionMode,
+  AcpRuntimeStatus,
+  AcpRuntimeTurnInput,
+} from "../acp/runtime/types.js";
+export type { AcpRuntimeBackend } from "../acp/runtime/registry.js";
+export {
+  getAcpRuntimeBackend,
+  registerAcpRuntimeBackend,
+  requireAcpRuntimeBackend,
+  unregisterAcpRuntimeBackend,
+} from "../acp/runtime/registry.js";
+export { ACP_ERROR_CODES, AcpRuntimeError } from "../acp/runtime/errors.js";
+export type { AcpRuntimeErrorCode } from "../acp/runtime/errors.js";
+export type {
   AnyAgentTool,
+  OpenClawPluginConfigSchema,
   OpenClawPluginApi,
   OpenClawPluginService,
   OpenClawPluginServiceContext,
   OpenClawPluginToolFactory,
+  PluginLogger,
   ProviderAuthContext,
   ProviderAuthResult,
 } from "../plugins/types.js";
@@ -246,6 +270,11 @@ export type {
 } from "./persistent-dedupe.js";
 export { formatErrorMessage } from "../infra/errors.js";
 export {
+  formatUtcTimestamp,
+  formatZonedTimestamp,
+  resolveTimezone,
+} from "../infra/format-time/format-datetime.js";
+export {
   DEFAULT_WEBHOOK_BODY_TIMEOUT_MS,
   DEFAULT_WEBHOOK_MAX_BODY_BYTES,
   RequestBodyLimitError,
@@ -378,6 +407,7 @@ export type { OutboundDeliveryResult } from "../infra/outbound/deliver.js";
 export {
   resolveDmAllowState,
   resolveDmGroupAccessDecision,
+  resolveDmGroupAccessWithLists,
   resolveEffectiveAllowFromLists,
 } from "../security/dm-policy-shared.js";
 export type { HookEntry } from "../hooks/types.js";
