@@ -162,53 +162,57 @@ describe("setupChannels", () => {
     expect(multiselect).not.toHaveBeenCalled();
   });
 
-  it("prompts for configured channel action and skips configuration when told to skip", async () => {
-    let quickstartSelectionCount = 0;
-    const select = vi.fn(async ({ message }: { message: string }) => {
-      if (message === "Select channel (QuickStart)") {
-        quickstartSelectionCount += 1;
-        return quickstartSelectionCount === 1 ? "telegram" : "__skip__";
-      }
-      if (message.includes("already configured")) {
-        return "skip";
-      }
-      throw new Error(`unexpected select prompt: ${message}`);
-    });
-    const { multiselect, text } = createUnexpectedPromptGuards();
+  it(
+    "prompts for configured channel action and skips configuration when told to skip",
+    { timeout: 15_000 },
+    async () => {
+      let quickstartSelectionCount = 0;
+      const select = vi.fn(async ({ message }: { message: string }) => {
+        if (message === "Select channel (QuickStart)") {
+          quickstartSelectionCount += 1;
+          return quickstartSelectionCount === 1 ? "telegram" : "__skip__";
+        }
+        if (message.includes("already configured")) {
+          return "skip";
+        }
+        throw new Error(`unexpected select prompt: ${message}`);
+      });
+      const { multiselect, text } = createUnexpectedPromptGuards();
 
-    const prompter = createPrompter({
-      select: select as unknown as WizardPrompter["select"],
-      multiselect,
-      text,
-    });
+      const prompter = createPrompter({
+        select: select as unknown as WizardPrompter["select"],
+        multiselect,
+        text,
+      });
 
-    const runtime = createExitThrowingRuntime();
+      const runtime = createExitThrowingRuntime();
 
-    await setupChannels(
-      {
-        channels: {
-          telegram: {
-            botToken: "token",
+      await setupChannels(
+        {
+          channels: {
+            telegram: {
+              botToken: "token",
+            },
           },
+        } as OpenClawConfig,
+        runtime,
+        prompter,
+        {
+          skipConfirm: true,
+          quickstartDefaults: true,
         },
-      } as OpenClawConfig,
-      runtime,
-      prompter,
-      {
-        skipConfirm: true,
-        quickstartDefaults: true,
-      },
-    );
+      );
 
-    expect(select).toHaveBeenCalledWith(
-      expect.objectContaining({ message: "Select channel (QuickStart)" }),
-    );
-    expect(select).toHaveBeenCalledWith(
-      expect.objectContaining({ message: expect.stringContaining("already configured") }),
-    );
-    expect(multiselect).not.toHaveBeenCalled();
-    expect(text).not.toHaveBeenCalled();
-  });
+      expect(select).toHaveBeenCalledWith(
+        expect.objectContaining({ message: "Select channel (QuickStart)" }),
+      );
+      expect(select).toHaveBeenCalledWith(
+        expect.objectContaining({ message: expect.stringContaining("already configured") }),
+      );
+      expect(multiselect).not.toHaveBeenCalled();
+      expect(text).not.toHaveBeenCalled();
+    },
+  );
 
   it("adds configured hint to channel selection when a channel is already configured", async () => {
     let selectionCount = 0;

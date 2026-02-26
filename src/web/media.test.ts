@@ -16,6 +16,9 @@ import {
   optimizeImageToJpeg,
 } from "./media.js";
 
+/** SSRF policy for tests using example.com; bypasses private-IP blocking when DNS resolves to internal addresses. */
+const TEST_SSRF_POLICY = { dangerouslyAllowPrivateNetwork: true } as const;
+
 let fixtureRoot = "";
 let fixtureFileCount = 0;
 let largeJpegBuffer: Buffer;
@@ -189,9 +192,11 @@ describe("web media loading", () => {
       url: "https://example.com/missing.jpg",
     } as unknown as Response);
 
-    await expect(loadWebMedia("https://example.com/missing.jpg", 1024 * 1024)).rejects.toThrow(
-      /Failed to fetch media from https:\/\/example\.com\/missing\.jpg.*HTTP 404/i,
-    );
+    await expect(
+      loadWebMedia("https://example.com/missing.jpg", 1024 * 1024, {
+        ssrfPolicy: TEST_SSRF_POLICY,
+      }),
+    ).rejects.toThrow(/Failed to fetch media from https:\/\/example\.com\/missing\.jpg.*HTTP 404/i);
 
     fetchMock.mockRestore();
   });
@@ -229,9 +234,11 @@ describe("web media loading", () => {
       status: 200,
     } as unknown as Response);
 
-    await expect(loadWebMediaRaw("https://example.com/too-big.png", 1024)).rejects.toThrow(
-      /exceeds maxBytes 1024/i,
-    );
+    await expect(
+      loadWebMediaRaw("https://example.com/too-big.png", 1024, {
+        ssrfPolicy: TEST_SSRF_POLICY,
+      }),
+    ).rejects.toThrow(/exceeds maxBytes 1024/i);
 
     fetchMock.mockRestore();
   });
@@ -267,7 +274,9 @@ describe("web media loading", () => {
       status: 200,
     } as unknown as Response);
 
-    const result = await loadWebMedia("https://example.com/download?id=1", 1024 * 1024);
+    const result = await loadWebMedia("https://example.com/download?id=1", 1024 * 1024, {
+      ssrfPolicy: TEST_SSRF_POLICY,
+    });
 
     expect(result.kind).toBe("document");
     expect(result.fileName).toBe("report.pdf");
@@ -290,7 +299,9 @@ describe("web media loading", () => {
       status: 200,
     } as unknown as Response);
 
-    const result = await loadWebMedia("https://example.com/animation.gif", 1024 * 1024);
+    const result = await loadWebMedia("https://example.com/animation.gif", 1024 * 1024, {
+      ssrfPolicy: TEST_SSRF_POLICY,
+    });
 
     expect(result.kind).toBe("image");
     expect(result.contentType).toBe("image/gif");

@@ -90,6 +90,7 @@ describe("cdp", () => {
     const created = await createTargetViaCdp({
       cdpUrl: `http://127.0.0.1:${httpPort}`,
       url: "https://example.com",
+      ssrfPolicy: { dangerouslyAllowPrivateNetwork: true },
     });
 
     expect(created.targetId).toBe("TARGET_123");
@@ -184,6 +185,7 @@ describe("cdp", () => {
       createTargetViaCdp({
         cdpUrl: `http://127.0.0.1:${httpPort}`,
         url: "https://example.com",
+        ssrfPolicy: { dangerouslyAllowPrivateNetwork: true },
       }),
     ).rejects.toThrow("CDP /json/version missing webSocketDebuggerUrl");
   });

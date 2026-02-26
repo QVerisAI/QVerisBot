@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { useFastShortTimeouts } from "../../test/helpers/fast-short-timeouts.js";
 import type { OpenClawConfig } from "../config/config.js";
+import * as ssrf from "../infra/net/ssrf.js";
 import { getMemorySearchManager, type MemoryIndexManager } from "./index.js";
 import { createOpenAIEmbeddingProviderMock } from "./test-embeddings-mock.js";
 import "./test-runtime-mocks.js";
@@ -146,6 +147,16 @@ describe("memory indexing with OpenAI batches", () => {
       texts.map((_text, index) => [index + 1, 0, 0]),
     );
 
+    vi.spyOn(ssrf, "resolvePinnedHostnameWithPolicy").mockImplementation(async (hostname) => {
+      const normalized = hostname.trim().toLowerCase().replace(/\.$/, "");
+      const addresses = ["93.184.216.34"];
+      return {
+        hostname: normalized,
+        addresses,
+        lookup: ssrf.createPinnedLookup({ hostname: normalized, addresses }),
+      };
+    });
+
     await fs.rm(memoryDir, { recursive: true, force: true });
     await fs.mkdir(memoryDir, { recursive: true });
 
@@ -164,6 +175,7 @@ describe("memory indexing with OpenAI batches", () => {
 
   afterEach(async () => {
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 
   it("uses OpenAI batch uploads when enabled", async () => {
