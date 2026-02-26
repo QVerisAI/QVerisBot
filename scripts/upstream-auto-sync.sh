@@ -4,7 +4,8 @@ set -euo pipefail
 # Idempotent upstream sync script for QVerisBot fork.
 #
 # Usage:
-#   bash scripts/upstream-auto-sync.sh
+#   bash scripts/upstream-auto-sync.sh                    # 完整同步
+#   bash scripts/upstream-auto-sync.sh --post-merge-only # 冲突解决后只执行 fork 补丁
 #
 # Optional env overrides:
 #   UPSTREAM_REMOTE=upstream
@@ -19,6 +20,8 @@ TODAY="$(date +"%Y-%m-%d")"
 SYNC_BRANCH="${SYNC_BRANCH:-sync/upstream-$TODAY}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+POST_MERGE_ONLY=false
+[[ "${1:-}" == "--post-merge-only" ]] && POST_MERGE_ONLY=true
 
 die() {
   echo "ERROR: $*" >&2
@@ -147,6 +150,15 @@ SHIM_PKG
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
+if [[ "$POST_MERGE_ONLY" == "true" ]]; then
+  ensure_git_repo
+  echo "==> Post-merge only: applying QVerisBot fork patches"
+  apply_fork_patches
+  echo
+  echo "==> Done."
+  exit 0
+fi
 
 echo "==> Preflight checks"
 ensure_git_repo
