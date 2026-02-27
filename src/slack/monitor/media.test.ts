@@ -2,7 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as ssrf from "../../infra/net/ssrf.js";
 import type { SavedMedia } from "../../media/store.js";
 import * as mediaStore from "../../media/store.js";
-import { mockPinnedHostnameResolution } from "../../test-helpers/ssrf.js";
+import {
+  mockPinnedHostnameResolution,
+  mockPinnedHostnameWithPolicyResolution,
+} from "../../test-helpers/ssrf.js";
 import { type FetchMock, withFetchPreconnect } from "../../test-utils/fetch-mock.js";
 import {
   fetchWithSlackAuth,
@@ -171,14 +174,18 @@ describe("fetchWithSlackAuth", () => {
 });
 
 describe("resolveSlackMedia", () => {
+  let ssrfPolicySpy: { mockRestore: () => void } | undefined;
+
   beforeEach(() => {
     mockFetch = vi.fn();
     globalThis.fetch = withFetchPreconnect(mockFetch);
     mockPinnedHostnameResolution();
+    ssrfPolicySpy = mockPinnedHostnameWithPolicyResolution();
   });
 
   afterEach(() => {
     globalThis.fetch = originalFetch;
+    ssrfPolicySpy?.mockRestore();
     vi.restoreAllMocks();
   });
 

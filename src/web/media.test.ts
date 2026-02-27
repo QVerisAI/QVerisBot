@@ -7,7 +7,10 @@ import { resolveStateDir } from "../config/paths.js";
 import { sendVoiceMessageDiscord } from "../discord/send.js";
 import { resolvePreferredOpenClawTmpDir } from "../infra/tmp-openclaw-dir.js";
 import { optimizeImageToPng } from "../media/image-ops.js";
-import { mockPinnedHostnameResolution } from "../test-helpers/ssrf.js";
+import {
+  mockPinnedHostnameResolution,
+  mockPinnedHostnameWithPolicyResolution,
+} from "../test-helpers/ssrf.js";
 import { captureEnv } from "../test-utils/env.js";
 import {
   LocalMediaAccessError,
@@ -129,8 +132,15 @@ describe("web media loading", () => {
     stateDirSnapshot.restore();
   });
 
+  let ssrfPolicySpy: { mockRestore: () => void } | undefined;
+
   beforeAll(() => {
     mockPinnedHostnameResolution();
+    ssrfPolicySpy = mockPinnedHostnameWithPolicyResolution();
+  });
+
+  afterAll(() => {
+    ssrfPolicySpy?.mockRestore();
   });
 
   it("strips MEDIA: prefix before reading local file (including whitespace variants)", async () => {
