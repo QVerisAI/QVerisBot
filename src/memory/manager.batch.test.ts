@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { useFastShortTimeouts } from "../../test/helpers/fast-short-timeouts.js";
 import type { OpenClawConfig } from "../config/config.js";
+import { mockPinnedHostnameWithPolicyResolution } from "../test-helpers/ssrf.js";
 import { getMemorySearchManager, type MemoryIndexManager } from "./index.js";
 import { createOpenAIEmbeddingProviderMock } from "./test-embeddings-mock.js";
 import "./test-runtime-mocks.js";
@@ -25,6 +26,7 @@ describe("memory indexing with OpenAI batches", () => {
   let memoryDir: string;
   let indexPath: string;
   let manager: MemoryIndexManager | null = null;
+  let ssrfSpy: { mockRestore: () => void } | undefined;
 
   async function readOpenAIBatchUploadRequests(body: FormData) {
     let uploadedRequests: Array<{ custom_id?: string }> = [];
@@ -140,6 +142,7 @@ describe("memory indexing with OpenAI batches", () => {
   });
 
   beforeEach(async () => {
+    ssrfSpy = mockPinnedHostnameWithPolicyResolution();
     embedBatch.mockClear();
     embedQuery.mockClear();
     embedBatch.mockImplementation(async (texts: string[]) =>
@@ -163,6 +166,7 @@ describe("memory indexing with OpenAI batches", () => {
   });
 
   afterEach(async () => {
+    ssrfSpy?.mockRestore();
     vi.unstubAllGlobals();
   });
 

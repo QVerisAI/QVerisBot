@@ -1,12 +1,22 @@
 import { createServer } from "node:http";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { type WebSocket, WebSocketServer } from "ws";
 import { SsrFBlockedError } from "../infra/net/ssrf.js";
 import { rawDataToString } from "../infra/ws.js";
+import { mockPinnedHostnameWithPolicyResolution } from "../test-helpers/ssrf.js";
 import { createTargetViaCdp, evaluateJavaScript, normalizeCdpWsUrl, snapshotAria } from "./cdp.js";
 import { InvalidBrowserNavigationUrlError } from "./navigation-guard.js";
 
 describe("cdp", () => {
+  let ssrfSpy: { mockRestore: () => void } | undefined;
+
+  beforeEach(() => {
+    ssrfSpy = mockPinnedHostnameWithPolicyResolution();
+  });
+
+  afterEach(() => {
+    ssrfSpy?.mockRestore();
+  });
   let httpServer: ReturnType<typeof createServer> | null = null;
   let wsServer: WebSocketServer | null = null;
 

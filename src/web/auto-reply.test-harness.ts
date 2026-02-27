@@ -6,6 +6,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, vi } from "vitest";
 import { resetInboundDedupe } from "../auto-reply/reply/inbound-dedupe.js";
 import * as ssrf from "../infra/net/ssrf.js";
 import { resetLogger, setLoggerOverride } from "../logging.js";
+import { mockPinnedHostnameWithPolicyResolution } from "../test-helpers/ssrf.js";
 import type { WebInboundMessage, WebListenerCloseReason } from "./inbound.js";
 import {
   resetBaileysMocks as _resetBaileysMocks,
@@ -126,6 +127,7 @@ export async function makeSessionStore(
 
 export function installWebAutoReplyUnitTestHooks(opts?: { pinDns?: boolean }) {
   let resolvePinnedHostnameSpy: { mockRestore: () => unknown } | undefined;
+  let resolvePinnedHostnameWithPolicySpy: { mockRestore: () => void } | undefined;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -135,7 +137,6 @@ export function installWebAutoReplyUnitTestHooks(opts?: { pinDns?: boolean }) {
       resolvePinnedHostnameSpy = vi
         .spyOn(ssrf, "resolvePinnedHostname")
         .mockImplementation(async (hostname) => {
-          // SSRF guard pins DNS; stub resolution to avoid live lookups in unit tests.
           const normalized = hostname.trim().toLowerCase().replace(/\.$/, "");
           const addresses = [TEST_NET_IP];
           return {
@@ -144,12 +145,18 @@ export function installWebAutoReplyUnitTestHooks(opts?: { pinDns?: boolean }) {
             lookup: ssrf.createPinnedLookup({ hostname: normalized, addresses }),
           };
         });
+      // Use a routable public IP; TEST_NET (203.0.113.x) may be blocked as reserved
+      resolvePinnedHostnameWithPolicySpy = mockPinnedHostnameWithPolicyResolution([
+        "93.184.216.34",
+      ]);
     }
   });
 
   afterEach(() => {
     resolvePinnedHostnameSpy?.mockRestore();
     resolvePinnedHostnameSpy = undefined;
+    resolvePinnedHostnameWithPolicySpy?.mockRestore();
+    resolvePinnedHostnameWithPolicySpy = undefined;
     resetLogger();
     setLoggerOverride(null);
     vi.useRealTimers();

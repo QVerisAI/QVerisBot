@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { mockPinnedHostnameWithPolicyResolution } from "../test-helpers/ssrf.js";
 import { InvalidBrowserNavigationUrlError } from "./navigation-guard.js";
 import {
   getPwToolsCoreSessionMocks,
@@ -7,9 +8,19 @@ import {
 } from "./pw-tools-core.test-harness.js";
 
 installPwToolsCoreTestHooks();
+
+let ssrfSpy: { mockRestore: () => void } | undefined;
 const mod = await import("./pw-tools-core.snapshot.js");
 
 describe("pw-tools-core.snapshot navigate guard", () => {
+  beforeEach(() => {
+    ssrfSpy = mockPinnedHostnameWithPolicyResolution();
+  });
+
+  afterEach(() => {
+    ssrfSpy?.mockRestore();
+  });
+
   it("blocks unsupported non-network URLs before page lookup", async () => {
     const goto = vi.fn(async () => {});
     setPwToolsCoreCurrentPage({
