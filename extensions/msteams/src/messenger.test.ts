@@ -92,9 +92,7 @@ describe("msteams messenger", () => {
       expect(messages).toEqual([]);
     });
 
-    it("does not filter substantive replies that start with the silent token", () => {
-      // isSilentReplyText is exact-match only (^NO_REPLY$) — upstream #19576 tightened
-      // this to avoid suppressing real replies that happen to begin with "NO_REPLY".
+    it("does not filter non-exact silent reply prefixes", () => {
       const messages = renderReplyPayloadsToMessages(
         [{ text: `${SILENT_REPLY_TOKEN} -- ignored` }],
         { textChunkLimit: 4000, tableMode: "code" },
