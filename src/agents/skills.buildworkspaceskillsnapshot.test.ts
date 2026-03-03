@@ -8,6 +8,10 @@ import { buildWorkspaceSkillSnapshot, buildWorkspaceSkillsPrompt } from "./skill
 
 const fixtureSuite = createFixtureSuite("openclaw-skills-snapshot-suite-");
 let truncationWorkspaceTemplateDir = "";
+
+const disablePluginsConfig = {
+  plugins: { enabled: false },
+} as const;
 let nestedRepoTemplateDir = "";
 
 beforeAll(async () => {

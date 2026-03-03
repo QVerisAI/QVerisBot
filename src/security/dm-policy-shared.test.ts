@@ -300,7 +300,6 @@ describe("security/dm-policy-shared", () => {
 
   function createParityCase(overrides: Partial<ParityCase> & Pick<ParityCase, "name">): ParityCase {
     return {
-      name: overrides.name,
       isGroup: false,
       dmPolicy: "open",
       groupPolicy: "allowlist",

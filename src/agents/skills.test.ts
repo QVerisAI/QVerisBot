@@ -16,6 +16,10 @@ import {
 const fixtureSuite = createFixtureSuite("openclaw-skills-suite-");
 let tempHome: TempHomeEnv | null = null;
 
+const disablePluginsConfig = {
+  plugins: { enabled: false },
+} as const;
+
 const resolveTestSkillDirs = (workspaceDir: string) => ({
   managedSkillsDir: path.join(workspaceDir, ".managed"),
   bundledSkillsDir: path.join(workspaceDir, ".bundled"),
