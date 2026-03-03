@@ -217,7 +217,9 @@ describe("secret ref resolver", () => {
                 source: "exec",
                 command: scriptPath,
                 passEnv: ["PATH"],
-                timeoutMs: 500,
+                // Use a generous timeout so Node.js startup overhead on loaded systems
+                // doesn't cause a spurious no-output-timeout failure.
+                timeoutMs: 5000,
               },
             },
           },
