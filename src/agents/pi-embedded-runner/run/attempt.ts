@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import os from "node:os";
-import type { AgentMessage } from "@mariozechner/pi-agent-core";
+import type { AgentMessage, StreamFn } from "@mariozechner/pi-agent-core";
 import { streamSimple } from "@mariozechner/pi-ai";
 import {
   createAgentSession,
@@ -39,9 +39,8 @@ import { DEFAULT_CONTEXT_TOKENS } from "../../defaults.js";
 import { resolveOpenClawDocsPath } from "../../docs-path.js";
 import { isTimeoutError } from "../../failover-error.js";
 import { resolveImageSanitizationLimits } from "../../image-sanitization.js";
-import { setupLlmProxy } from "../../llm-proxy.js";
 import { resolveModelAuthMode } from "../../model-auth.js";
-import { resolveDefaultModelForAgent } from "../../model-selection.js";
+import { normalizeProviderId, resolveDefaultModelForAgent } from "../../model-selection.js";
 import { createOllamaStreamFn, OLLAMA_NATIVE_BASE_URL } from "../../ollama-stream.js";
 import { resolveOwnerDisplaySetting } from "../../owner-display.js";
 import {
@@ -79,7 +78,6 @@ import { resolveTranscriptPolicy } from "../../transcript-policy.js";
 import { DEFAULT_BOOTSTRAP_FILENAME } from "../../workspace.js";
 import { isRunnerAbortError } from "../abort.js";
 import { appendCacheTtlTimestamp, isCacheTtlEligibleProvider } from "../cache-ttl.js";
-import { filterContextByRetentionAndTurns } from "../context-filter.js";
 import { buildEmbeddedExtensionFactories } from "../extensions.js";
 import { applyExtraParamsToAgent } from "../extra-params.js";
 import {
@@ -87,6 +85,7 @@ import {
   sanitizeSessionHistory,
   sanitizeToolsForGoogle,
 } from "../google.js";
+import { getDmHistoryLimitFromSessionKey, limitHistoryTurns } from "../history.js";
 import { log } from "../logger.js";
 import { buildModelAliasLines } from "../model.js";
 import {
@@ -127,6 +126,176 @@ type PromptBuildHookRunner = {
     ctx: PluginHookAgentContext,
   ) => Promise<PluginHookBeforeAgentStartResult | undefined>;
 };
+
+export function isOllamaCompatProvider(model: {
+  provider?: string;
+  baseUrl?: string;
+  api?: string;
+}): boolean {
+  const providerId = normalizeProviderId(model.provider ?? "");
+  if (providerId === "ollama") {
+    return true;
+  }
+  if (!model.baseUrl) {
+    return false;
+  }
+  try {
+    const parsed = new URL(model.baseUrl);
+    const hostname = parsed.hostname.toLowerCase();
+    const isLocalhost =
+      hostname === "localhost" ||
+      hostname === "127.0.0.1" ||
+      hostname === "::1" ||
+      hostname === "[::1]";
+    if (isLocalhost && parsed.port === "11434") {
+      return true;
+    }
+
+    // Allow remote/LAN Ollama OpenAI-compatible endpoints when the provider id
+    // itself indicates Ollama usage (e.g. "my-ollama").
+    const providerHintsOllama = providerId.includes("ollama");
+    const isOllamaPort = parsed.port === "11434";
+    const isOllamaCompatPath = parsed.pathname === "/" || /^\/v1\/?$/i.test(parsed.pathname);
+    return providerHintsOllama && isOllamaPort && isOllamaCompatPath;
+  } catch {
+    return false;
+  }
+}
+
+export function resolveOllamaCompatNumCtxEnabled(params: {
+  config?: OpenClawConfig;
+  providerId?: string;
+}): boolean {
+  const providerId = params.providerId?.trim();
+  if (!providerId) {
+    return true;
+  }
+  const providers = params.config?.models?.providers;
+  if (!providers) {
+    return true;
+  }
+  const direct = providers[providerId];
+  if (direct) {
+    return direct.injectNumCtxForOpenAICompat ?? true;
+  }
+  const normalized = normalizeProviderId(providerId);
+  for (const [candidateId, candidate] of Object.entries(providers)) {
+    if (normalizeProviderId(candidateId) === normalized) {
+      return candidate.injectNumCtxForOpenAICompat ?? true;
+    }
+  }
+  return true;
+}
+
+export function shouldInjectOllamaCompatNumCtx(params: {
+  model: { api?: string; provider?: string; baseUrl?: string };
+  config?: OpenClawConfig;
+  providerId?: string;
+}): boolean {
+  // Restrict to the OpenAI-compatible adapter path only.
+  if (params.model.api !== "openai-completions") {
+    return false;
+  }
+  if (!isOllamaCompatProvider(params.model)) {
+    return false;
+  }
+  return resolveOllamaCompatNumCtxEnabled({
+    config: params.config,
+    providerId: params.providerId,
+  });
+}
+
+export function wrapOllamaCompatNumCtx(baseFn: StreamFn | undefined, numCtx: number): StreamFn {
+  const streamFn = baseFn ?? streamSimple;
+  return (model, context, options) =>
+    streamFn(model, context, {
+      ...options,
+      onPayload: (payload: unknown) => {
+        if (!payload || typeof payload !== "object") {
+          options?.onPayload?.(payload);
+          return;
+        }
+        const payloadRecord = payload as Record<string, unknown>;
+        if (!payloadRecord.options || typeof payloadRecord.options !== "object") {
+          payloadRecord.options = {};
+        }
+        (payloadRecord.options as Record<string, unknown>).num_ctx = numCtx;
+        options?.onPayload?.(payload);
+      },
+    });
+}
+
+function trimWhitespaceFromToolCallNamesInMessage(message: unknown): void {
+  if (!message || typeof message !== "object") {
+    return;
+  }
+  const content = (message as { content?: unknown }).content;
+  if (!Array.isArray(content)) {
+    return;
+  }
+  for (const block of content) {
+    if (!block || typeof block !== "object") {
+      continue;
+    }
+    const typedBlock = block as { type?: unknown; name?: unknown };
+    if (typedBlock.type !== "toolCall" || typeof typedBlock.name !== "string") {
+      continue;
+    }
+    const trimmed = typedBlock.name.trim();
+    if (trimmed !== typedBlock.name) {
+      typedBlock.name = trimmed;
+    }
+  }
+}
+
+function wrapStreamTrimToolCallNames(
+  stream: ReturnType<typeof streamSimple>,
+): ReturnType<typeof streamSimple> {
+  const originalResult = stream.result.bind(stream);
+  stream.result = async () => {
+    const message = await originalResult();
+    trimWhitespaceFromToolCallNamesInMessage(message);
+    return message;
+  };
+
+  const originalAsyncIterator = stream[Symbol.asyncIterator].bind(stream);
+  (stream as { [Symbol.asyncIterator]: typeof originalAsyncIterator })[Symbol.asyncIterator] =
+    function () {
+      const iterator = originalAsyncIterator();
+      return {
+        async next() {
+          const result = await iterator.next();
+          if (!result.done && result.value && typeof result.value === "object") {
+            const event = result.value as {
+              partial?: unknown;
+              message?: unknown;
+            };
+            trimWhitespaceFromToolCallNamesInMessage(event.partial);
+            trimWhitespaceFromToolCallNamesInMessage(event.message);
+          }
+          return result;
+        },
+        async return(value?: unknown) {
+          return iterator.return?.(value) ?? { done: true as const, value: undefined };
+        },
+        async throw(error?: unknown) {
+          return iterator.throw?.(error) ?? { done: true as const, value: undefined };
+        },
+      };
+    };
+
+  return stream;
+}
+
+export function wrapStreamFnTrimToolCallNames(baseFn: StreamFn): StreamFn {
+  return (model, context, options) => {
+    const maybeStream = baseFn(model, context, options);
+    if (maybeStream && typeof maybeStream === "object" && "then" in maybeStream) {
+      return Promise.resolve(maybeStream).then((stream) => wrapStreamTrimToolCallNames(stream));
+    }
+    return wrapStreamTrimToolCallNames(maybeStream);
+  };
+}
 
 export async function resolvePromptBuildHookResult(params: {
   prompt: string;
@@ -258,9 +427,6 @@ function summarizeSessionContext(messages: AgentMessage[]): {
 export async function runEmbeddedAttempt(
   params: EmbeddedRunAttemptParams,
 ): Promise<EmbeddedRunAttemptResult> {
-  // Set up LLM proxy if configured (must be done before any fetch calls)
-  setupLlmProxy(params.config);
-
   const resolvedWorkspace = resolveUserPath(params.workspaceDir);
   const prevCwd = process.cwd();
   const runAbortController = new AbortController();
@@ -372,8 +538,6 @@ export async function runEmbeddedAttempt(
           currentMessageId: params.currentMessageId,
           replyToMode: params.replyToMode,
           hasRepliedRef: params.hasRepliedRef,
-          originatingChannel: params.originatingChannel,
-          originatingSenderId: params.originatingSenderId,
           modelHasVision,
           requireExplicitMessageTarget:
             params.requireExplicitMessageTarget ?? isSubagentSessionKey(params.sessionKey),
@@ -707,6 +871,27 @@ export async function runEmbeddedAttempt(
         activeSession.agent.streamFn = streamSimple;
       }
 
+      // Ollama with OpenAI-compatible API needs num_ctx in payload.options.
+      // Otherwise Ollama defaults to a 4096 context window.
+      const providerIdForNumCtx =
+        typeof params.model.provider === "string" && params.model.provider.trim().length > 0
+          ? params.model.provider
+          : params.provider;
+      const shouldInjectNumCtx = shouldInjectOllamaCompatNumCtx({
+        model: params.model,
+        config: params.config,
+        providerId: providerIdForNumCtx,
+      });
+      if (shouldInjectNumCtx) {
+        const numCtx = Math.max(
+          1,
+          Math.floor(
+            params.model.contextWindow ?? params.model.maxTokens ?? DEFAULT_CONTEXT_TOKENS,
+          ),
+        );
+        activeSession.agent.streamFn = wrapOllamaCompatNumCtx(activeSession.agent.streamFn, numCtx);
+      }
+
       applyExtraParamsToAgent(
         activeSession.agent,
         params.config,
@@ -775,6 +960,11 @@ export async function runEmbeddedAttempt(
         };
       }
 
+      // Some models emit tool names with surrounding whitespace (e.g. " read ").
+      // pi-agent-core dispatches tool calls with exact string matching, so normalize
+      // names on the live response stream before tool execution.
+      activeSession.agent.streamFn = wrapStreamFnTrimToolCallNames(activeSession.agent.streamFn);
+
       if (anthropicPayloadLogger) {
         activeSession.agent.streamFn = anthropicPayloadLogger.wrapStreamFn(
           activeSession.agent.streamFn,
@@ -800,12 +990,10 @@ export async function runEmbeddedAttempt(
         const validated = transcriptPolicy.validateAnthropicTurns
           ? validateAnthropicTurns(validatedGemini)
           : validatedGemini;
-        const truncated = filterContextByRetentionAndTurns({
-          messages: validated,
-          entries: sessionManager.getEntries(),
-          config: params.config,
-          sessionKey: params.sessionKey,
-        });
+        const truncated = limitHistoryTurns(
+          validated,
+          getDmHistoryLimitFromSessionKey(params.sessionKey, params.config),
+        );
         // Re-run tool_use/tool_result pairing repair after truncation, since
         // limitHistoryTurns can orphan tool_result blocks by removing the
         // assistant message that contained the matching tool_use.

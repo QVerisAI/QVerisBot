@@ -48,10 +48,10 @@ jobs:
       - name: Install pnpm deps (minimal)
         run: pnpm install --ignore-scripts --frozen-lockfile
 
-      - name: Validate local installer scripts
+      - name: Run root Dockerfile CLI smoke
         run: |
-          bash scripts/install.sh --help
-          bash scripts/install-cli.sh --help
+          docker build -t openclaw-dockerfile-smoke:local -f Dockerfile .
+          docker run --rm --entrypoint sh openclaw-dockerfile-smoke:local -lc 'which openclaw && openclaw --version'
 
       - name: Run installer docker tests
         env:
