@@ -13,19 +13,22 @@ import {
 } from "./storage.js";
 
 function sanitizeUserIdList(input: unknown, label: string): string[] {
-  const LogService = loadMatrixSdk().LogService;
+  const { LogService } = loadMatrixSdk();
   if (input == null) {
     return [];
   }
   if (!Array.isArray(input)) {
-    warn(`Expected ${label} list to be an array, got ${typeof input}`);
+    LogService.warn("create-client", `Expected ${label} list to be an array, got ${typeof input}`);
     return [];
   }
   const filtered = input.filter(
     (entry): entry is string => typeof entry === "string" && entry.trim().length > 0,
   );
   if (filtered.length !== input.length) {
-    warn(`Dropping ${input.length - filtered.length} invalid ${label} entries from sync payload`);
+    LogService.warn(
+      "create-client",
+      `Dropping ${input.length - filtered.length} invalid ${label} entries from sync payload`,
+    );
   }
   return filtered;
 }
@@ -64,7 +67,7 @@ export async function createMatrixClient(params: {
       const { StoreType } = await import("@matrix-org/matrix-sdk-crypto-nodejs");
       cryptoStorage = new RustSdkCryptoStorageProvider(storagePaths.cryptoPath, StoreType.Sqlite);
     } catch (err) {
-      warn("Failed to initialize crypto storage, E2EE disabled:", err);
+      LogService.warn("create-client", "Failed to initialize crypto storage, E2EE disabled:", err);
     }
   }
 
@@ -86,8 +89,8 @@ export async function createMatrixClient(params: {
       changedDeviceLists,
       leftDeviceLists,
     ) => {
-      const safeChanged = sanitizeUserIdList(changedDeviceLists, "changed device list", warn);
-      const safeLeft = sanitizeUserIdList(leftDeviceLists, "left device list", warn);
+      const safeChanged = sanitizeUserIdList(changedDeviceLists, "changed device list");
+      const safeLeft = sanitizeUserIdList(leftDeviceLists, "left device list");
       try {
         return await originalUpdateSyncData(
           toDeviceMessages,
@@ -99,7 +102,11 @@ export async function createMatrixClient(params: {
       } catch (err) {
         const message = typeof err === "string" ? err : err instanceof Error ? err.message : "";
         if (message.includes("Expect value to be String")) {
-          warn("Ignoring malformed device list entries during crypto sync", message);
+          LogService.warn(
+            "create-client",
+            "Ignoring malformed device list entries during crypto sync",
+            message,
+          );
           return;
         }
         throw err;

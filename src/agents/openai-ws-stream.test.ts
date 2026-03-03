@@ -448,9 +448,10 @@ describe("convertMessagesToInputItems", () => {
       isError: false,
       timestamp: 0,
     };
-    const items = convertMessagesToInputItems([msg] as Parameters<
-      typeof convertMessagesToInputItems
-    >[0]);
+    const items = convertMessagesToInputItems(
+      // intentionally omitting toolCallId to test legacy toolUseId fallback
+      [msg] as unknown as Parameters<typeof convertMessagesToInputItems>[0],
+    );
     expect(items).toHaveLength(1);
     expect(items[0]).toMatchObject({
       type: "function_call_output",
