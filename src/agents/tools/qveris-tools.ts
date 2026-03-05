@@ -497,7 +497,7 @@ export function createQverisTools(options?: {
         execution_id: result.execution_id,
         success: result.success,
         elapsed_time_ms: result.elapsed_time_ms,
-        result: result.result?.data,
+        result: result.result,
         error_message: result.error_message,
         cost: result.cost ?? result.credits_used,
       });
