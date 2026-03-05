@@ -207,9 +207,6 @@ export const FeishuConfigSchema = z
     webhookPath: z.string().optional().default("/feishu/events"),
     ...FeishuSharedConfigShape,
     dmPolicy: DmPolicySchema.optional().default("pairing"),
-    allowFrom: z.array(z.union([z.string(), z.number()])).optional(),
-    /** Feishu user IDs allowed to trigger X actions (follow/like/reply/dm). Separate from allowFrom. */
-    xActionsAllowFrom: z.array(z.union([z.string(), z.number()])).optional(),
     reactionNotifications: ReactionNotificationModeSchema.optional().default("own"),
     groupPolicy: GroupPolicySchema.optional().default("allowlist"),
     requireMention: z.boolean().optional().default(true),
