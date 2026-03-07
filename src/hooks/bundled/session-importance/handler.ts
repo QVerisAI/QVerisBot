@@ -175,12 +175,16 @@ const sessionImportanceHandler: HookHandler = async (event) => {
 
     const cfg = context.cfg as OpenClawConfig | undefined;
     const agentId = resolveAgentIdFromSessionKey(event.sessionKey);
-    const workspaceDir = cfg
-      ? resolveAgentWorkspaceDir(cfg, agentId)
-      : path.join(
-          resolveStateDir(process.env, () => os.homedir()),
-          "workspace",
-        );
+    let workspaceDir: string;
+    if (cfg) {
+      workspaceDir = resolveAgentWorkspaceDir(cfg, agentId);
+    } else {
+      log.warn("cfg not available in hook context; falling back to default workspace path");
+      workspaceDir = path.join(
+        resolveStateDir(process.env, () => os.homedir()),
+        "workspace",
+      );
+    }
 
     // Resolve the session file (prefer previous session)
     const sessionFile = (sessionEntry.sessionFile as string) || undefined;

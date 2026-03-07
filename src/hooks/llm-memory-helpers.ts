@@ -158,7 +158,7 @@ async function runOneShotLLM(params: {
     const workspaceDir = resolveAgentWorkspaceDir(params.cfg, agentId);
     const agentDir = resolveAgentDir(params.cfg, agentId);
 
-    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), `openclaw-${params.purpose}-`));
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-" + params.purpose + "-"));
     tempSessionFile = path.join(tempDir, "session.jsonl");
 
     const modelRef = resolveAgentEffectiveModelPrimary(params.cfg, agentId);

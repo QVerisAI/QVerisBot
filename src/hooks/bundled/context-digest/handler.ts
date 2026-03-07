@@ -35,12 +35,12 @@ const DEFAULT_DAYS = 7;
 const DEFAULT_MAX_SESSION_MESSAGES = 20;
 const MAX_OUTPUT_CHARS = 8192;
 
-function resolveStorePath(context: Record<string, unknown>): string | null {
+function resolveStorePath(context: Record<string, unknown>, agentId: string): string | null {
   if (typeof context.storePath === "string") {
     return context.storePath;
   }
   const stateDir = resolveStateDir(process.env, () => os.homedir());
-  return path.join(stateDir, "agents", "main", "sessions", "sessions.json");
+  return path.join(stateDir, "agents", agentId || "main", "sessions", "sessions.json");
 }
 
 const contextDigestHandler: HookHandler = async (event) => {
@@ -70,12 +70,16 @@ const contextDigestHandler: HookHandler = async (event) => {
 
     const cfg = context.cfg as OpenClawConfig | undefined;
     const agentId = resolveAgentIdFromSessionKey(event.sessionKey);
-    const workspaceDir = cfg
-      ? resolveAgentWorkspaceDir(cfg, agentId)
-      : path.join(
-          resolveStateDir(process.env, () => os.homedir()),
-          "workspace",
-        );
+    let workspaceDir: string;
+    if (cfg) {
+      workspaceDir = resolveAgentWorkspaceDir(cfg, agentId);
+    } else {
+      log.warn("cfg not available in hook context; falling back to default workspace path");
+      workspaceDir = path.join(
+        resolveStateDir(process.env, () => os.homedir()),
+        "workspace",
+      );
+    }
 
     // Mutex: debounce concurrent digest generation
     await withDigestLock(workspaceDir, async () => {
@@ -95,7 +99,7 @@ const contextDigestHandler: HookHandler = async (event) => {
           : DEFAULT_MAX_SESSION_MESSAGES;
       const llmDigest = hookConfig?.llmDigest !== false;
 
-      const storePath = resolveStorePath(context);
+      const storePath = resolveStorePath(context, agentId);
       if (!storePath) {
         log.debug("Could not resolve sessions store path");
         return;

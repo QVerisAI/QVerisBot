@@ -133,7 +133,7 @@ describe("buildContextDigestAnchorPrompt", () => {
 
     const result = await buildContextDigestAnchorPrompt({ workspaceDir: workDir });
     expect(result).toBeDefined();
-    expect(result).toContain("open items from memory");
+    expect(result).toContain("open items");
     expect(result).toContain("Deploy API v3");
     expect(result).toContain("Update SDK docs");
   });

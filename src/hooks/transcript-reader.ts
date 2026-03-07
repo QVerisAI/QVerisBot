@@ -42,8 +42,27 @@ export async function parseTranscriptMessages(
   const maxMessages = options?.maxMessages;
 
   try {
-    const raw = await fs.readFile(filePath, "utf-8");
-    const content = raw.length > maxBytes ? raw.slice(0, maxBytes) : raw;
+    // Read only the first maxBytes to avoid loading huge transcripts into memory
+    const stat = await fs.stat(filePath);
+    const readBytes = Math.min(stat.size, maxBytes);
+    const fh = await fs.open(filePath, "r");
+    let content: string;
+    try {
+      const buf = Buffer.alloc(readBytes);
+      const { bytesRead } = await fh.read(buf, 0, readBytes, 0);
+      content = buf.toString("utf-8", 0, bytesRead);
+    } finally {
+      await fh.close();
+    }
+
+    // If we truncated mid-file, drop the last partial line
+    if (stat.size > maxBytes) {
+      const lastNewline = content.lastIndexOf("\n");
+      if (lastNewline > 0) {
+        content = content.slice(0, lastNewline);
+      }
+    }
+
     const lines = content.trim().split("\n");
     const messages: ParsedMessage[] = [];
 
