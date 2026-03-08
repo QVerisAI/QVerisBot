@@ -33,16 +33,18 @@ It answers you on the channels you already use (WhatsApp, Telegram, Slack, Disco
 - **QVeris-first tool experience**: integrate with 500+ providers and 10,000+ APIs via a single tool-search + tool-execute workflow.
 - **China-friendly channel strategy**: stronger Feishu and regional ecosystem readiness without sacrificing global channel coverage.
 - **Faster first-run onboarding**: CLI/macOS/web wizard now includes QVeris API setup and X channel credentials in guided flow.
+- **Enhanced long-term memory**: two new bundled hooks — `context-digest` (rolling cross-session summary injected into system prompt) and `session-importance` (auto-archives important conversations to `memory/important/`) — extend memory beyond the single session.
 
 ### OpenClaw vs QVerisBot (quick comparison)
 
-| Area                 | OpenClaw (base platform)                          | QVerisBot (this repo)                                                                                             |
-| :------------------- | :------------------------------------------------ | :---------------------------------------------------------------------------------------------------------------- |
-| Positioning          | Local-first agent gateway + multi-channel runtime | OpenClaw-based distribution focused on professional tool use and faster production onboarding                     |
-| Tool ecosystem       | Built-in tools + extension mechanism              | QVeris Universal Toolbox integration (search + execute), plus QVeris-first defaults                               |
-| Web search default   | Commonly configured with Brave/other providers    | During onboarding, defaults `web_search` to QVeris Smart Search when QVeris is enabled                            |
-| Channel focus        | Broad global channels and plugin model            | Adds stronger China-facing defaults/integration (especially Feishu), while keeping full OpenClaw channel coverage |
-| First-run onboarding | Wizard-driven baseline setup                      | Enhanced wizard flow: QVeris API key setup + X channel credential setup integrated into onboarding                |
+| Area                 | OpenClaw (base platform)                          | QVerisBot (this repo)                                                                                                         |
+| :------------------- | :------------------------------------------------ | :---------------------------------------------------------------------------------------------------------------------------- |
+| Positioning          | Local-first agent gateway + multi-channel runtime | OpenClaw-based distribution focused on professional tool use and faster production onboarding                                 |
+| Tool ecosystem       | Built-in tools + extension mechanism              | QVeris Universal Toolbox integration (search + execute), plus QVeris-first defaults                                           |
+| Web search default   | Commonly configured with Brave/other providers    | During onboarding, defaults `web_search` to QVeris Smart Search when QVeris is enabled                                        |
+| Channel focus        | Broad global channels and plugin model            | Adds stronger China-facing defaults/integration (especially Feishu), while keeping full OpenClaw channel coverage             |
+| First-run onboarding | Wizard-driven baseline setup                      | Enhanced wizard flow: QVeris API key setup + X channel credential setup integrated into onboarding                            |
+| Long-term memory     | Session-scoped memory + manual memory files       | Adds `context-digest` (cross-session summary → system prompt) and `session-importance` (auto-archive important conversations) |
 
 ## Quick Start (5 minutes)
 
@@ -155,10 +157,11 @@ New install? Start here: [Getting started](https://docs.openclaw.ai/start/gettin
 
 Model note: while many providers/models are supported, for the best experience and lower prompt-injection risk use the strongest latest-generation model available to you. See [Onboarding](https://docs.openclaw.ai/start/onboarding).
 
-## Models (selection + auth)
+## Models (selection + switching)
 
 - Models config + CLI: [Models](https://docs.openclaw.ai/concepts/models)
 - Auth profile rotation (OAuth vs API keys) + fallbacks: [Model failover](https://docs.openclaw.ai/concepts/model-failover)
+- **Natural language model switching**: ask the agent to switch models in conversation (e.g. "use kimi", "switch to sonnet") — the `switch_model` tool handles alias resolution, fuzzy matching, and confirmation when ambiguous. The `/model <name>` command also works.
 
 ## Install (recommended)
 
@@ -167,6 +170,27 @@ Runtime: **Node ≥22**.
 <p align="center"><a href="https://qveris.ai/integrations"><strong>Explore all 500+ integrations →</strong></a></p>
 
 </details>
+
+### How the agent uses QVeris tools
+
+QVerisBot exposes three QVeris tools to the agent, with built-in routing guidance to prevent misuse:
+
+| Tool                | When to use                                                                                                                                                                                                                                                     |
+| :------------------ | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `qveris_search`     | Discover tools by **capability type** — real-time data APIs (prices, weather, financials), external service capabilities (image generation, OCR, TTS, translation), geo/location APIs. **Not for** local file reads, software config, or documentation lookups. |
+| `qveris_execute`    | Execute a tool returned by `qveris_search` or verified by `qveris_get_by_ids`. Pass parameters as JSON using `sample_parameters` from the search result as a template.                                                                                          |
+| `qveris_get_by_ids` | Re-verify a **known** tool ID without a full search — use when the agent has already found a good tool in this session. Skips the search round-trip and returns the current parameter schema.                                                                   |
+
+The agent follows a routing decision tree before calling `qveris_search`:
+
+1. **Local operation?** (read files, check config, session status) → use local tools, skip QVeris
+2. **Need a web page or article?** → use `web_search` / `web_fetch` directly
+3. **Need structured real-time data?** → `qveris_search("weather forecast API")` — describe the capability, not the task
+4. **Need an external service capability?** → `qveris_search("text to image generation API")`
+5. **Already used a QVeris tool this session?** → `qveris_get_by_ids` with the known ID, then execute directly
+6. **None of the above?** → do not call QVeris; use `web_search` or report the limitation
+
+A session-scoped **Tool Rolodex** tracks successfully executed tools. After a tool is used, it is annotated as `previously_used` in future search results and listed under `session_known_tools`, so the agent reuses verified tools instead of re-discovering them from scratch.
 
 ### What can you build with QVeris?
 
@@ -189,7 +213,7 @@ Runtime: **Node ≥22**.
 
 ## What Else Makes QVerisBot Special
 
-- **OpenClaw + QVeris optimization layer** — keeps OpenClaw's core reliability while adding QVeris-first defaults for practical business/research workflows
+- **OpenClaw + QVeris optimization layer** — keeps OpenClaw's core reliability while adding QVeris-first defaults and a structured tool-routing layer (decision tree + session rolodex) for practical business/research workflows
 - **[Feishu Native Support](docs/qverisbot-from-source.md)** — WebSocket-based deep integration, ideal for Chinese enterprise users
 - **Improved onboarding across CLI/macOS/web wizard flows** — guided QVeris API key setup, auto-default `web_search` to QVeris Xiaosu Smart Search, and built-in X (Twitter) channel credential onboarding
 - **Multi-channel inbox** — WhatsApp, Telegram, Slack, Discord, Google Chat, Signal, iMessage, **Feishu**, Microsoft Teams, Matrix, Zalo, WebChat
@@ -402,6 +426,7 @@ QVerisBot is built on OpenClaw. For deep architecture, channel internals, platfo
 - **Bot migration (cross-OS):** see [Migrating Your Bot](#migrating-your-bot) above — `qverisbot migrate export|import|doctor`
 - **QVeris AI integrations:** https://qveris.ai/integrations
 - **QVeris dashboard / API keys:** https://qveris.ai/dashboard
+- **QVeris tool routing:** see [How the agent uses QVeris tools](#how-the-agent-uses-qveris-tools) above — `qveris_search`, `qveris_execute`, `qveris_get_by_ids`
 
 ## About QVerisBot
 
@@ -494,6 +519,7 @@ WhatsApp / Telegram / Slack / Discord / Google Chat / Signal / iMessage / BlueBu
 - **[Nodes](https://docs.openclaw.ai/nodes)** — Canvas, camera snap/clip, screen record, `location.get`, notifications, plus macOS‑only `system.run`/`system.notify`.
 
 - `/status` — compact session status (model + tokens, cost when available)
+- `/model <name>` — switch model (alias, partial, or full provider/model; or ask in natural language)
 - `/new` or `/reset` — reset the session
 - `/compact` — compact session context (summary)
 - `/think <level>` — off|minimal|low|medium|high|xhigh
@@ -521,6 +547,7 @@ ClawHub is a minimal skill registry. With ClawHub enabled, the agent can search 
 Send these in WhatsApp/Telegram/Slack/Google Chat/Microsoft Teams/WebChat (group commands are owner-only):
 
 - `/status` — compact session status (model + tokens, cost when available)
+- `/model <name>` — switch model (alias, partial, or full provider/model; or ask in natural language)
 - `/new` or `/reset` — reset the session
 - `/compact` — compact session context (summary)
 - `/think <level>` — off|minimal|low|medium|high|xhigh (GPT-5.2 + Codex models only)
