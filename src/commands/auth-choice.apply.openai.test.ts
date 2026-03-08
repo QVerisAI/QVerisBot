@@ -7,6 +7,7 @@ import {
   createAuthTestLifecycle,
   createExitThrowingRuntime,
   createWizardPrompter,
+  readAuthProfilesForAgent,
   setupAuthTestEnv,
 } from "./test-wizard-helpers.js";
 
@@ -71,13 +72,44 @@ describe("applyAuthChoiceOpenAI", () => {
     expect(savedKey).toBe("sk-openai-env");
   });
 
+  it("writes env-backed OpenAI key as keyRef when secret-input-mode=ref", async () => {
+    const { agentDir, stateDir } = await setupTempState();
+    process.env.OPENAI_API_KEY = "sk-openai-env"; // pragma: allowlist secret
+
+    const prompter = createWizardPrompter({});
+    const runtime = createExitThrowingRuntime();
+
+    await applyAuthChoiceOpenAI({
+      authChoice: "apiKey",
+      config: {},
+      prompter,
+      runtime,
+      setDefaultModel: true,
+      opts: {
+        secretInputMode: "ref",
+      },
+    });
+
+    expect(result).not.toBeNull();
+    expect(readSharedEnvKey(stateDir, "OPENAI_API_KEY")).toBeUndefined();
+    const parsed = await readAuthProfilesForAgent<{
+      profiles?: Record<string, { key?: string; keyRef?: unknown }>;
+    }>(agentDir);
+    expect(parsed.profiles?.["openai:default"]?.key).toBeUndefined();
+    expect(parsed.profiles?.["openai:default"]?.keyRef).toEqual({
+      source: "env",
+      provider: "default",
+      id: "OPENAI_API_KEY",
+    });
+  });
+
   it("writes explicit token input to shared .env", async () => {
     const { stateDir } = await setupTempState();
 
     const prompter = createWizardPrompter({});
     const runtime = createExitThrowingRuntime();
 
-    const result = await applyAuthChoiceOpenAI({
+    await applyAuthChoiceOpenAI({
       authChoice: "apiKey",
       config: {},
       prompter,
@@ -88,8 +120,6 @@ describe("applyAuthChoiceOpenAI", () => {
         token: "sk-openai-token",
       },
     });
-
-    expect(result).not.toBeNull();
 
     const savedKey = readSharedEnvKey(stateDir, "OPENAI_API_KEY");
     expect(savedKey).toBe("sk-openai-token");
