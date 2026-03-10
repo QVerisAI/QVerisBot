@@ -291,7 +291,7 @@ export const ToolsWebSearchSchema = z
         /** QVeris tool ID for web search (e.g. xiaosu.smartsearch.search.retrieve.v2.6c50f296_domestic). */
         toolId: z.string().optional(),
         /** QVeris API key (falls back to tools.qveris.apiKey or QVERIS_API_KEY). */
-        apiKey: z.string().optional(),
+        apiKey: SecretInputSchema.optional().register(sensitive),
         /** QVeris API base URL (falls back to tools.qveris.baseUrl). */
         baseUrl: z.string().optional(),
       })
