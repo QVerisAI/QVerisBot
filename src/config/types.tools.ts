@@ -477,7 +477,7 @@ export type ToolsConfig = {
         /** QVeris tool ID for web search (e.g. xiaosu.smartsearch.search.retrieve.v2.6c50f296_domestic). */
         toolId?: string;
         /** QVeris API key (falls back to tools.qveris.apiKey or QVERIS_API_KEY). */
-        apiKey?: string;
+        apiKey?: SecretInput;
         /** QVeris API base URL (falls back to tools.qveris.baseUrl). */
         baseUrl?: string;
       };
