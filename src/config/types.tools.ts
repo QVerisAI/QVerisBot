@@ -620,7 +620,9 @@ export type ToolsConfig = {
     enabled?: boolean;
     /** QVeris API key (optional; defaults to QVERIS_API_KEY env var). */
     apiKey?: string;
-    /** QVeris API base URL (default: https://qveris.ai/api/v1). */
+    /** QVeris region: "global" (qveris.ai) or "cn" (qveris.cn). Default: "global". */
+    region?: "global" | "cn";
+    /** QVeris API base URL (overrides region-derived URL when set). */
     baseUrl?: string;
     /**
      * @deprecated Use searchTimeoutSeconds / executeTimeoutSeconds instead.
@@ -629,11 +631,17 @@ export type ToolsConfig = {
     timeoutSeconds?: number;
     /** Timeout in seconds for qveris_discover requests (default: 5). */
     searchTimeoutSeconds?: number;
-    /** Timeout in seconds for qveris_invoke requests (default: 60). */
+    /** Timeout in seconds for qveris_call requests (default: 60). */
     executeTimeoutSeconds?: number;
     /** Max response size in bytes (default: 20480). */
     maxResponseSize?: number;
     /** Default search result limit (default: 10). */
     searchLimit?: number;
+    /** Auto-download and save large full_content_file_url responses (default: false). */
+    autoMaterializeFullContent?: boolean;
+    /** Max bytes for full-content download (default: 10 MB). */
+    fullContentMaxBytes?: number;
+    /** Timeout in seconds for full-content download (default: 30). */
+    fullContentTimeoutSeconds?: number;
   };
 };

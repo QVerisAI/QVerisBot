@@ -63,20 +63,24 @@ function buildMemorySection(params: {
   return lines;
 }
 
-function buildQverisSection(params: { isMinimal: boolean; availableTools: Set<string> }) {
+function buildQverisSection(params: {
+  isMinimal: boolean;
+  availableTools: Set<string>;
+  autoMaterialize?: boolean;
+}) {
   if (params.isMinimal) {
     return [];
   }
   if (!params.availableTools.has("qveris_discover")) {
     return [];
   }
-  const hasInvoke = params.availableTools.has("qveris_invoke");
+  const hasInvoke = params.availableTools.has("qveris_call");
   const hasInspect = params.availableTools.has("qveris_inspect");
   const hasWebSearch = params.availableTools.has("web_search");
   const hasWebFetch = params.availableTools.has("web_fetch");
   const qverisExecutionLine = hasInvoke
-    ? "   -> Prefer qveris_discover + qveris_invoke. Specialized APIs/services return precise structured data or service outputs from dedicated providers."
-    : "   -> Use qveris_discover to identify the best specialized API/service available in this session. If qveris_invoke is unavailable here, report the limitation honestly instead of promising a tool call you cannot make.";
+    ? "   -> Prefer qveris_discover + qveris_call. Specialized APIs/services return precise structured data or service outputs from dedicated providers."
+    : "   -> Use qveris_discover to identify the best specialized API/service available in this session. If qveris_call is unavailable here, report the limitation honestly instead of promising a tool call you cannot make.";
   const inspectLine = hasInspect
     ? "   -> Use qveris_inspect with the known tool_id to verify availability and recover discovery_id. If qveris_inspect returns discovery_id, invoke directly; otherwise run qveris_discover again first."
     : undefined;
@@ -130,16 +134,33 @@ function buildQverisSection(params: { isMinimal: boolean; availableTools: Set<st
     "",
     "After qveris_discover: evaluate results by success_rate (prefer >= 0.9) and avg_execution_time_ms. If results look irrelevant, try a different query.",
     hasInvoke
-      ? `Invoke with qveris_invoke, using sample_parameters from ${hasInspect ? "qveris_discover or qveris_inspect" : "qveris_discover"} as your parameter template.`
-      : "If qveris_invoke is unavailable in this session, do not imply that you executed the discovered tool.",
+      ? `Invoke with qveris_call, using sample_parameters from ${hasInspect ? "qveris_discover or qveris_inspect" : "qveris_discover"} as your parameter template.`
+      : "If qveris_call is unavailable in this session, do not imply that you executed the discovered tool.",
     "",
     ...(hasInvoke
       ? [
-          "qveris_invoke error recovery (follow in order):",
+          "qveris_call error recovery (follow in order):",
           "- **Attempt 1 — Fix params**: Read error_type and detail. Check required params are present with correct types (strings quoted, numbers unquoted, dates ISO 8601). Fix and retry.",
           "- **Attempt 2 — Simplify**: Drop all optional params. Use well-known/standard values (e.g. common ticker symbols, major cities). Retry.",
           "- **Attempt 3 — Switch tool**: Go back to the qveris_discover results and select the next-best alternative tool by success_rate. Invoke with new params.",
           fallbackLine,
+          "",
+          ...(params.autoMaterialize
+            ? [
+                "qveris_call large-data handling:",
+                "- When a tool returns data exceeding the transport limit, the integration layer auto-downloads and saves the full content locally.",
+                "- You receive a materialized_content manifest with file path, content type, schema, and preview — not the raw data.",
+                "- ALWAYS use read or exec to process the materialized file for analysis. NEVER base conclusions on truncated transport data alone.",
+                "- For large JSON/CSV: write a script via exec to load, filter, and summarize the data.",
+                "- For media files (image/audio/video): the binary file is saved to disk. Report the file path and metadata to the user; use the image tool to analyze images.",
+              ]
+            : [
+                "qveris_call large-data handling:",
+                "- When a response contains truncated_content and full_content_file_url, the transport data is incomplete.",
+                "- For text/JSON/CSV: use web_fetch on full_content_file_url to download, then process it.",
+                "- For binary files (images, audio, video): use exec with curl to download the file directly (web_fetch only handles text/HTML).",
+                "- NEVER base conclusions on truncated transport data alone.",
+              ]),
         ]
       : []),
     "",
@@ -316,10 +337,13 @@ export function buildAgentSystemPrompt(params: {
     channel: string;
   };
   memoryCitationsMode?: MemoryCitationsMode;
+  /** Whether QVeris auto-materialization of large results is enabled. */
+  qverisAutoMaterialize?: boolean;
 }) {
   const acpEnabled = params.acpEnabled !== false;
   const sandboxedRuntime = params.sandboxInfo?.enabled === true;
   const acpSpawnRuntimeEnabled = acpEnabled && !sandboxedRuntime;
+  const qverisAutoMat = params.qverisAutoMaterialize === true;
   const coreToolSummaries: Record<string, string> = {
     read: "Read file contents",
     write: "Create or overwrite files",
@@ -359,9 +383,12 @@ export function buildAgentSystemPrompt(params: {
       "web extraction, PDF workflows, or external processing/generation (OCR, speech, image, video, translation). " +
       "Preferred over web_search when a specialized provider can return the answer or perform the work. " +
       "Query in English describing the capability needed.",
-    qveris_invoke:
+    qveris_call:
       "Call a QVeris API/service tool to get structured data, reports, extracted content, PDFs, or processed/generated media. " +
-      "Requires tool_id and discovery_id from qveris_discover or qveris_inspect.",
+      "Requires tool_id and discovery_id from qveris_discover or qveris_inspect. " +
+      (qverisAutoMat
+        ? "When the response is large, full content is auto-materialized locally; use read/exec to process."
+        : "When the response is truncated, use web_fetch (text) or exec+curl (binary) on full_content_file_url to get the complete data."),
     qveris_inspect:
       "Quick-verify known tool IDs and recover session-known discovery_id for reuse. " +
       "Use when you already have a tool_id from this session.",
@@ -378,7 +405,7 @@ export function buildAgentSystemPrompt(params: {
     "exec",
     "process",
     "qveris_discover",
-    "qveris_invoke",
+    "qveris_call",
     "qveris_inspect",
     "web_search",
     "web_fetch",
@@ -512,7 +539,11 @@ export function buildAgentSystemPrompt(params: {
     availableTools,
     citationsMode: params.memoryCitationsMode,
   });
-  const qverisSection = buildQverisSection({ isMinimal, availableTools });
+  const qverisSection = buildQverisSection({
+    isMinimal,
+    availableTools,
+    autoMaterialize: qverisAutoMat,
+  });
   const docsSection = buildDocsSection({
     docsPath: params.docsPath,
     isMinimal,

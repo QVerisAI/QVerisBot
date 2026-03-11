@@ -161,7 +161,7 @@ describe("buildAgentSystemPrompt", () => {
   it("includes QVeris routing section when qveris_discover is in toolNames", () => {
     const prompt = buildAgentSystemPrompt({
       workspaceDir: "/tmp/openclaw",
-      toolNames: ["qveris_discover", "qveris_invoke"],
+      toolNames: ["qveris_discover", "qveris_call"],
     });
 
     expect(prompt).toContain("## Tool Routing: QVeris vs Local vs Web");
@@ -170,7 +170,7 @@ describe("buildAgentSystemPrompt", () => {
     expect(prompt).toContain("error recovery");
     expect(prompt).toContain("anti-patterns");
     // QVeris-first: data path comes before web_search path
-    expect(prompt).toContain("Prefer qveris_discover + qveris_invoke");
+    expect(prompt).toContain("Prefer qveris_discover + qveris_call");
     // Query rewrite examples: bilingual pairs converging on English capability
     expect(prompt).toContain("stock quote real-time API");
     expect(prompt).toContain("stock historical price time series API");
@@ -189,7 +189,7 @@ describe("buildAgentSystemPrompt", () => {
   it("includes qveris_inspect step when tool is available", () => {
     const prompt = buildAgentSystemPrompt({
       workspaceDir: "/tmp/openclaw",
-      toolNames: ["qveris_discover", "qveris_invoke", "qveris_inspect"],
+      toolNames: ["qveris_discover", "qveris_call", "qveris_inspect"],
     });
 
     expect(prompt).toContain("qveris_inspect");
@@ -200,7 +200,7 @@ describe("buildAgentSystemPrompt", () => {
   it("narrows web_search summary when QVeris is available", () => {
     const withQveris = buildAgentSystemPrompt({
       workspaceDir: "/tmp/openclaw",
-      toolNames: ["qveris_discover", "qveris_invoke", "web_search"],
+      toolNames: ["qveris_discover", "qveris_call", "web_search"],
     });
 
     expect(withQveris).toContain("prefer qveris_discover");
@@ -224,8 +224,8 @@ describe("buildAgentSystemPrompt", () => {
       toolNames: ["qveris_discover", "web_search"],
     });
 
-    expect(prompt).toContain("qveris_invoke is unavailable in this session");
-    expect(prompt).not.toContain("qveris_invoke error recovery");
+    expect(prompt).toContain("qveris_call is unavailable in this session");
+    expect(prompt).not.toContain("qveris_call error recovery");
     expect(prompt).not.toContain("web_search + web_fetch");
     expect(prompt).toContain(
       "Use web_search for articles, opinions, explanations, documentation, and broad research.",
@@ -236,10 +236,36 @@ describe("buildAgentSystemPrompt", () => {
     const prompt = buildAgentSystemPrompt({
       workspaceDir: "/tmp/openclaw",
       promptMode: "minimal",
-      toolNames: ["qveris_discover", "qveris_invoke"],
+      toolNames: ["qveris_discover", "qveris_call"],
     });
 
     expect(prompt).not.toContain("## Tool Routing: QVeris vs Local vs Web");
+  });
+
+  it("includes materialized content guidance when qveris_call + autoMaterialize", () => {
+    const prompt = buildAgentSystemPrompt({
+      workspaceDir: "/tmp/openclaw",
+      toolNames: ["qveris_discover", "qveris_call"],
+      qverisAutoMaterialize: true,
+    });
+
+    expect(prompt).toContain("auto-downloads and saves the full content locally");
+    expect(prompt).toContain("NEVER base conclusions on truncated transport data alone");
+    expect(prompt).toContain("materialized_content manifest");
+  });
+
+  it("shows web_fetch fallback guidance when qveris_call without autoMaterialize", () => {
+    const prompt = buildAgentSystemPrompt({
+      workspaceDir: "/tmp/openclaw",
+      toolNames: ["qveris_discover", "qveris_call"],
+      qverisAutoMaterialize: false,
+    });
+
+    expect(prompt).toContain("web_fetch on full_content_file_url");
+    expect(prompt).toContain("exec with curl");
+    expect(prompt).toContain("NEVER base conclusions on truncated transport data alone");
+    expect(prompt).not.toContain("auto-downloads and saves the full content locally");
+    expect(prompt).not.toContain("materialized_content manifest");
   });
 
   it("includes safety guardrails in full prompts", () => {

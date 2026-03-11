@@ -57,15 +57,15 @@ QVeris 相关接口：
 | 工具              | 用途                                                                                                                                                                                                                                                        |
 | :---------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `qveris_discover` | 发现专用 API/服务工具，用于**精确实时数值、历史序列数据、结构化报告、网页抽取、PDF 工作流**以及外部处理/生成能力（OCR、语音、图片、视频、翻译、地理编码）。当专用提供方能直接返回答案或执行任务时，**优先于 `web_search`**。查询词必须用英文描述 API 能力。 |
-| `qveris_invoke`   | 调用 QVeris API/服务工具，获取结构化数据、报告、网页抽取结果、PDF，或处理/生成后的多模态内容。需要 `tool_id` 和来自 `qveris_discover` 或 `qveris_inspect` 的 `discovery_id`。                                                                               |
+| `qveris_call`     | 调用 QVeris API/服务工具，获取结构化数据、报告、网页抽取结果、PDF，或处理/生成后的多模态内容。需要 `tool_id` 和来自 `qveris_discover` 或 `qveris_inspect` 的 `discovery_id`。                                                                               |
 | `qveris_inspect`  | 快速验证已知 `tool_id` 并恢复会话内的 `discovery_id`——适用于本次会话内已成功使用过的工具。                                                                                                                                                                  |
 
 **工具路由决策树（QVeris 优先处理专用外部能力）：**
 
 1. **本地操作**（读文件、查配置、session 状态）→ 用本地工具，不调 QVeris
-2. **需要精确实时数值、历史序列、排行数据或结构化报告？**（股价、时间序列、汇率、天气、加密货币、AQI、涨幅榜、财报 / filings）→ 优先用 `qveris_discover` + `qveris_invoke`。将用户请求转换为英文能力查询，中英文原问题都应收敛到同一个 capability：`"腾讯最新股价"` / `"What is Tencent's latest stock price?"` → `"stock quote real-time API"`，`"腾讯最近30天股价走势"` / `"Show Tencent stock over the last 30 days"` → `"stock historical price time series API"`，`"英伟达最新财报"` / `"Show Nvidia's latest earnings report"` → `"company earnings report API"`
-3. **需要外部处理、抓取或生成服务？**（网页抽取 / 爬取、PDF 解析 / 生成、OCR、TTS、语音 / 图片 / 视频理解与生成、翻译、地理编码）→ `qveris_discover` + `qveris_invoke`。中英文请求同样要改写成同一个 capability：`"抓取这个网页正文"` / `"Extract the main content from this webpage"` → `"web page content extraction API"`，`"把这个网页导出成 PDF"` / `"Convert this webpage to PDF"` → `"HTML to PDF conversion API"`
-4. **本次会话已用过某工具** → 先用 `qveris_inspect` 恢复 `discovery_id`；若返回了 `discovery_id` 再 `qveris_invoke`，否则先重新 `qveris_discover`
+2. **需要精确实时数值、历史序列、排行数据或结构化报告？**（股价、时间序列、汇率、天气、加密货币、AQI、涨幅榜、财报 / filings）→ 优先用 `qveris_discover` + `qveris_call`。将用户请求转换为英文能力查询，中英文原问题都应收敛到同一个 capability：`"腾讯最新股价"` / `"What is Tencent's latest stock price?"` → `"stock quote real-time API"`，`"腾讯最近30天股价走势"` / `"Show Tencent stock over the last 30 days"` → `"stock historical price time series API"`，`"英伟达最新财报"` / `"Show Nvidia's latest earnings report"` → `"company earnings report API"`
+3. **需要外部处理、抓取或生成服务？**（网页抽取 / 爬取、PDF 解析 / 生成、OCR、TTS、语音 / 图片 / 视频理解与生成、翻译、地理编码）→ `qveris_discover` + `qveris_call`。中英文请求同样要改写成同一个 capability：`"抓取这个网页正文"` / `"Extract the main content from this webpage"` → `"web page content extraction API"`，`"把这个网页导出成 PDF"` / `"Convert this webpage to PDF"` → `"HTML to PDF conversion API"`
+4. **本次会话已用过某工具** → 先用 `qveris_inspect` 恢复 `discovery_id`；若返回了 `discovery_id` 再 `qveris_call`，否则先重新 `qveris_discover`
 5. **需要文章、观点、说明文档或广泛调研？** → 用 `web_search` + `web_fetch`
 6. **以上均不符合** → 如实告知限制，切勿编造数据
 
@@ -344,7 +344,7 @@ mkdir -p ~/.openclaw
     "qveris": {
       "enabled": true,
       "apiKey": "qv_xxx",
-      "baseUrl": "https://qveris.ai/api/v1",
+      "region": "global",
       "timeoutSeconds": 60,
       "maxResponseSize": 20480,
       "searchLimit": 10
@@ -400,13 +400,14 @@ mkdir -p ~/.openclaw
 
 #### QVeris 工具
 
-| 配置项            | 说明                             |
-| ----------------- | -------------------------------- |
-| `apiKey`          | QVeris API Key（也可用环境变量） |
-| `baseUrl`         | 默认 `https://qveris.ai/api/v1`  |
-| `timeoutSeconds`  | 请求超时秒数                     |
-| `maxResponseSize` | 最大响应字节数                   |
-| `searchLimit`     | 搜索结果上限                     |
+| 配置项            | 说明                                                          |
+| ----------------- | ------------------------------------------------------------- |
+| `apiKey`          | QVeris API Key（也可用环境变量）                              |
+| `region`          | `"global"` (qveris.ai) 或 `"cn"` (qveris.cn)，默认 `"global"` |
+| `baseUrl`         | API 地址覆盖（设置后忽略 region 推导）                        |
+| `timeoutSeconds`  | 请求超时秒数                                                  |
+| `maxResponseSize` | 最大响应字节数                                                |
+| `searchLimit`     | 搜索结果上限                                                  |
 
 ### 5.3 `x-actions` 与权限模型
 

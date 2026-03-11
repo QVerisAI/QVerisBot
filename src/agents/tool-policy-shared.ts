@@ -14,11 +14,11 @@ const TOOL_NAME_ALIASES: Record<string, string> = {
   "apply-patch": "apply_patch",
   // Legacy QVeris tool names (renamed in 2026.3.10)
   qveris_search: "qveris_discover",
-  qveris_execute: "qveris_invoke",
+  qveris_execute: "qveris_call",
   qveris_get_by_ids: "qveris_inspect",
 };
 
-const QVERIS_TOOLS = ["qveris_discover", "qveris_invoke", "qveris_inspect"] as const;
+const QVERIS_TOOLS = ["qveris_discover", "qveris_call", "qveris_inspect"] as const;
 
 export const TOOL_GROUPS: Record<string, string[]> = {
   ...CORE_TOOL_GROUPS,

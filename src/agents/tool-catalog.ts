@@ -250,9 +250,9 @@ const CORE_TOOL_DEFINITIONS: CoreToolDefinition[] = [
     includeInOpenClawGroup: true,
   },
   {
-    id: "qveris_invoke",
-    label: "qveris_invoke",
-    description: "Invoke a discovered third-party API or service",
+    id: "qveris_call",
+    label: "qveris_call",
+    description: "Call a discovered third-party API or service",
     sectionId: "web",
     profiles: ["coding", "messaging"],
     includeInOpenClawGroup: true,

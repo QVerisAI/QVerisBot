@@ -1,18 +1,33 @@
 import { randomUUID } from "node:crypto";
+import fs from "node:fs/promises";
+import path from "node:path";
 import { Type } from "@sinclair/typebox";
 import type { OpenClawConfig } from "../../config/config.js";
 import type { AnyAgentTool } from "./common.js";
 import { jsonResult, readNumberParam, readStringParam } from "./common.js";
+import { readResponseBuffer } from "./web-shared.js";
 
 // ============================================================================
 // Constants
 // ============================================================================
 
-const DEFAULT_QVERIS_BASE_URL = "https://qveris.ai/api/v1";
 const DEFAULT_DISCOVER_TIMEOUT_SECONDS = 5;
-const DEFAULT_INVOKE_TIMEOUT_SECONDS = 60;
+const DEFAULT_CALL_TIMEOUT_SECONDS = 60;
 const DEFAULT_MAX_RESPONSE_SIZE = 20480;
 const DEFAULT_DISCOVER_LIMIT = 10;
+
+// Full-content materialization defaults
+const DEFAULT_FULL_CONTENT_MAX_BYTES = 10 * 1024 * 1024; // 10MB
+const DEFAULT_FULL_CONTENT_TIMEOUT_SECONDS = 30;
+const MATERIALIZED_PREVIEW_MAX_CHARS = 800;
+const QVERIS_DATA_DIR_NAME = "qveris-data";
+
+export type QverisRegion = "global" | "cn";
+
+export const QVERIS_REGION_DOMAINS: Record<QverisRegion, string> = {
+  global: "qveris.ai",
+  cn: "qveris.cn",
+};
 
 // Short-TTL cache for discover results — avoids redundant API calls within a session
 const DEFAULT_DISCOVER_CACHE_TTL_MS = 90_000; // 90 seconds
@@ -80,6 +95,37 @@ interface QverisInvocationResponse {
   credits_used?: number;
 }
 
+/** Content analysis metadata returned in the materialized manifest */
+interface ContentAnalysis {
+  root_type?: string;
+  record_count?: number;
+  line_count?: number;
+  column_names?: string[];
+  fields?: Record<string, string>;
+  preview_records?: number;
+}
+
+type ContentCategory = "json" | "csv" | "text" | "image" | "audio" | "video" | "binary";
+
+interface MaterializedContentReady {
+  status: "ready";
+  path: string;
+  content_category: ContentCategory;
+  mime_type: string;
+  file_bytes: number;
+  analysis?: ContentAnalysis;
+  preview?: string;
+  consumption_contract: string;
+}
+
+interface MaterializedContentFailed {
+  status: "failed";
+  reason: string;
+  detail?: string;
+}
+
+type MaterializedContent = MaterializedContentReady | MaterializedContentFailed;
+
 /** Structured error returned to the model instead of throwing */
 interface QverisErrorResult {
   success: false;
@@ -114,16 +160,59 @@ function resolveQverisApiKey(config?: QverisConfig): string | undefined {
   return fromConfig || fromEnv || undefined;
 }
 
+function resolveQverisRegion(config?: QverisConfig): QverisRegion {
+  const r = config && "region" in config ? (config as Record<string, unknown>).region : undefined;
+  return r === "cn" ? "cn" : "global";
+}
+
+function resolveQverisDomain(config?: QverisConfig): string {
+  return QVERIS_REGION_DOMAINS[resolveQverisRegion(config)];
+}
+
 function resolveQverisBaseUrl(config?: QverisConfig): string {
-  return config?.baseUrl?.trim() || DEFAULT_QVERIS_BASE_URL;
+  const explicit = config?.baseUrl?.trim();
+  if (explicit) {
+    return explicit;
+  }
+  return `https://${resolveQverisDomain(config)}/api/v1`;
+}
+
+/**
+ * Returns the OSS domain whitelist for full-content downloads.
+ * Includes the region domain and, if baseUrl overrides to a different
+ * QVeris domain, that domain too — so the whitelist stays consistent
+ * with wherever the API is actually pointing.
+ */
+function resolveFullContentAllowedDomains(config?: QverisConfig): string[] {
+  const regionDomain = resolveQverisDomain(config);
+  const domains = new Set<string>([regionDomain]);
+
+  const explicit = config?.baseUrl?.trim();
+  if (explicit) {
+    try {
+      const host = new URL(explicit).hostname.toLowerCase();
+      const allKnownDomains = Object.values(QVERIS_REGION_DOMAINS);
+      const isQverisDomain = allKnownDomains.some((d) => host === d || host.endsWith(`.${d}`));
+      if (isQverisDomain) {
+        for (const d of allKnownDomains) {
+          if (host === d || host.endsWith(`.${d}`)) {
+            domains.add(d);
+          }
+        }
+      }
+    } catch {
+      // invalid baseUrl — ignore, region domain still in the set
+    }
+  }
+  return [...domains];
 }
 
 function resolveDiscoverTimeoutSeconds(config?: QverisConfig): number {
   return config?.searchTimeoutSeconds ?? config?.timeoutSeconds ?? DEFAULT_DISCOVER_TIMEOUT_SECONDS;
 }
 
-function resolveInvokeTimeoutSeconds(config?: QverisConfig): number {
-  return config?.executeTimeoutSeconds ?? config?.timeoutSeconds ?? DEFAULT_INVOKE_TIMEOUT_SECONDS;
+function resolveCallTimeoutSeconds(config?: QverisConfig): number {
+  return config?.executeTimeoutSeconds ?? config?.timeoutSeconds ?? DEFAULT_CALL_TIMEOUT_SECONDS;
 }
 
 function resolveMaxResponseSize(config?: QverisConfig): number {
@@ -132,6 +221,29 @@ function resolveMaxResponseSize(config?: QverisConfig): number {
 
 function resolveDiscoverLimit(config?: QverisConfig): number {
   return config?.searchLimit ?? DEFAULT_DISCOVER_LIMIT;
+}
+
+function resolveAutoMaterialize(config?: QverisConfig): boolean {
+  if (config && "autoMaterializeFullContent" in config) {
+    return config.autoMaterializeFullContent === true;
+  }
+  return false;
+}
+
+function resolveFullContentMaxBytes(config?: QverisConfig): number {
+  return (
+    ((config && "fullContentMaxBytes" in config
+      ? (config as Record<string, unknown>).fullContentMaxBytes
+      : undefined) as number | undefined) ?? DEFAULT_FULL_CONTENT_MAX_BYTES
+  );
+}
+
+function resolveFullContentTimeoutSeconds(config?: QverisConfig): number {
+  return (
+    ((config && "fullContentTimeoutSeconds" in config
+      ? (config as Record<string, unknown>).fullContentTimeoutSeconds
+      : undefined) as number | undefined) ?? DEFAULT_FULL_CONTENT_TIMEOUT_SECONDS
+  );
 }
 
 // ============================================================================
@@ -285,7 +397,7 @@ async function qverisDiscover(params: {
   }
 }
 
-async function qverisInvoke(params: {
+async function qverisCall(params: {
   toolId: string;
   searchId: string;
   sessionId: string;
@@ -328,7 +440,7 @@ async function qverisInvoke(params: {
   }
 }
 
-/** QVeris get-by-ids API response */
+/** QVeris by-ids API response */
 interface QverisGetByIdsResponse {
   tools: QverisDiscoverResultTool[];
 }
@@ -349,7 +461,7 @@ async function qverisGetByIds(params: {
       session_id: params.sessionId,
     };
 
-    const res = await fetch(`${params.baseUrl}/tools/get-by-ids`, {
+    const res = await fetch(`${params.baseUrl}/tools/by-ids`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -462,6 +574,426 @@ function makeDiscoverResultTracker() {
 }
 
 // ============================================================================
+// Full-Content Materialization
+// ============================================================================
+
+interface DownloadResult {
+  /** Raw bytes — always present, preserves binary content byte-for-byte. */
+  raw: Uint8Array;
+  /** Text decode — only populated when bytes can be safely decoded as UTF-8. */
+  text?: string;
+  headerMime: string | null;
+  bytesRead: number;
+  truncatedOnDownload: boolean;
+}
+
+function isAllowedFullContentDomain(hostname: string, allowedDomains: string[]): boolean {
+  const lower = hostname.toLowerCase();
+  return allowedDomains.some((domain) => lower === domain || lower.endsWith(`.${domain}`));
+}
+
+function tryDecodeUtf8(buffer: Uint8Array): string | undefined {
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(buffer);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Fetch full result data from a QVeris-provided URL.
+ * Security: HTTPS-only, domain-whitelisted, no redirects, no auth forwarding.
+ */
+async function fetchQverisResultData(params: {
+  url: string;
+  maxBytes: number;
+  timeoutSeconds: number;
+  allowedDomains: string[];
+}): Promise<DownloadResult> {
+  if (!params.url.startsWith("https://")) {
+    throw new Error("full_content_file_url must use HTTPS");
+  }
+
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(params.url);
+  } catch {
+    throw new Error(`full_content_file_url is not a valid URL: ${params.url}`);
+  }
+
+  if (!isAllowedFullContentDomain(parsedUrl.hostname, params.allowedDomains)) {
+    throw new Error(
+      `full_content_file_url domain "${parsedUrl.hostname}" is not in the allowed list ` +
+        `(${params.allowedDomains.join(", ")}). Download blocked.`,
+    );
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), params.timeoutSeconds * 1000);
+
+  try {
+    const res = await fetch(params.url, {
+      signal: controller.signal,
+      redirect: "error",
+    });
+
+    if (!res.ok) {
+      throw new Error(`Full-content download failed (${res.status}): ${res.statusText}`);
+    }
+
+    const headerMime = res.headers.get("content-type");
+    const category = classifyContentCategory(
+      headerMime ? headerMime.split(";")[0].trim() : undefined,
+    );
+    const { buffer, truncated, bytesRead } = await readResponseBuffer(res, {
+      maxBytes: params.maxBytes,
+    });
+    // Keep raw bytes for all downloads. Only derive text when the payload is
+    // safely decodable as UTF-8, so unknown MIME types can still be
+    // reclassified as JSON without corrupting true binary content.
+    const text =
+      category === "image" || category === "audio" || category === "video"
+        ? undefined
+        : tryDecodeUtf8(buffer);
+    return { raw: buffer, text, headerMime, bytesRead, truncatedOnDownload: truncated };
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+function classifyContentCategory(mimeType: string | undefined): ContentCategory {
+  if (!mimeType) {
+    return "binary";
+  }
+  const lower = mimeType.toLowerCase().split(";")[0].trim();
+  if (lower === "application/json" || lower.endsWith("+json")) {
+    return "json";
+  }
+  if (lower === "text/csv" || lower === "application/csv") {
+    return "csv";
+  }
+  if (lower.startsWith("text/")) {
+    return "text";
+  }
+  if (lower.startsWith("image/")) {
+    return "image";
+  }
+  if (lower.startsWith("audio/")) {
+    return "audio";
+  }
+  if (lower.startsWith("video/")) {
+    return "video";
+  }
+  return "binary";
+}
+
+function inferFieldType(value: unknown): string {
+  if (value === null || value === undefined) {
+    return "null";
+  }
+  if (Array.isArray(value)) {
+    if (value.length === 0) {
+      return "array";
+    }
+    const first = value[0];
+    return `${typeof first === "object" && first !== null ? "object" : typeof first}[]`;
+  }
+  if (typeof value === "object") {
+    return "object";
+  }
+  return typeof value;
+}
+
+export function inferJsonAnalysis(
+  text: string,
+  maxPreviewChars: number,
+): ContentAnalysis & { preview?: string } {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return {};
+  }
+
+  if (Array.isArray(parsed)) {
+    const fields: Record<string, string> = {};
+    const sample = parsed[0];
+    if (sample && typeof sample === "object" && sample !== null) {
+      for (const [key, val] of Object.entries(sample as Record<string, unknown>)) {
+        fields[key] = inferFieldType(val);
+      }
+    }
+    const previewSlice = parsed.slice(0, 2);
+    let preview = JSON.stringify(previewSlice);
+    if (preview.length > maxPreviewChars) {
+      preview = preview.slice(0, maxPreviewChars) + "...";
+    }
+    return {
+      root_type: "array",
+      record_count: parsed.length,
+      fields: Object.keys(fields).length > 0 ? fields : undefined,
+      preview_records: Math.min(2, parsed.length),
+      preview,
+    };
+  }
+
+  if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+    const keys: Record<string, string> = {};
+    for (const [key, val] of Object.entries(parsed as Record<string, unknown>)) {
+      if (Array.isArray(val)) {
+        keys[key] = `array[${val.length}]`;
+      } else {
+        keys[key] = inferFieldType(val);
+      }
+    }
+    let preview = JSON.stringify(parsed, null, 2);
+    if (preview.length > maxPreviewChars) {
+      preview = preview.slice(0, maxPreviewChars) + "...";
+    }
+    return {
+      root_type: "object",
+      fields: Object.keys(keys).length > 0 ? keys : undefined,
+      preview,
+    };
+  }
+
+  return {};
+}
+
+function inferCsvAnalysis(
+  text: string,
+  maxPreviewChars: number,
+): ContentAnalysis & { preview?: string } {
+  const lines = text.split("\n").filter((l) => l.trim().length > 0);
+  if (lines.length === 0) {
+    return { line_count: 0 };
+  }
+
+  const firstLine = lines[0];
+  const delimiter = firstLine.includes("\t") ? "\t" : ",";
+  const columnNames = firstLine.split(delimiter).map((c) => c.trim().replace(/^["']|["']$/g, ""));
+
+  const previewLines = lines.slice(0, 5);
+  let preview = previewLines.join("\n");
+  if (preview.length > maxPreviewChars) {
+    preview = preview.slice(0, maxPreviewChars) + "...";
+  }
+
+  return {
+    line_count: lines.length,
+    column_names: columnNames,
+    preview,
+  };
+}
+
+function inferTextAnalysis(
+  text: string,
+  maxPreviewChars: number,
+): ContentAnalysis & { preview?: string } {
+  const lines = text.split("\n");
+  let preview = text.slice(0, maxPreviewChars);
+  if (text.length > maxPreviewChars) {
+    preview += "...";
+  }
+  return {
+    line_count: lines.length,
+    preview,
+  };
+}
+
+function buildContentAnalysis(
+  text: string,
+  category: ContentCategory,
+  maxPreviewChars: number,
+): { analysis?: ContentAnalysis; preview?: string } {
+  let raw: ContentAnalysis & { preview?: string };
+  switch (category) {
+    case "json":
+      raw = inferJsonAnalysis(text, maxPreviewChars);
+      break;
+    case "csv":
+      raw = inferCsvAnalysis(text, maxPreviewChars);
+      break;
+    case "text":
+      raw = inferTextAnalysis(text, maxPreviewChars);
+      break;
+    default:
+      return {};
+  }
+  const { preview, ...rest } = raw;
+  const analysis = Object.keys(rest).length > 0 ? rest : undefined;
+  return { analysis, preview };
+}
+
+function resolveExtensionForMime(mime: string | undefined): string {
+  if (!mime) {
+    return ".bin";
+  }
+  const lower = mime.toLowerCase().split(";")[0].trim();
+  if (lower === "application/json" || lower.endsWith("+json")) {
+    return ".json";
+  }
+  if (lower === "text/csv" || lower === "application/csv") {
+    return ".csv";
+  }
+  if (lower === "text/plain") {
+    return ".txt";
+  }
+  if (lower === "text/html") {
+    return ".html";
+  }
+  if (lower === "text/xml" || lower === "application/xml") {
+    return ".xml";
+  }
+  if (lower.startsWith("image/png")) {
+    return ".png";
+  }
+  if (lower.startsWith("image/jpeg")) {
+    return ".jpg";
+  }
+  if (lower.startsWith("image/gif")) {
+    return ".gif";
+  }
+  if (lower.startsWith("image/webp")) {
+    return ".webp";
+  }
+  if (lower.startsWith("audio/mpeg")) {
+    return ".mp3";
+  }
+  if (lower.startsWith("audio/wav")) {
+    return ".wav";
+  }
+  if (lower.startsWith("video/mp4")) {
+    return ".mp4";
+  }
+  return ".bin";
+}
+
+const TEXT_MATERIALIZATION_CONTRACT =
+  "Use read or exec to process the materialized file. Do NOT base analysis on truncated transport data.";
+const MEDIA_MATERIALIZATION_CONTRACT =
+  "Binary file saved to disk. Report the file path and metadata to the user. Use the image tool to analyze images if applicable.";
+
+/**
+ * Save full QVeris result data to workspace: fetch, classify, write file, build manifest.
+ * Never throws — returns MaterializedContentFailed on any error.
+ */
+async function saveQverisFullResult(params: {
+  url: string;
+  executionId: string;
+  workspaceDir: string;
+  maxBytes: number;
+  timeoutSeconds: number;
+  allowedDomains: string[];
+}): Promise<MaterializedContent> {
+  let downloaded: DownloadResult;
+  try {
+    downloaded = await fetchQverisResultData({
+      url: params.url,
+      maxBytes: params.maxBytes,
+      timeoutSeconds: params.timeoutSeconds,
+      allowedDomains: params.allowedDomains,
+    });
+  } catch (err) {
+    const isTimeout =
+      (err instanceof DOMException && err.name === "AbortError") ||
+      (err instanceof Error && err.name === "AbortError");
+    return {
+      status: "failed",
+      reason: isTimeout ? "download_timeout" : "download_error",
+      detail: err instanceof Error ? err.message : String(err),
+    };
+  }
+
+  // Determine MIME from HTTP Content-Type header (no binary magic-byte sniffing)
+  let mimeType: string | undefined = downloaded.headerMime
+    ? downloaded.headerMime.split(";")[0].trim()
+    : undefined;
+
+  // Heuristic: if MIME is unknown/octet-stream but text looks like JSON, reclassify
+  if ((!mimeType || mimeType === "application/octet-stream") && downloaded.text) {
+    const trimmed = downloaded.text.trimStart();
+    if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+      try {
+        JSON.parse(downloaded.text);
+        mimeType = "application/json";
+      } catch {
+        mimeType = mimeType || "application/octet-stream";
+      }
+    }
+  }
+
+  const category = classifyContentCategory(mimeType);
+
+  // If the download was truncated by the byte limit, the file is incomplete.
+  if (downloaded.truncatedOnDownload) {
+    return {
+      status: "failed",
+      reason: "download_truncated",
+      detail:
+        `Downloaded content was truncated at ${downloaded.bytesRead} bytes (limit: ${params.maxBytes}). ` +
+        "The file is incomplete. Use web_fetch for text content, exec+curl for binary content, or increase fullContentMaxBytes.",
+    };
+  }
+
+  // Use raw bytes directly — preserves binary content byte-for-byte
+  const buffer = Buffer.from(downloaded.raw);
+  const ext = resolveExtensionForMime(mimeType);
+
+  // Safe execution_id for directory name
+  const safeDirName = params.executionId.replace(/[^a-zA-Z0-9_-]/g, "_");
+  const relDir = path.posix.join(".openclaw", QVERIS_DATA_DIR_NAME, safeDirName);
+  const absDir = path.join(params.workspaceDir, ".openclaw", QVERIS_DATA_DIR_NAME, safeDirName);
+  const dataFilename = `data${ext}`;
+  const relDataPath = path.posix.join(relDir, dataFilename);
+  const absDataPath = path.join(absDir, dataFilename);
+
+  try {
+    await fs.mkdir(absDir, { recursive: true });
+    await fs.writeFile(absDataPath, buffer, { flag: "w" });
+  } catch (err) {
+    return {
+      status: "failed",
+      reason: "write_error",
+      detail: err instanceof Error ? err.message : String(err),
+    };
+  }
+
+  // Build content analysis for text-based formats (binary files get metadata only)
+  const isTextBased = category === "json" || category === "csv" || category === "text";
+  const { analysis, preview } =
+    isTextBased && downloaded.text
+      ? buildContentAnalysis(downloaded.text, category, MATERIALIZED_PREVIEW_MAX_CHARS)
+      : { analysis: undefined, preview: undefined };
+
+  // Write manifest.json for debugging/inspection
+  const manifest: MaterializedContentReady = {
+    status: "ready",
+    path: relDataPath,
+    content_category: category,
+    mime_type: mimeType || "application/octet-stream",
+    file_bytes: buffer.byteLength,
+    ...(analysis ? { analysis } : {}),
+    ...(preview ? { preview } : {}),
+    consumption_contract: isTextBased
+      ? TEXT_MATERIALIZATION_CONTRACT
+      : MEDIA_MATERIALIZATION_CONTRACT,
+  };
+
+  try {
+    await fs.writeFile(
+      path.join(absDir, "manifest.json"),
+      JSON.stringify(manifest, null, 2) + "\n",
+      { flag: "w" },
+    );
+  } catch {
+    // Non-fatal: manifest.json is for debugging only
+  }
+
+  return manifest;
+}
+
+// ============================================================================
 // Tool Schemas
 // ============================================================================
 
@@ -482,7 +1014,7 @@ const QverisDiscoverSchema = Type.Object({
   ),
 });
 
-const QverisInvokeSchema = Type.Object({
+const QverisCallSchema = Type.Object({
   tool_id: Type.String({
     description:
       "The ID of the tool to invoke. Must come from a previous qveris_discover or qveris_inspect call.",
@@ -543,6 +1075,7 @@ export function createQverisTools(options?: {
   config?: OpenClawConfig;
   sandboxed?: boolean;
   agentSessionKey?: string;
+  workspaceDir?: string;
 }): AnyAgentTool[] {
   const config = resolveQverisConfig(options?.config);
 
@@ -557,16 +1090,20 @@ export function createQverisTools(options?: {
 
   const baseUrl = resolveQverisBaseUrl(config);
   const discoverTimeoutSeconds = resolveDiscoverTimeoutSeconds(config);
-  const invokeTimeoutSeconds = resolveInvokeTimeoutSeconds(config);
+  const callTimeoutSeconds = resolveCallTimeoutSeconds(config);
   const maxResponseSize = resolveMaxResponseSize(config);
   const discoverLimit = resolveDiscoverLimit(config);
+  const autoMaterialize = resolveAutoMaterialize(config);
+  const fullContentMaxBytes = resolveFullContentMaxBytes(config);
+  const fullContentTimeoutSeconds = resolveFullContentTimeoutSeconds(config);
+  const workspaceDir = options?.workspaceDir?.trim() || undefined;
 
   const discoverCache = makeDiscoverCache();
   const rolodex = makeToolRolodex();
   const discoverTracker = makeDiscoverResultTracker();
 
   // Per-tool invoke failure counter for progressive recovery hints
-  const invokeFailureCount = new Map<string, number>();
+  const callFailureCount = new Map<string, number>();
 
   const sessionId = options?.agentSessionKey ?? `clawdbot-${Date.now()}-${randomUUID()}`;
 
@@ -658,14 +1195,14 @@ export function createQverisTools(options?: {
     },
   };
 
-  const invokeTool: AnyAgentTool = {
-    label: "QVeris Invoke",
-    name: "qveris_invoke",
+  const callTool: AnyAgentTool = {
+    label: "QVeris Call",
+    name: "qveris_call",
     description:
       "Invoke a discovered third-party API/service with provided parameters. " +
       "tool_id is required; discovery_id should come from qveris_discover or qveris_inspect. " +
       "Pass parameters to the tool through params_to_tool as a JSON string.",
-    parameters: QverisInvokeSchema,
+    parameters: QverisCallSchema,
     execute: async (_toolCallId, args) => {
       const params = args as Record<string, unknown>;
       const toolId = readStringParam(params, "tool_id", { required: true });
@@ -684,7 +1221,7 @@ export function createQverisTools(options?: {
           success: false,
           error_type: "json_parse_error",
           detail:
-            "Missing discovery_id for qveris_invoke. Run qveris_discover first, or call qveris_inspect for a previously used tool so the session rolodex can provide the discovery_id.",
+            "Missing discovery_id for qveris_call. Run qveris_discover first, or call qveris_inspect for a previously used tool so the session rolodex can provide the discovery_id.",
           retry_hint:
             "Pass discovery_id from qveris_discover/qveris_inspect. If the tool was not previously used in this session, rediscover it to obtain one.",
         } satisfies QverisErrorResult);
@@ -705,7 +1242,7 @@ export function createQverisTools(options?: {
 
       let result: QverisInvocationResponse;
       try {
-        result = await qverisInvoke({
+        result = await qverisCall({
           toolId,
           searchId: discoveryId,
           sessionId,
@@ -713,11 +1250,11 @@ export function createQverisTools(options?: {
           maxResponseSize: maxSize,
           apiKey,
           baseUrl,
-          timeoutSeconds: timeoutOverride ?? invokeTimeoutSeconds,
+          timeoutSeconds: timeoutOverride ?? callTimeoutSeconds,
         });
       } catch (err) {
-        const failCount = (invokeFailureCount.get(toolId) ?? 0) + 1;
-        invokeFailureCount.set(toolId, failCount);
+        const failCount = (callFailureCount.get(toolId) ?? 0) + 1;
+        callFailureCount.set(toolId, failCount);
         const recoveryStep =
           failCount === 1 ? "fix_params" : failCount === 2 ? "simplify" : "switch_tool";
         const classified = classifyQverisError(err);
@@ -729,7 +1266,7 @@ export function createQverisTools(options?: {
       }
 
       if (result.success) {
-        invokeFailureCount.delete(toolId);
+        callFailureCount.delete(toolId);
         const meta = discoverTracker.getMeta(toolId);
         if (meta) {
           rolodex.record(toolId, {
@@ -741,8 +1278,8 @@ export function createQverisTools(options?: {
         }
       } else {
         // Track failures reported by the QVeris backend (success: false in response body)
-        const failCount = (invokeFailureCount.get(toolId) ?? 0) + 1;
-        invokeFailureCount.set(toolId, failCount);
+        const failCount = (callFailureCount.get(toolId) ?? 0) + 1;
+        callFailureCount.set(toolId, failCount);
         const recoveryStep =
           failCount === 1 ? "fix_params" : failCount === 2 ? "simplify" : "switch_tool";
         return jsonResult({
@@ -757,9 +1294,53 @@ export function createQverisTools(options?: {
       }
 
       const resultData = result.result;
-      const isTruncated = Boolean(
-        resultData?.truncated_content || resultData?.full_content_file_url,
-      );
+      const fullContentUrl =
+        typeof resultData?.full_content_file_url === "string" && resultData.full_content_file_url
+          ? resultData.full_content_file_url
+          : null;
+      const isTruncated = Boolean(resultData?.truncated_content || fullContentUrl);
+
+      // Attempt auto-materialization when full content URL is available
+      if (isTruncated && fullContentUrl && autoMaterialize && workspaceDir) {
+        const materialized = await saveQverisFullResult({
+          url: fullContentUrl,
+          executionId: result.execution_id,
+          workspaceDir,
+          maxBytes: fullContentMaxBytes,
+          timeoutSeconds: fullContentTimeoutSeconds,
+          allowedDomains: resolveFullContentAllowedDomains(config),
+        });
+
+        if (materialized.status === "ready") {
+          // Strip transport-layer truncation fields so the model cannot misuse them
+          const {
+            truncated_content: _tc,
+            full_content_file_url: _url,
+            ...cleanResult
+          } = resultData as Record<string, unknown>;
+          return jsonResult({
+            execution_id: result.execution_id,
+            success: true,
+            elapsed_time_ms: result.elapsed_time_ms,
+            result: cleanResult,
+            cost: result.cost ?? result.credits_used,
+            materialized_content: materialized,
+          });
+        }
+
+        // Materialization failed — degrade to current behavior with failure info
+        return jsonResult({
+          execution_id: result.execution_id,
+          success: true,
+          elapsed_time_ms: result.elapsed_time_ms,
+          result: resultData,
+          cost: result.cost ?? result.credits_used,
+          truncated: true,
+          truncation_hint:
+            "Auto-materialization failed. Use web_fetch on full_content_file_url to download manually.",
+          materialized_content: materialized,
+        });
+      }
 
       return jsonResult({
         execution_id: result.execution_id,
@@ -850,7 +1431,7 @@ export function createQverisTools(options?: {
     },
   };
 
-  return [discoverTool, invokeTool, inspectTool];
+  return [discoverTool, callTool, inspectTool];
 }
 
 /**
