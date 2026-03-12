@@ -83,6 +83,7 @@ apps/ios/*.mobileprovision
 # Local untracked files
 .local/
 docs/.local/
+tmp/
 IDENTITY.md
 USER.md
 .tgz
@@ -131,3 +132,4 @@ dist/protocol.schema.json
 
 **/.vscode
 **/.vscode/** 
+.dev-state

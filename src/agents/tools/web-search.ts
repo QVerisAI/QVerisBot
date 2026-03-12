@@ -3,10 +3,12 @@ import { formatCliCommand } from "../../cli/command-format.js";
 import type { OpenClawConfig } from "../../config/config.js";
 import { normalizeResolvedSecretInputString } from "../../config/types.secrets.js";
 import { logVerbose } from "../../globals.js";
+import type { RuntimeWebSearchMetadata } from "../../secrets/runtime-web-tools.js";
 import { wrapWebContent } from "../../security/external-content.js";
 import { normalizeSecretInput } from "../../utils/normalize-secret-input.js";
 import type { AnyAgentTool } from "./common.js";
 import { jsonResult, readNumberParam, readStringArrayParam, readStringParam } from "./common.js";
+import { QVERIS_REGION_DOMAINS, type QverisRegion } from "./qveris-tools.js";
 import { withTrustedWebToolsEndpoint } from "./web-guarded-fetch.js";
 import { resolveCitationRedirectUrl } from "./web-search-citation-redirect.js";
 import {
@@ -194,6 +196,33 @@ function createWebSearchSchema(params: {
     ),
   } as const;
 
+  const perplexityStructuredFilterSchema = {
+    country: Type.Optional(
+      Type.String({
+        description:
+          "Native Perplexity Search API only. 2-letter country code for region-specific results (e.g., 'DE', 'US', 'ALL'). Default: 'US'.",
+      }),
+    ),
+    language: Type.Optional(
+      Type.String({
+        description:
+          "Native Perplexity Search API only. ISO 639-1 language code for results (e.g., 'en', 'de', 'fr').",
+      }),
+    ),
+    date_after: Type.Optional(
+      Type.String({
+        description:
+          "Native Perplexity Search API only. Only results published after this date (YYYY-MM-DD).",
+      }),
+    ),
+    date_before: Type.Optional(
+      Type.String({
+        description:
+          "Native Perplexity Search API only. Only results published before this date (YYYY-MM-DD).",
+      }),
+    ),
+  } as const;
+
   if (params.provider === "brave") {
     return Type.Object({
       ...querySchema,
@@ -222,7 +251,8 @@ function createWebSearchSchema(params: {
     }
     return Type.Object({
       ...querySchema,
-      ...filterSchema,
+      freshness: filterSchema.freshness,
+      ...perplexityStructuredFilterSchema,
       domain_filter: Type.Optional(
         Type.Array(Type.String(), {
           description:
@@ -368,6 +398,16 @@ type PerplexitySearchResponse = {
   choices?: Array<{
     message?: {
       content?: string;
+      annotations?: Array<{
+        type?: string;
+        url?: string;
+        url_citation?: {
+          url?: string;
+          title?: string;
+          start_index?: number;
+          end_index?: number;
+        };
+      }>;
     };
   }>;
   citations?: string[];
@@ -402,8 +442,38 @@ type QverisExecutionResponse = {
   elapsed_time_ms: number;
 };
 
-import { QVERIS_REGION_DOMAINS, type QverisRegion } from "./qveris-tools.js";
 const DEFAULT_QVERIS_SEARCH_TOOL_ID = "xiaosu.smartsearch.search.retrieve.v2.6c50f296_domestic";
+function extractPerplexityCitations(data: PerplexitySearchResponse): string[] {
+  const normalizeUrl = (value: unknown): string | undefined => {
+    if (typeof value !== "string") {
+      return undefined;
+    }
+    const trimmed = value.trim();
+    return trimmed ? trimmed : undefined;
+  };
+
+  const topLevel = (data.citations ?? [])
+    .map(normalizeUrl)
+    .filter((url): url is string => Boolean(url));
+  if (topLevel.length > 0) {
+    return [...new Set(topLevel)];
+  }
+
+  const citations: string[] = [];
+  for (const choice of data.choices ?? []) {
+    for (const annotation of choice.message?.annotations ?? []) {
+      if (annotation.type !== "url_citation") {
+        continue;
+      }
+      const url = normalizeUrl(annotation.url_citation?.url ?? annotation.url);
+      if (url) {
+        citations.push(url);
+      }
+    }
+  }
+
+  return [...new Set(citations)];
+}
 function extractGrokContent(data: GrokSearchResponse): {
   text: string | undefined;
   annotationCitations: string[];
@@ -828,6 +898,16 @@ function resolveQverisBaseUrl(
 
 function resolveQverisToolId(qverisSearch?: QverisSearchConfig): string {
   return qverisSearch?.toolId?.trim() || DEFAULT_QVERIS_SEARCH_TOOL_ID;
+}
+
+function resolvePerplexitySchemaTransportHint(
+  perplexity?: PerplexityConfig,
+): PerplexityTransport | undefined {
+  const hasLegacyOverride = Boolean(
+    (perplexity?.baseUrl && perplexity.baseUrl.trim()) ||
+    (perplexity?.model && perplexity.model.trim()),
+  );
+  return hasLegacyOverride ? "chat_completions" : undefined;
 }
 
 function resolveGrokConfig(search?: WebSearchConfig): GrokConfig {
@@ -1301,7 +1381,8 @@ async function runPerplexitySearch(params: {
 
       const data = (await res.json()) as PerplexitySearchResponse;
       const content = data.choices?.[0]?.message?.content ?? "No response";
-      const citations = data.citations ?? [];
+      // Prefer top-level citations; fall back to OpenRouter-style message annotations.
+      const citations = extractPerplexityCitations(data);
 
       return { content, citations };
     },
@@ -1977,16 +2058,22 @@ export function createWebSearchTool(options?: {
   config?: OpenClawConfig;
   sandboxed?: boolean;
   agentSessionKey?: string;
+  runtimeWebSearch?: RuntimeWebSearchMetadata;
 }): AnyAgentTool | null {
   const search = resolveSearchConfig(options?.config);
   if (!resolveSearchEnabled({ search, sandboxed: options?.sandboxed })) {
     return null;
   }
 
-  const provider = resolveSearchProvider(search);
+  const provider =
+    options?.runtimeWebSearch?.selectedProvider ??
+    options?.runtimeWebSearch?.providerConfigured ??
+    resolveSearchProvider(search);
   const perplexityConfig = resolvePerplexityConfig(search);
-  const perplexityTransport = resolvePerplexityTransport(perplexityConfig);
   const qverisSearchConfig = resolveQverisSearchConfig(search);
+  const perplexitySchemaTransportHint =
+    options?.runtimeWebSearch?.perplexityTransport ??
+    resolvePerplexitySchemaTransportHint(perplexityConfig);
   const grokConfig = resolveGrokConfig(search);
   const geminiConfig = resolveGeminiConfig(search);
   const kimiConfig = resolveKimiConfig(search);
@@ -1995,9 +2082,9 @@ export function createWebSearchTool(options?: {
 
   const description =
     provider === "perplexity"
-      ? perplexityTransport.transport === "chat_completions"
+      ? perplexitySchemaTransportHint === "chat_completions"
         ? "Search the web using Perplexity Sonar via Perplexity/OpenRouter chat completions. Returns AI-synthesized answers with citations from web-grounded search."
-        : "Search the web using the Perplexity Search API. Returns structured results (title, URL, snippet) for fast research. Supports domain, region, language, and freshness filtering."
+        : "Search the web using Perplexity. Runtime routing decides between native Search API and Sonar chat-completions compatibility. Structured filters are available on the native Search API path."
       : provider === "qveris"
         ? "Search the web using QVeris smart search API. Returns relevant search results from third-party data sources."
         : provider === "grok"
@@ -2016,10 +2103,13 @@ export function createWebSearchTool(options?: {
     description,
     parameters: createWebSearchSchema({
       provider,
-      perplexityTransport: provider === "perplexity" ? perplexityTransport.transport : undefined,
+      perplexityTransport: provider === "perplexity" ? perplexitySchemaTransportHint : undefined,
     }),
     execute: async (_toolCallId, args) => {
-      const perplexityRuntime = provider === "perplexity" ? perplexityTransport : undefined;
+      // Resolve Perplexity auth/transport lazily at execution time so unrelated providers
+      // do not touch Perplexity-only credential surfaces during tool construction.
+      const perplexityRuntime =
+        provider === "perplexity" ? resolvePerplexityTransport(perplexityConfig) : undefined;
       const apiKey =
         provider === "perplexity"
           ? perplexityRuntime?.apiKey
