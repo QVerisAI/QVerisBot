@@ -73,7 +73,7 @@ interface QverisDiscoverResponse {
   query: string;
   total: number;
   results: QverisDiscoverResultTool[];
-  search_id: string; // backend field name; exposed to model as discovery_id
+  search_id: string; // backend session ID; resolved internally, not exposed to model
   elapsed_time_ms?: number;
 }
 
@@ -129,7 +129,13 @@ type MaterializedContent = MaterializedContentReady | MaterializedContentFailed;
 /** Structured error returned to the model instead of throwing */
 interface QverisErrorResult {
   success: false;
-  error_type: "timeout" | "http_error" | "network_error" | "json_parse_error" | "rate_limited";
+  error_type:
+    | "timeout"
+    | "http_error"
+    | "network_error"
+    | "json_parse_error"
+    | "rate_limited"
+    | "tool_not_discovered";
   status?: number;
   detail: string;
   retry_hint?: string;
@@ -297,7 +303,7 @@ export function classifyQverisError(err: unknown): QverisErrorResult {
         status,
         detail: err.message,
         retry_hint: isClientError
-          ? "Check tool_id, discovery_id (from qveris_discover or qveris_inspect), and params_to_tool structure."
+          ? "Check tool_id and params_to_tool structure. Make sure tool_id came from qveris_discover."
           : "QVeris service error — retry in a moment.",
       };
     }
@@ -529,24 +535,23 @@ function makeToolRolodex() {
     tool_id: string;
     name: string;
     uses: number;
-    discovery_id?: string;
   }> {
     return Array.from(store.values()).map((e) => ({
       tool_id: e.toolId,
       name: e.name,
       uses: e.successCount,
-      ...(e.discoveryId ? { discovery_id: e.discoveryId } : {}),
     }));
   }
 
   return { record, lookup, getSummary };
 }
 
-// Track which discovery returned which tool_id so we can populate rolodex on invoke
+// Track which discovery returned which tool_id so we can populate rolodex on call
 interface DiscoverResultMeta {
   name: string;
   description: string;
   query: string;
+  searchId?: string;
 }
 
 function makeDiscoverResultTracker() {
@@ -555,6 +560,7 @@ function makeDiscoverResultTracker() {
   function trackResults(
     query: string,
     tools: Array<{ tool_id: string; name: string; description: string }>,
+    searchId?: string,
   ) {
     for (const tool of tools) {
       const existing = store.get(tool.tool_id);
@@ -562,6 +568,7 @@ function makeDiscoverResultTracker() {
         name: tool.name,
         description: tool.description,
         query: query === "(inspect)" ? (existing?.query ?? query) : query,
+        searchId: searchId ?? existing?.searchId,
       });
     }
   }
@@ -1016,22 +1023,8 @@ const QverisDiscoverSchema = Type.Object({
 
 const QverisCallSchema = Type.Object({
   tool_id: Type.String({
-    description:
-      "The ID of the tool to invoke. Must come from a previous qveris_discover or qveris_inspect call.",
+    description: "The tool_id from qveris_discover or qveris_inspect results.",
   }),
-  discovery_id: Type.Optional(
-    Type.String({
-      description:
-        "The discovery_id from qveris_discover or qveris_inspect. " +
-        "Required unless this session already knows the discovery_id for the tool_id from a prior discovery/inspect.",
-    }),
-  ),
-  search_id: Type.Optional(
-    Type.String({
-      description:
-        "Legacy alias for discovery_id. Prefer discovery_id for new calls, but older clients may still send search_id.",
-    }),
-  ),
   params_to_tool: Type.String({
     description:
       "JSON dictionary of parameters to pass to the tool. " +
@@ -1107,13 +1100,13 @@ export function createQverisTools(options?: {
 
   const sessionId = options?.agentSessionKey ?? `clawdbot-${Date.now()}-${randomUUID()}`;
 
-  function resolveKnownDiscoveryId(toolId: string): string | undefined {
-    return rolodex.lookup(toolId)?.discoveryId;
+  // Auto-resolve the backend search_id so the model never has to manage it.
+  function resolveKnownSearchId(toolId: string): string | undefined {
+    return rolodex.lookup(toolId)?.discoveryId ?? discoverTracker.getMeta(toolId)?.searchId;
   }
 
   function formatToolForModel(tool: QverisDiscoverResultTool) {
     const entry = rolodex.lookup(tool.tool_id);
-    const discoveryId = resolveKnownDiscoveryId(tool.tool_id);
     return {
       tool_id: tool.tool_id,
       name: tool.name,
@@ -1129,7 +1122,6 @@ export function createQverisTools(options?: {
         ? { sample_parameters: tool.examples.sample_parameters }
         : undefined,
       stats: tool.stats,
-      ...(discoveryId ? { discovery_id: discoveryId } : {}),
       ...(entry ? { previously_used: true, session_uses: entry.successCount } : {}),
     };
   }
@@ -1178,13 +1170,13 @@ export function createQverisTools(options?: {
           name: t.name,
           description: t.description,
         })),
+        result.search_id,
       );
 
       const knownTools = rolodex.getSummary();
       const payload = jsonResult({
         query: result.query,
         total: result.total,
-        discovery_id: result.search_id,
         elapsed_time_ms: result.elapsed_time_ms,
         results: result.results.map(formatToolForModel),
         ...(knownTools.length > 0 ? { session_known_tools: knownTools } : {}),
@@ -1199,31 +1191,27 @@ export function createQverisTools(options?: {
     label: "QVeris Call",
     name: "qveris_call",
     description:
-      "Invoke a discovered third-party API/service with provided parameters. " +
-      "tool_id is required; discovery_id should come from qveris_discover or qveris_inspect. " +
-      "Pass parameters to the tool through params_to_tool as a JSON string.",
+      "Call a discovered third-party API/service. " +
+      "Provide the tool_id from qveris_discover results and parameters as a JSON string in params_to_tool.",
     parameters: QverisCallSchema,
     execute: async (_toolCallId, args) => {
       const params = args as Record<string, unknown>;
       const toolId = readStringParam(params, "tool_id", { required: true });
-      // Accept discovery_id (new) or search_id (legacy); fall back to session-known IDs.
-      const discoveryId =
-        readStringParam(params, "discovery_id") ||
-        readStringParam(params, "search_id") ||
-        resolveKnownDiscoveryId(toolId);
+      const searchId = resolveKnownSearchId(toolId);
       const paramsToToolRaw = readStringParam(params, "params_to_tool", { required: true });
       const maxSize =
         readNumberParam(params, "max_response_size", { integer: true }) ?? maxResponseSize;
       const timeoutOverride = readNumberParam(params, "timeout_seconds");
 
-      if (!discoveryId) {
+      if (!searchId) {
         return jsonResult({
           success: false,
-          error_type: "json_parse_error",
+          error_type: "tool_not_discovered",
           detail:
-            "Missing discovery_id for qveris_call. Run qveris_discover first, or call qveris_inspect for a previously used tool so the session rolodex can provide the discovery_id.",
+            "This tool_id has not been discovered in the current session. " +
+            "Run qveris_discover first to search for the tool, then retry qveris_call with the same tool_id.",
           retry_hint:
-            "Pass discovery_id from qveris_discover/qveris_inspect. If the tool was not previously used in this session, rediscover it to obtain one.",
+            "Use qveris_discover to find the tool, then call it with the tool_id from the results.",
         } satisfies QverisErrorResult);
       }
 
@@ -1244,7 +1232,7 @@ export function createQverisTools(options?: {
       try {
         result = await qverisCall({
           toolId,
-          searchId: discoveryId,
+          searchId,
           sessionId,
           parameters: toolParams,
           maxResponseSize: maxSize,
@@ -1273,7 +1261,7 @@ export function createQverisTools(options?: {
             name: meta.name,
             description: meta.description,
             discoveryQuery: meta.query,
-            discoveryId,
+            discoveryId: searchId,
           });
         }
       } else {
@@ -1365,8 +1353,8 @@ export function createQverisTools(options?: {
     name: "qveris_inspect",
     description:
       "Inspect known QVeris tools by their IDs without a full discovery. " +
-      "Use when you already have a tool_id from a previous qveris_discover or session context and want to verify availability, recover discovery_id when known, and get current parameter schemas before reusing the tool. " +
-      "Returns tool details including params, sample_parameters, stats, and discovery_id when the session knows it.",
+      "Use when you already have a tool_id from a previous qveris_discover or session context " +
+      "and want to verify availability and get current parameter schemas before reusing the tool.",
     parameters: QverisInspectSchema,
     execute: async (_toolCallId, args) => {
       const params = args as Record<string, unknown>;
@@ -1408,23 +1396,19 @@ export function createQverisTools(options?: {
       );
 
       const tools = result.tools.map(formatToolForModel);
-      const resolvedDiscoveryIds = Array.from(
-        new Set(
-          tools
-            .map((tool) => tool.discovery_id)
-            .filter((v): v is string => typeof v === "string" && v.length > 0),
-        ),
+      const hasSessionContext = tools.some(
+        (t) => resolveKnownSearchId((t as { tool_id: string }).tool_id) !== undefined,
       );
 
       return jsonResult({
         tool_ids_requested: toolIds,
-        ...(resolvedDiscoveryIds.length === 1 ? { discovery_id: resolvedDiscoveryIds[0] } : {}),
         tools_found: result.tools.length,
         tools,
-        ...(resolvedDiscoveryIds.length === 0
+        ...(!hasSessionContext
           ? {
-              invoke_hint:
-                "No discovery_id is known for these tool_ids in this session. If you need to invoke one, run qveris_discover first to obtain a discovery_id.",
+              call_hint:
+                "These tools have not been discovered in this session yet. " +
+                "Run qveris_discover first before calling them with qveris_call.",
             }
           : {}),
       });

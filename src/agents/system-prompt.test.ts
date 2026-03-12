@@ -194,7 +194,7 @@ describe("buildAgentSystemPrompt", () => {
 
     expect(prompt).toContain("qveris_inspect");
     expect(prompt).toContain("Previously used a QVeris tool");
-    expect(prompt).toContain("recover discovery_id");
+    expect(prompt).toContain("verify availability");
   });
 
   it("narrows web_search summary when QVeris is available", () => {

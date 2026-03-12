@@ -206,13 +206,15 @@ describe("createQverisTools", () => {
     expect(discover?.description).toContain("web extraction/crawling");
   });
 
-  it("qveris_call schema preserves legacy search_id alias", () => {
+  it("qveris_call schema has tool_id and params_to_tool but not discovery_id", () => {
     const tools = createQverisTools({ config: makeConfig() });
     const invoke = tools.find((t) => t.name === "qveris_call");
     const schema = invoke?.parameters as { properties?: Record<string, unknown> } | undefined;
 
-    expect(schema?.properties?.discovery_id).toBeDefined();
-    expect(schema?.properties?.search_id).toBeDefined();
+    expect(schema?.properties?.tool_id).toBeDefined();
+    expect(schema?.properties?.params_to_tool).toBeDefined();
+    expect(schema?.properties?.discovery_id).toBeUndefined();
+    expect(schema?.properties?.search_id).toBeUndefined();
   });
 
   it("qveris_discover query schema includes bilingual rewrite guidance", () => {
@@ -243,7 +245,7 @@ describe("createQverisTools", () => {
     expect(toolsList[0].tool_id).toBe("openweathermap.weather.execute.v1");
   });
 
-  it("qveris_inspect returns rolodex discovery_id after a prior successful invoke", async () => {
+  it("qveris_inspect returns tool info and no discovery_id after discover+call", async () => {
     const fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
       if (typeof url === "string" && url.includes("/search")) {
         return Promise.resolve({
@@ -266,8 +268,6 @@ describe("createQverisTools", () => {
         });
       }
       if (typeof url === "string" && url.includes("/tools/by-ids")) {
-        const body = parseRequestBody(init?.body);
-        expect(body.search_id).toBeUndefined();
         return Promise.resolve({
           ok: true,
           status: 200,
@@ -292,7 +292,6 @@ describe("createQverisTools", () => {
     await discover.execute("discover-1", { query: "weather forecast API" });
     await invoke.execute("invoke-1", {
       tool_id: "openweathermap.weather.execute.v1",
-      discovery_id: "search-abc",
       params_to_tool: '{"city": "London"}',
     });
     const result = await inspect.execute("inspect-1", {
@@ -300,9 +299,10 @@ describe("createQverisTools", () => {
     });
 
     const parsed = parseToolResult(result);
-    expect(parsed.discovery_id).toBe("search-abc");
+    expect(parsed.discovery_id).toBeUndefined();
     const toolsList = parsed.tools as Array<Record<string, unknown>>;
-    expect(toolsList[0].discovery_id).toBe("search-abc");
+    expect(toolsList[0].tool_id).toBe("openweathermap.weather.execute.v1");
+    expect(toolsList[0].discovery_id).toBeUndefined();
   });
 
   it("qveris_inspect returns error for empty tool_ids", async () => {
@@ -315,7 +315,7 @@ describe("createQverisTools", () => {
     expect(parsed.error_type).toBe("json_parse_error");
   });
 
-  it("qveris_call reuses a rolodex discovery_id from a prior successful invoke", async () => {
+  it("qveris_call auto-resolves search_id from discover tracker on repeated calls", async () => {
     const fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
       if (typeof url === "string" && url.includes("/search")) {
         return Promise.resolve({
@@ -350,12 +350,13 @@ describe("createQverisTools", () => {
     const invoke = tools.find((t) => t.name === "qveris_call")!;
 
     await discover.execute("discover-1", { query: "weather forecast API" });
+    // First call — search_id auto-resolved from discover tracker
     await invoke.execute("call-0", {
       tool_id: "openweathermap.weather.execute.v1",
-      discovery_id: "search-abc",
       params_to_tool: '{"city": "London"}',
     });
 
+    // Second call — search_id auto-resolved from rolodex
     const result = await invoke.execute("call-1", {
       tool_id: "openweathermap.weather.execute.v1",
       params_to_tool: '{"city": "London"}',
@@ -366,56 +367,22 @@ describe("createQverisTools", () => {
     expect(parsed.execution_id).toBe("exec-123");
   });
 
-  it("qveris_call returns a structured error when discovery_id is unknown", async () => {
+  it("qveris_call returns a structured error when tool was not discovered", async () => {
     const fetchMock = vi.fn();
     globalThis.fetch = fetchMock as typeof globalThis.fetch;
     const tools = createQverisTools({ config: makeConfig() });
     const invoke = tools.find((t) => t.name === "qveris_call")!;
 
     const result = await invoke.execute("call-1", {
-      tool_id: "openweathermap.weather.execute.v1",
+      tool_id: "unknown-tool-xyz",
       params_to_tool: '{"city": "London"}',
     });
 
     const parsed = parseToolResult(result);
     expect(parsed.success).toBe(false);
-    expect(parsed.error_type).toBe("json_parse_error");
-    expect(String(parsed.detail)).toContain("Missing discovery_id");
+    expect(parsed.error_type).toBe("tool_not_discovered");
+    expect(String(parsed.detail)).toContain("not been discovered");
     expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-  it("qveris_call accepts legacy search_id parameter", async () => {
-    const fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
-      if (typeof url === "string" && url.includes("/tools/execute")) {
-        const body = parseRequestBody(init?.body);
-        expect(body.search_id).toBe("search-abc");
-        return Promise.resolve({
-          ok: true,
-          status: 200,
-          json: () => Promise.resolve(SAMPLE_INVOKE_RESPONSE),
-          text: () => Promise.resolve(""),
-          headers: new Headers(),
-        });
-      }
-      return Promise.resolve({
-        ok: false,
-        status: 404,
-        text: () => Promise.resolve("not found"),
-        headers: new Headers(),
-      });
-    });
-    globalThis.fetch = fetchMock;
-    const tools = createQverisTools({ config: makeConfig() });
-    const invoke = tools.find((t) => t.name === "qveris_call")!;
-
-    const result = await invoke.execute("call-1", {
-      tool_id: "openweathermap.weather.execute.v1",
-      search_id: "search-abc",
-      params_to_tool: '{"city": "London"}',
-    });
-
-    const parsed = parseToolResult(result);
-    expect(parsed.success).toBe(true);
   });
 
   it("qveris_call returns recovery_step on body-level failure", async () => {
@@ -427,13 +394,37 @@ describe("createQverisTools", () => {
       elapsed_time_ms: 100,
       cost: 0,
     };
-    globalThis.fetch = mockFetchJson(failResponse);
+    const discoverResponse = {
+      query: "tool x API",
+      total: 1,
+      search_id: "s1",
+      results: [{ tool_id: "tool-x", name: "ToolX", description: "test" }],
+    };
+    globalThis.fetch = vi.fn().mockImplementation((url: string) => {
+      if (typeof url === "string" && url.includes("/search")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve(discoverResponse),
+          text: () => Promise.resolve(""),
+          headers: new Headers(),
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve(failResponse),
+        text: () => Promise.resolve(""),
+        headers: new Headers(),
+      });
+    });
     const tools = createQverisTools({ config: makeConfig() });
+    const discover = tools.find((t) => t.name === "qveris_discover")!;
     const invoke = tools.find((t) => t.name === "qveris_call")!;
 
+    await discover.execute("d1", { query: "tool x API" });
     const result1 = await invoke.execute("call-1", {
       tool_id: "tool-x",
-      discovery_id: "s1",
       params_to_tool: '{"city": "Atlantis"}',
     });
     const parsed1 = parseToolResult(result1);
@@ -443,7 +434,6 @@ describe("createQverisTools", () => {
 
     const result2 = await invoke.execute("call-2", {
       tool_id: "tool-x",
-      discovery_id: "s1",
       params_to_tool: '{"city": "London"}',
     });
     const parsed2 = parseToolResult(result2);
@@ -490,10 +480,9 @@ describe("createQverisTools", () => {
     const results1 = parsed1.results as Array<Record<string, unknown>>;
     expect(results1[0].previously_used).toBeUndefined();
 
-    // Invoke the tool successfully
+    // Invoke the tool successfully — search_id auto-resolved from discover tracker
     await invoke.execute("e1", {
       tool_id: "openweathermap.weather.execute.v1",
-      discovery_id: "search-abc",
       params_to_tool: '{"city": "London"}',
     });
 
@@ -505,13 +494,13 @@ describe("createQverisTools", () => {
     expect(knownTools).toHaveLength(1);
     expect(knownTools[0].tool_id).toBe("openweathermap.weather.execute.v1");
     expect(knownTools[0].uses).toBe(1);
-    expect(knownTools[0].discovery_id).toBe("search-abc");
+    expect(knownTools[0].discovery_id).toBeUndefined();
 
     // The tool in results should be annotated as previously_used
     const results2 = parsed2.results as Array<Record<string, unknown>>;
     expect(results2[0].previously_used).toBe(true);
     expect(results2[0].session_uses).toBe(1);
-    expect(results2[0].discovery_id).toBe("search-abc");
+    expect(results2[0].discovery_id).toBeUndefined();
   });
 });
 
@@ -590,18 +579,57 @@ describe("qveris_call materialization", () => {
     { user_id: "def", nickname: "KOL_B", fans_count: 31000, tags: ["fashion"] },
   ]);
 
-  function makeMaterializeFetchMock() {
+  // Builds a discover response that registers a given tool_id in the session tracker
+  function makeDiscoverResponse(toolId: string, searchId = "search-mat") {
+    return {
+      query: "materialize test",
+      total: 1,
+      search_id: searchId,
+      results: [{ tool_id: toolId, name: toolId, description: "test tool" }],
+    };
+  }
+
+  // Helper: run discover to register a tool so qveris_call can auto-resolve search_id
+  async function registerToolViaDiscover(
+    tools: Array<{
+      name: string;
+      execute: (id: string, args: Record<string, unknown>) => Promise<unknown>;
+    }>,
+    toolId: string,
+  ) {
+    const discover = tools.find((t) => t.name === "qveris_discover")!;
+    await discover.execute("pre-discover", { query: `find ${toolId}` });
+  }
+
+  function makeMaterializeFetchMock(opts?: {
+    toolId?: string;
+    invokeResponse?: typeof TRUNCATED_INVOKE_RESPONSE;
+    ossHandler?: (url: string) => Promise<unknown>;
+  }) {
+    const toolId = opts?.toolId ?? "test-tool";
+    const invokeResponse = opts?.invokeResponse ?? TRUNCATED_INVOKE_RESPONSE;
     return vi.fn().mockImplementation((url: string) => {
+      if (typeof url === "string" && url.includes("/search")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve(makeDiscoverResponse(toolId)),
+          text: () => Promise.resolve(""),
+          headers: new Headers(),
+        });
+      }
       if (typeof url === "string" && url.includes("/tools/execute")) {
         return Promise.resolve({
           ok: true,
           status: 200,
-          json: () => Promise.resolve(TRUNCATED_INVOKE_RESPONSE),
-          text: () => Promise.resolve(JSON.stringify(TRUNCATED_INVOKE_RESPONSE)),
+          json: () => Promise.resolve(invokeResponse),
+          text: () => Promise.resolve(JSON.stringify(invokeResponse)),
           headers: new Headers(),
         });
       }
-      // OSS full content download
+      if (opts?.ossHandler && typeof url === "string" && url.includes("oss.qveris.ai")) {
+        return opts.ossHandler(url);
+      }
       if (typeof url === "string" && url.includes("oss.qveris.ai")) {
         return Promise.resolve({
           ok: true,
@@ -620,16 +648,16 @@ describe("qveris_call materialization", () => {
   }
 
   it("materializes full content when full_content_file_url is present", async () => {
-    globalThis.fetch = makeMaterializeFetchMock();
+    globalThis.fetch = makeMaterializeFetchMock({ toolId: "xiaohongshu.kol_search.v1" });
     const tools = createQverisTools({
       config: makeConfig({ autoMaterializeFullContent: true }),
       workspaceDir: tmpDir,
     });
+    await registerToolViaDiscover(tools, "xiaohongshu.kol_search.v1");
     const invoke = tools.find((t) => t.name === "qveris_call")!;
 
     const result = await invoke.execute("call-1", {
       tool_id: "xiaohongshu.kol_search.v1",
-      discovery_id: "search-xyz",
       params_to_tool: '{"keyword": "beauty"}',
     });
 
@@ -649,16 +677,16 @@ describe("qveris_call materialization", () => {
   });
 
   it("strips truncated transport fields on successful materialization", async () => {
-    globalThis.fetch = makeMaterializeFetchMock();
+    globalThis.fetch = makeMaterializeFetchMock({ toolId: "xiaohongshu.kol_search.v1" });
     const tools = createQverisTools({
       config: makeConfig({ autoMaterializeFullContent: true }),
       workspaceDir: tmpDir,
     });
+    await registerToolViaDiscover(tools, "xiaohongshu.kol_search.v1");
     const invoke = tools.find((t) => t.name === "qveris_call")!;
 
     const result = await invoke.execute("call-1", {
       tool_id: "xiaohongshu.kol_search.v1",
-      discovery_id: "search-xyz",
       params_to_tool: '{"keyword": "beauty"}',
     });
 
@@ -674,6 +702,15 @@ describe("qveris_call materialization", () => {
 
   it("degrades gracefully when full content download times out", async () => {
     const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (typeof url === "string" && url.includes("/search")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve(makeDiscoverResponse("tool-x")),
+          text: () => Promise.resolve(""),
+          headers: new Headers(),
+        });
+      }
       if (typeof url === "string" && url.includes("/tools/execute")) {
         return Promise.resolve({
           ok: true,
@@ -699,11 +736,11 @@ describe("qveris_call materialization", () => {
       config: makeConfig({ autoMaterializeFullContent: true }),
       workspaceDir: tmpDir,
     });
+    await registerToolViaDiscover(tools, "tool-x");
     const invoke = tools.find((t) => t.name === "qveris_call")!;
 
     const result = await invoke.execute("call-1", {
       tool_id: "tool-x",
-      discovery_id: "search-1",
       params_to_tool: '{"q": "test"}',
     });
 
@@ -728,6 +765,15 @@ describe("qveris_call materialization", () => {
       },
     };
     const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (typeof url === "string" && url.includes("/search")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve(makeDiscoverResponse("tool-x")),
+          text: () => Promise.resolve(""),
+          headers: new Headers(),
+        });
+      }
       if (typeof url === "string" && url.includes("/tools/execute")) {
         return Promise.resolve({
           ok: true,
@@ -749,11 +795,11 @@ describe("qveris_call materialization", () => {
       config: makeConfig({ autoMaterializeFullContent: true }),
       workspaceDir: tmpDir,
     });
+    await registerToolViaDiscover(tools, "tool-x");
     const invoke = tools.find((t) => t.name === "qveris_call")!;
 
     const result = await invoke.execute("call-1", {
       tool_id: "tool-x",
-      discovery_id: "search-1",
       params_to_tool: '{"q": "test"}',
     });
 
@@ -773,6 +819,15 @@ describe("qveris_call materialization", () => {
       },
     };
     const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (typeof url === "string" && url.includes("/search")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve(makeDiscoverResponse("tool-x")),
+          text: () => Promise.resolve(""),
+          headers: new Headers(),
+        });
+      }
       if (typeof url === "string" && url.includes("/tools/execute")) {
         return Promise.resolve({
           ok: true,
@@ -794,11 +849,11 @@ describe("qveris_call materialization", () => {
       config: makeConfig({ autoMaterializeFullContent: true }),
       workspaceDir: tmpDir,
     });
+    await registerToolViaDiscover(tools, "tool-x");
     const invoke = tools.find((t) => t.name === "qveris_call")!;
 
     const result = await invoke.execute("call-1", {
       tool_id: "tool-x",
-      discovery_id: "search-1",
       params_to_tool: '{"q": "test"}',
     });
 
@@ -813,16 +868,16 @@ describe("qveris_call materialization", () => {
   });
 
   it("skips materialization when autoMaterializeFullContent is false", async () => {
-    globalThis.fetch = makeMaterializeFetchMock();
+    globalThis.fetch = makeMaterializeFetchMock({ toolId: "tool-x" });
     const tools = createQverisTools({
       config: makeConfig({ autoMaterializeFullContent: false }),
       workspaceDir: tmpDir,
     });
+    await registerToolViaDiscover(tools, "tool-x");
     const invoke = tools.find((t) => t.name === "qveris_call")!;
 
     const result = await invoke.execute("call-1", {
       tool_id: "tool-x",
-      discovery_id: "search-1",
       params_to_tool: '{"q": "test"}',
     });
 
@@ -834,13 +889,13 @@ describe("qveris_call materialization", () => {
   });
 
   it("skips materialization when no workspaceDir", async () => {
-    globalThis.fetch = makeMaterializeFetchMock();
+    globalThis.fetch = makeMaterializeFetchMock({ toolId: "tool-x" });
     const tools = createQverisTools({ config: makeConfig() });
+    await registerToolViaDiscover(tools, "tool-x");
     const invoke = tools.find((t) => t.name === "qveris_call")!;
 
     const result = await invoke.execute("call-1", {
       tool_id: "tool-x",
-      discovery_id: "search-1",
       params_to_tool: '{"q": "test"}',
     });
 
@@ -863,6 +918,15 @@ describe("qveris_call materialization", () => {
       },
     };
     const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (typeof url === "string" && url.includes("/search")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve(makeDiscoverResponse("img-tool")),
+          text: () => Promise.resolve(""),
+          headers: new Headers(),
+        });
+      }
       if (typeof url === "string" && url.includes("/tools/execute")) {
         return Promise.resolve({
           ok: true,
@@ -892,11 +956,11 @@ describe("qveris_call materialization", () => {
       config: makeConfig({ autoMaterializeFullContent: true }),
       workspaceDir: tmpDir,
     });
+    await registerToolViaDiscover(tools, "img-tool");
     const invoke = tools.find((t) => t.name === "qveris_call")!;
 
     const result = await invoke.execute("call-1", {
       tool_id: "img-tool",
-      discovery_id: "search-img",
       params_to_tool: '{"q": "chart"}',
     });
 
@@ -921,6 +985,15 @@ describe("qveris_call materialization", () => {
   it("rejects download when content is truncated by byte limit", async () => {
     const largeContent = "x".repeat(200);
     const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (typeof url === "string" && url.includes("/search")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve(makeDiscoverResponse("big-tool")),
+          text: () => Promise.resolve(""),
+          headers: new Headers(),
+        });
+      }
       if (typeof url === "string" && url.includes("/tools/execute")) {
         return Promise.resolve({
           ok: true,
@@ -957,11 +1030,11 @@ describe("qveris_call materialization", () => {
       config: makeConfig({ autoMaterializeFullContent: true, fullContentMaxBytes: 50 }),
       workspaceDir: tmpDir,
     });
+    await registerToolViaDiscover(tools, "big-tool");
     const invoke = tools.find((t) => t.name === "qveris_call")!;
 
     const result = await invoke.execute("call-1", {
       tool_id: "big-tool",
-      discovery_id: "search-big",
       params_to_tool: '{"q": "test"}',
     });
 
@@ -981,6 +1054,15 @@ describe("qveris_call materialization", () => {
       },
     };
     const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (typeof url === "string" && url.includes("/search")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve(makeDiscoverResponse("cn-tool")),
+          text: () => Promise.resolve(""),
+          headers: new Headers(),
+        });
+      }
       if (typeof url === "string" && url.includes("/tools/execute")) {
         return Promise.resolve({
           ok: true,
@@ -1015,11 +1097,11 @@ describe("qveris_call materialization", () => {
       }),
       workspaceDir: tmpDir,
     });
+    await registerToolViaDiscover(tools, "cn-tool");
     const invoke = tools.find((t) => t.name === "qveris_call")!;
 
     const result = await invoke.execute("call-1", {
       tool_id: "cn-tool",
-      discovery_id: "search-cn",
       params_to_tool: '{"q": "test"}',
     });
 
@@ -1038,6 +1120,15 @@ describe("qveris_call materialization", () => {
       },
     };
     const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (typeof url === "string" && url.includes("/search")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve(makeDiscoverResponse("generic-tool")),
+          text: () => Promise.resolve(""),
+          headers: new Headers(),
+        });
+      }
       if (typeof url === "string" && url.includes("/tools/execute")) {
         return Promise.resolve({
           ok: true,
@@ -1067,11 +1158,11 @@ describe("qveris_call materialization", () => {
       config: makeConfig({ autoMaterializeFullContent: true }),
       workspaceDir: tmpDir,
     });
+    await registerToolViaDiscover(tools, "generic-tool");
     const invoke = tools.find((t) => t.name === "qveris_call")!;
 
     const result = await invoke.execute("call-1", {
       tool_id: "generic-tool",
-      discovery_id: "search-generic",
       params_to_tool: '{"q": "test"}',
     });
 
@@ -1095,6 +1186,15 @@ describe("qveris_call materialization", () => {
       },
     };
     const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (typeof url === "string" && url.includes("/search")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve(makeDiscoverResponse("binary-tool")),
+          text: () => Promise.resolve(""),
+          headers: new Headers(),
+        });
+      }
       if (typeof url === "string" && url.includes("/tools/execute")) {
         return Promise.resolve({
           ok: true,
@@ -1129,11 +1229,11 @@ describe("qveris_call materialization", () => {
       config: makeConfig({ autoMaterializeFullContent: true }),
       workspaceDir: tmpDir,
     });
+    await registerToolViaDiscover(tools, "binary-tool");
     const invoke = tools.find((t) => t.name === "qveris_call")!;
 
     const result = await invoke.execute("call-1", {
       tool_id: "binary-tool",
-      discovery_id: "search-binary",
       params_to_tool: '{"q": "test"}',
     });
 
@@ -1153,6 +1253,15 @@ describe("qveris_call materialization", () => {
   it("does not truncate when file size exactly equals maxBytes", async () => {
     const exactContent = "x".repeat(100);
     const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (typeof url === "string" && url.includes("/search")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve(makeDiscoverResponse("exact-tool")),
+          text: () => Promise.resolve(""),
+          headers: new Headers(),
+        });
+      }
       if (typeof url === "string" && url.includes("/tools/execute")) {
         return Promise.resolve({
           ok: true,
@@ -1189,11 +1298,11 @@ describe("qveris_call materialization", () => {
       config: makeConfig({ autoMaterializeFullContent: true, fullContentMaxBytes: 100 }),
       workspaceDir: tmpDir,
     });
+    await registerToolViaDiscover(tools, "exact-tool");
     const invoke = tools.find((t) => t.name === "qveris_call")!;
 
     const result = await invoke.execute("call-1", {
       tool_id: "exact-tool",
-      discovery_id: "search-exact",
       params_to_tool: '{"q": "test"}',
     });
 
@@ -1214,6 +1323,15 @@ describe("qveris_call materialization", () => {
       },
     };
     const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (typeof url === "string" && url.includes("/search")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve(makeDiscoverResponse("jpeg-tool")),
+          text: () => Promise.resolve(""),
+          headers: new Headers(),
+        });
+      }
       if (typeof url === "string" && url.includes("/tools/execute")) {
         return Promise.resolve({
           ok: true,
@@ -1248,11 +1366,11 @@ describe("qveris_call materialization", () => {
       config: makeConfig({ autoMaterializeFullContent: true }),
       workspaceDir: tmpDir,
     });
+    await registerToolViaDiscover(tools, "jpeg-tool");
     const invoke = tools.find((t) => t.name === "qveris_call")!;
 
     const result = await invoke.execute("call-1", {
       tool_id: "jpeg-tool",
-      discovery_id: "search-jpeg",
       params_to_tool: '{"q": "photo"}',
     });
 
@@ -1277,6 +1395,15 @@ describe("qveris_call materialization", () => {
       },
     };
     const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (typeof url === "string" && url.includes("/search")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve(makeDiscoverResponse("csv-tool")),
+          text: () => Promise.resolve(""),
+          headers: new Headers(),
+        });
+      }
       if (typeof url === "string" && url.includes("/tools/execute")) {
         return Promise.resolve({
           ok: true,
@@ -1306,11 +1433,11 @@ describe("qveris_call materialization", () => {
       config: makeConfig({ autoMaterializeFullContent: true }),
       workspaceDir: tmpDir,
     });
+    await registerToolViaDiscover(tools, "csv-tool");
     const invoke = tools.find((t) => t.name === "qveris_call")!;
 
     const result = await invoke.execute("call-1", {
       tool_id: "csv-tool",
-      discovery_id: "search-csv",
       params_to_tool: '{"q": "test"}',
     });
 

@@ -82,7 +82,7 @@ function buildQverisSection(params: {
     ? "   -> Prefer qveris_discover + qveris_call. Specialized APIs/services return precise structured data or service outputs from dedicated providers."
     : "   -> Use qveris_discover to identify the best specialized API/service available in this session. If qveris_call is unavailable here, report the limitation honestly instead of promising a tool call you cannot make.";
   const inspectLine = hasInspect
-    ? "   -> Use qveris_inspect with the known tool_id to verify availability and recover discovery_id. If qveris_inspect returns discovery_id, invoke directly; otherwise run qveris_discover again first."
+    ? "   -> Use qveris_inspect with the known tool_id to verify availability and get current parameter schemas. If the tool is available, run qveris_discover to register it for this session, then call it."
     : undefined;
   const webResearchLine =
     hasWebSearch && hasWebFetch
@@ -385,12 +385,12 @@ export function buildAgentSystemPrompt(params: {
       "Query in English describing the capability needed.",
     qveris_call:
       "Call a QVeris API/service tool to get structured data, reports, extracted content, PDFs, or processed/generated media. " +
-      "Requires tool_id and discovery_id from qveris_discover or qveris_inspect. " +
+      "Provide the tool_id from qveris_discover results. " +
       (qverisAutoMat
         ? "When the response is large, full content is auto-materialized locally; use read/exec to process."
         : "When the response is truncated, use web_fetch (text) or exec+curl (binary) on full_content_file_url to get the complete data."),
     qveris_inspect:
-      "Quick-verify known tool IDs and recover session-known discovery_id for reuse. " +
+      "Quick-verify known tool IDs and get current parameter schemas for reuse. " +
       "Use when you already have a tool_id from this session.",
   };
 
