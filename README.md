@@ -40,7 +40,7 @@ It answers you on the channels you already use (WhatsApp, Telegram, Slack, Disco
 | Area                 | OpenClaw (base platform)                          | QVerisBot (this repo)                                                                                                         |
 | :------------------- | :------------------------------------------------ | :---------------------------------------------------------------------------------------------------------------------------- |
 | Positioning          | Local-first agent gateway + multi-channel runtime | OpenClaw-based distribution focused on professional tool use and faster production onboarding                                 |
-| Tool ecosystem       | Built-in tools + extension mechanism              | QVeris Universal Toolbox integration (search + execute), plus QVeris-first defaults                                           |
+| Tool ecosystem       | Built-in tools + extension mechanism              | QVeris Universal Toolbox: `qveris_discover` + `qveris_call` + `qveris_inspect`, with auto session-context resolution          |
 | Web search default   | Commonly configured with Brave/other providers    | During onboarding, defaults `web_search` to QVeris Smart Search when QVeris is enabled                                        |
 | Channel focus        | Broad global channels and plugin model            | Adds stronger China-facing defaults/integration (especially Feishu), while keeping full OpenClaw channel coverage             |
 | First-run onboarding | Wizard-driven baseline setup                      | Enhanced wizard flow: QVeris API key setup + X channel credential setup integrated into onboarding                            |
@@ -173,24 +173,27 @@ Runtime: **Node ≥22**.
 
 ### How the agent uses QVeris tools
 
-QVerisBot exposes three QVeris tools to the agent, with built-in routing guidance to prevent misuse:
+QVerisBot exposes three QVeris tools to the agent with built-in routing guidance:
 
-| Tool                | When to use                                                                                                                                                                                                                                                     |
-| :------------------ | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `qveris_search`     | Discover tools by **capability type** — real-time data APIs (prices, weather, financials), external service capabilities (image generation, OCR, TTS, translation), geo/location APIs. **Not for** local file reads, software config, or documentation lookups. |
-| `qveris_execute`    | Execute a tool returned by `qveris_search` or verified by `qveris_get_by_ids`. Pass parameters as JSON using `sample_parameters` from the search result as a template.                                                                                          |
-| `qveris_get_by_ids` | Re-verify a **known** tool ID without a full search — use when the agent has already found a good tool in this session. Skips the search round-trip and returns the current parameter schema.                                                                   |
+| Tool              | When to use                                                                                                                                                                                                                                   |
+| :---------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `qveris_discover` | Find tools by **capability** — real-time data APIs (prices, weather, financials), external service capabilities (image gen, OCR, TTS, translation), geo/location APIs. **Not for** local file ops, software config, or documentation lookups. |
+| `qveris_call`     | Call a tool returned by `qveris_discover`. Just provide the `tool_id` — the session layer auto-resolves all backend routing. Pass parameters as JSON using `sample_parameters` from the discover result as a template.                        |
+| `qveris_inspect`  | Re-verify a known `tool_id` without a full discover — use when the agent has already found a tool in this session and wants to confirm availability or refresh its parameter schema.                                                          |
 
-The agent follows a routing decision tree before calling `qveris_search`:
+**Zero ID management for the model.** After `qveris_discover`, the integration layer automatically maps each `tool_id` to its backend session context. The model calls `qveris_call(tool_id, params_to_tool)` directly — no `discovery_id`, no `search_id` to carry around.
+
+The agent follows a routing decision tree before calling `qveris_discover`:
 
 1. **Local operation?** (read files, check config, session status) → use local tools, skip QVeris
 2. **Need a web page or article?** → use `web_search` / `web_fetch` directly
-3. **Need structured real-time data?** → `qveris_search("weather forecast API")` — describe the capability, not the task
-4. **Need an external service capability?** → `qveris_search("text to image generation API")`
-5. **Already used a QVeris tool this session?** → `qveris_get_by_ids` with the known ID, then execute directly
-6. **None of the above?** → do not call QVeris; use `web_search` or report the limitation
+3. **Need structured real-time data or an external service?** → `qveris_discover("weather forecast API")` — describe the capability in English, not the task
+4. **Already used a QVeris tool this session?** → `qveris_inspect` with the known ID to verify, then `qveris_call` directly
+5. **None of the above?** → do not call QVeris; use `web_search` or report the limitation
 
-A session-scoped **Tool Rolodex** tracks successfully executed tools. After a tool is used, it is annotated as `previously_used` in future search results and listed under `session_known_tools`, so the agent reuses verified tools instead of re-discovering them from scratch.
+A session-scoped **Tool Rolodex** tracks successfully called tools. After a tool is used, it is annotated as `previously_used` in future discover results and listed under `session_known_tools`, so the agent reuses verified tools instead of re-discovering from scratch.
+
+**Large response handling.** When a QVeris tool returns data exceeding the transport limit, the response includes a `full_content_file_url` link to the full dataset on QVeris-managed storage. The integration layer can optionally auto-download and materialize it to the agent's workspace (`autoMaterializeFullContent: true`), returning a metadata manifest instead of raw bytes. Security boundaries: HTTPS-only, domain-whitelisted to the configured QVeris region, size-capped, no redirects.
 
 ### What can you build with QVeris?
 
@@ -204,7 +207,7 @@ A session-scoped **Tool Rolodex** tracks successfully executed tools. After a to
 
 1. **Create account:** [qveris.ai](https://qveris.ai) → Sign Up
 2. **Get API key:** Dashboard → API Keys → Create New Key
-3. **Use it:** Run `pnpm openclaw onboard` — the wizard will prompt for your key and configure QVeris + `web_search` automatically.
+3. **Use it:** Run `qverisbot onboard` — the wizard prompts for your key, lets you choose your region (`qveris.ai` global or `qveris.cn` for China), and configures QVeris + `web_search` automatically.
 
 > [!NOTE]
 > QVeris offers a free tier. For production use, purchase credits at [qveris.ai/dashboard](https://qveris.ai/dashboard).
@@ -213,7 +216,7 @@ A session-scoped **Tool Rolodex** tracks successfully executed tools. After a to
 
 ## What Else Makes QVerisBot Special
 
-- **OpenClaw + QVeris optimization layer** — keeps OpenClaw's core reliability while adding QVeris-first defaults and a structured tool-routing layer (decision tree + session rolodex) for practical business/research workflows
+- **OpenClaw + QVeris optimization layer** — structured tool-routing (decision tree + session rolodex), zero-friction `qveris_call` (no ID management), optional large-response auto-materialization, and dual-region support (`qveris.ai` / `qveris.cn`)
 - **[Feishu Native Support](docs/qverisbot-from-source.md)** — WebSocket-based deep integration, ideal for Chinese enterprise users
 - **Improved onboarding across CLI/macOS/web wizard flows** — guided QVeris API key setup, auto-default `web_search` to QVeris Xiaosu Smart Search, and built-in X (Twitter) channel credential onboarding
 - **Multi-channel inbox** — WhatsApp, Telegram, Slack, Discord, Google Chat, Signal, iMessage, **Feishu**, Microsoft Teams, Matrix, Zalo, WebChat
