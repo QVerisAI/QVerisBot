@@ -17,6 +17,15 @@ import {
   uninstallScheduledTask,
 } from "./schtasks.js";
 import type { GatewayServiceRuntime } from "./service-runtime.js";
+import type {
+  GatewayServiceCommandConfig,
+  GatewayServiceControlArgs,
+  GatewayServiceEnv,
+  GatewayServiceEnvArgs,
+  GatewayServiceInstallArgs,
+  GatewayServiceManageArgs,
+  GatewayServiceRestartResult,
+} from "./service-types.js";
 import {
   installSystemdService,
   isSystemdServiceEnabled,
@@ -26,43 +35,53 @@ import {
   stopSystemdService,
   uninstallSystemdService,
 } from "./systemd.js";
-
-export type GatewayServiceInstallArgs = {
-  env: Record<string, string | undefined>;
-  stdout: NodeJS.WritableStream;
-  programArguments: string[];
-  workingDirectory?: string;
-  environment?: Record<string, string | undefined>;
-  description?: string;
-};
+export type {
+  GatewayServiceCommandConfig,
+  GatewayServiceControlArgs,
+  GatewayServiceEnv,
+  GatewayServiceEnvArgs,
+  GatewayServiceInstallArgs,
+  GatewayServiceManageArgs,
+  GatewayServiceRestartResult,
+} from "./service-types.js";
 
 export type GatewayService = {
   label: string;
   loadedText: string;
   notLoadedText: string;
   install: (args: GatewayServiceInstallArgs) => Promise<void>;
-  uninstall: (args: {
-    env: Record<string, string | undefined>;
-    stdout: NodeJS.WritableStream;
-  }) => Promise<void>;
-  stop: (args: {
-    env?: Record<string, string | undefined>;
-    stdout: NodeJS.WritableStream;
-  }) => Promise<void>;
-  restart: (args: {
-    env?: Record<string, string | undefined>;
-    stdout: NodeJS.WritableStream;
-  }) => Promise<void>;
-  isLoaded: (args: { env?: Record<string, string | undefined> }) => Promise<boolean>;
-  readCommand: (env: Record<string, string | undefined>) => Promise<{
-    programArguments: string[];
-    workingDirectory?: string;
-    environment?: Record<string, string>;
-    environmentValueSources?: Record<string, "inline" | "file">;
-    sourcePath?: string;
-  } | null>;
-  readRuntime: (env: Record<string, string | undefined>) => Promise<GatewayServiceRuntime>;
+  uninstall: (args: GatewayServiceManageArgs) => Promise<void>;
+  stop: (args: GatewayServiceControlArgs) => Promise<void>;
+  restart: (args: GatewayServiceControlArgs) => Promise<GatewayServiceRestartResult>;
+  isLoaded: (args: GatewayServiceEnvArgs) => Promise<boolean>;
+  readCommand: (env: GatewayServiceEnv) => Promise<GatewayServiceCommandConfig | null>;
+  readRuntime: (env: GatewayServiceEnv) => Promise<GatewayServiceRuntime>;
 };
+
+export function describeGatewayServiceRestart(
+  serviceNoun: string,
+  result: GatewayServiceRestartResult,
+): {
+  scheduled: boolean;
+  daemonActionResult: "restarted" | "scheduled";
+  message: string;
+  progressMessage: string;
+} {
+  if (result.outcome === "scheduled") {
+    return {
+      scheduled: true,
+      daemonActionResult: "scheduled",
+      message: `restart scheduled, ${serviceNoun.toLowerCase()} will restart momentarily`,
+      progressMessage: `${serviceNoun} service restart scheduled.`,
+    };
+  }
+  return {
+    scheduled: false,
+    daemonActionResult: "restarted",
+    message: `${serviceNoun} service restarted.`,
+    progressMessage: `${serviceNoun} service restarted.`,
+  };
+}
 
 type SupportedGatewayServicePlatform = "darwin" | "linux" | "win32";
 
