@@ -21,6 +21,9 @@ export class MediaFetchError extends Error {
     super(message, options);
     this.code = code;
     this.name = "MediaFetchError";
+    if (options && "cause" in options) {
+      (this as Error & { cause?: unknown }).cause = options.cause;
+    }
   }
 }
 

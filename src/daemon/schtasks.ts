@@ -596,14 +596,9 @@ export async function installScheduledTask({
       const launcher = buildStartupLauncherScript({ description: taskDescription, scriptPath });
       await fs.writeFile(startupEntryPath, launcher, "utf8");
       launchFallbackTaskScript(scriptPath);
-      writeFormattedLines(
-        stdout,
-        [
-          { label: "Installed Windows login item", value: startupEntryPath },
-          { label: "Task script", value: scriptPath },
-        ],
-        { leadingBlankLine: true },
-      );
+      stdout.write("\n");
+      stdout.write(`${formatLine("Installed Windows login item", startupEntryPath)}\n`);
+      stdout.write(`${formatLine("Task script", scriptPath)}\n`);
       return { scriptPath };
     }
     throw new Error(`schtasks create failed: ${detail}`.trim());

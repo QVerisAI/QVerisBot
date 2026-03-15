@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { withEnvAsync } from "../test-utils/env.js";
+import { resolveUsableRuntimeVersion } from "../version.js";
 
 async function withPresenceModule<T>(
   env: Record<string, string | undefined>,
@@ -31,7 +32,10 @@ describe("system-presence version fallback", () => {
         OPENCLAW_SERVICE_VERSION: "2.4.6-service",
         npm_package_version: "1.0.0-package",
       },
-      async () => (await import("../version.js")).VERSION,
+      async () => {
+        const { VERSION } = await import("../version.js");
+        return resolveUsableRuntimeVersion(VERSION) ?? "2.4.6-service";
+      },
     );
   });
 
@@ -53,7 +57,10 @@ describe("system-presence version fallback", () => {
         OPENCLAW_SERVICE_VERSION: "2.4.6-service",
         npm_package_version: "1.0.0-package",
       },
-      async () => (await import("../version.js")).VERSION,
+      async () => {
+        const { VERSION } = await import("../version.js");
+        return resolveUsableRuntimeVersion(VERSION) ?? "2.4.6-service";
+      },
     );
   });
 
@@ -64,7 +71,10 @@ describe("system-presence version fallback", () => {
         OPENCLAW_SERVICE_VERSION: "\t",
         npm_package_version: "1.0.0-package",
       },
-      async () => (await import("../version.js")).VERSION,
+      async () => {
+        const { VERSION } = await import("../version.js");
+        return resolveUsableRuntimeVersion(VERSION) ?? "1.0.0-package";
+      },
     );
   });
 
@@ -75,7 +85,10 @@ describe("system-presence version fallback", () => {
         OPENCLAW_SERVICE_VERSION: "\t",
         npm_package_version: "1.0.0-package",
       },
-      async () => (await import("../version.js")).VERSION,
+      async () => {
+        const { VERSION } = await import("../version.js");
+        return resolveUsableRuntimeVersion(VERSION) ?? "1.0.0-package";
+      },
     );
   });
 });

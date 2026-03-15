@@ -382,11 +382,11 @@ function shouldRetryWithIpv4Fallback(err: unknown): boolean {
     codes: collectErrorCodes(err),
   };
   for (const rule of IPV4_FALLBACK_RULES) {
-    if (!rule.matches(ctx)) {
-      return false;
+    if (rule.matches(ctx)) {
+      return true;
     }
   }
-  return true;
+  return false;
 }
 
 export function shouldRetryTelegramIpv4Fallback(err: unknown): boolean {
@@ -443,15 +443,16 @@ export function resolveTelegramTransport(
     defaultDispatcher.mode === "direct" ||
     (defaultDispatcher.mode === "env-proxy" && shouldBypassEnvProxy);
   const stickyShouldUseEnvProxy = defaultDispatcher.mode === "env-proxy";
-  const fallbackPinnedDispatcherPolicy = allowStickyIpv4Fallback
-    ? resolveTelegramDispatcherPolicy({
-        autoSelectFamily: false,
-        dnsResultOrder: "ipv4first",
-        useEnvProxy: stickyShouldUseEnvProxy,
-        forceIpv4: true,
-        proxyUrl: explicitProxyUrl,
-      }).policy
-    : undefined;
+  // Always expose an explicit IPv4 fallback policy for callers (for example
+  // media fetch retry lanes). Sticky auto-retry below remains gated by
+  // allowStickyIpv4Fallback for proxy safety.
+  const fallbackPinnedDispatcherPolicy = resolveTelegramDispatcherPolicy({
+    autoSelectFamily: false,
+    dnsResultOrder: "ipv4first",
+    useEnvProxy: stickyShouldUseEnvProxy,
+    forceIpv4: true,
+    proxyUrl: explicitProxyUrl,
+  }).policy;
 
   let stickyIpv4FallbackEnabled = false;
   let stickyIpv4Dispatcher: TelegramDispatcher | null = null;

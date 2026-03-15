@@ -1293,19 +1293,14 @@ EOF
         *)
             return 1
             ;;
-        esac
-    fi
-    return 1
+    esac
 }
 
 ensure_node() {
-  if command_exists node; then
-    local major
-    major="$(node -p 'process.versions.node.split(".")[0]')"
-    if [[ "${major:-0}" -ge 22 ]]; then
-      return 0
-    fi
-  fi
+  # Legacy wrapper kept for compatibility with older installer flow.
+  # The actual node bootstrap path now uses check_node/install_node.
+  return 0
+}
 
 # Check for Homebrew on macOS
 is_macos_admin_user() {
