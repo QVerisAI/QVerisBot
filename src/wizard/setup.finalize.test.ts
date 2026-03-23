@@ -86,6 +86,7 @@ vi.mock("../commands/health.js", () => ({
 vi.mock("../commands/onboard-search.js", () => ({
   SEARCH_PROVIDER_OPTIONS: [],
   resolveSearchProviderOptions: () => [],
+  resolveSearchProviderSignupUrl: () => "https://example.com/signup",
   hasExistingKey,
   hasKeyInEnv,
   resolveExistingKey,
