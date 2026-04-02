@@ -53,7 +53,9 @@ apps/ios/*.xcworkspace/
 apps/ios/.swiftpm/
 apps/ios/.derivedData/
 apps/ios/.local-signing.xcconfig
-vendor/
+vendor/*
+!vendor/a2ui/
+!vendor/a2ui/**
 !src/auto-reply/reply/export-html/vendor/
 !src/auto-reply/reply/export-html/vendor/**
 apps/ios/Clawdbot.xcodeproj/
@@ -87,6 +89,7 @@ apps/ios/*.mobileprovision
 # Local untracked files
 .local/
 docs/.local/
+docs/internal/
 tmp/
 IDENTITY.md
 USER.md
@@ -147,3 +150,6 @@ docs/superpowers
 
 # Deprecated changelog fragment workflow
 changelog/fragments/
+
+# Local scratch workspace
+.tmp/

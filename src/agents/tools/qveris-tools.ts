@@ -161,7 +161,13 @@ interface QverisErrorResult {
 // ============================================================================
 
 function resolveQverisConfig(cfg?: OpenClawConfig): QverisConfig {
-  return cfg?.tools?.qveris;
+  const toolsConfig = cfg?.tools?.qveris;
+  const pluginConfig = cfg?.plugins?.entries?.qveris?.config;
+  if (!toolsConfig && !pluginConfig) {
+    return undefined;
+  }
+  // Merge: tools.qveris takes precedence, plugin config is fallback
+  return { ...pluginConfig, ...toolsConfig } as NonNullable<QverisConfig>;
 }
 
 function resolveQverisEnabled(params: { config?: QverisConfig; sandboxed?: boolean }): boolean {

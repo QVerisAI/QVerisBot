@@ -1,16 +1,13 @@
+import * as ssrf from "openclaw/plugin-sdk/infra-runtime";
+import * as mediaFetch from "openclaw/plugin-sdk/media-runtime";
+import type { SavedMedia } from "openclaw/plugin-sdk/media-runtime";
+import * as mediaStore from "openclaw/plugin-sdk/media-runtime";
+import { mockPinnedHostnameResolution } from "openclaw/plugin-sdk/testing";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import * as ssrf from "../../../../src/infra/net/ssrf.js";
-import * as mediaFetch from "../../../../src/media/fetch.js";
-import type { SavedMedia } from "../../../../src/media/store.js";
-import * as mediaStore from "../../../../src/media/store.js";
-import {
-  mockPinnedHostnameResolution,
-  mockPinnedHostnameWithPolicyResolution,
-} from "../../../../src/test-helpers/ssrf.js";
 import {
   type FetchMock,
   withFetchPreconnect,
-} from "../../../../test/helpers/extensions/fetch-mock.js";
+} from "../../../../test/helpers/plugins/fetch-mock.js";
 import {
   fetchWithSlackAuth,
   resolveSlackAttachmentContent,
@@ -178,18 +175,14 @@ describe("fetchWithSlackAuth", () => {
 });
 
 describe("resolveSlackMedia", () => {
-  let ssrfPolicySpy: { mockRestore: () => void } | undefined;
-
   beforeEach(() => {
     mockFetch = vi.fn();
     globalThis.fetch = withFetchPreconnect(mockFetch);
     mockPinnedHostnameResolution();
-    ssrfPolicySpy = mockPinnedHostnameWithPolicyResolution();
   });
 
   afterEach(() => {
     globalThis.fetch = originalFetch;
-    ssrfPolicySpy?.mockRestore();
     vi.restoreAllMocks();
   });
 

@@ -3,8 +3,18 @@ import { QVERIS_REGION_DOMAINS } from "../agents/tools/qveris-tools.js";
 import type { OpenClawConfig } from "../config/config.js";
 import type { WizardPrompter } from "../wizard/prompts.js";
 
+function resolvePluginRootConfig(cfg: OpenClawConfig): Record<string, unknown> | undefined {
+  const raw = cfg?.plugins?.entries?.qveris?.config;
+  return raw && typeof raw === "object" && !Array.isArray(raw) ? raw : undefined;
+}
+
 function resolveConfigApiKey(cfg: OpenClawConfig): string {
-  return cfg.tools?.qveris?.apiKey?.trim() ?? "";
+  const fromTools = cfg.tools?.qveris?.apiKey?.trim() ?? "";
+  if (fromTools) {
+    return fromTools;
+  }
+  const pluginRoot = resolvePluginRootConfig(cfg);
+  return typeof pluginRoot?.apiKey === "string" ? pluginRoot.apiKey.trim() : "";
 }
 
 function resolveEnvApiKey(): string {
@@ -13,7 +23,11 @@ function resolveEnvApiKey(): string {
 
 function resolveConfigRegion(cfg: OpenClawConfig): QverisRegion {
   const r = (cfg.tools?.qveris as Record<string, unknown> | undefined)?.region;
-  return r === "cn" ? "cn" : "global";
+  if (r === "cn") {
+    return "cn";
+  }
+  const pluginRoot = resolvePluginRootConfig(cfg);
+  return pluginRoot?.region === "cn" ? "cn" : "global";
 }
 
 export async function promptQverisConfig(

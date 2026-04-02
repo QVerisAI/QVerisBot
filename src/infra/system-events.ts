@@ -4,12 +4,19 @@
 
 import type { CronOrigin } from "../cron/types.js";
 import { resolveGlobalMap } from "../shared/global-singleton.js";
+import {
+  mergeDeliveryContext,
+  normalizeDeliveryContext,
+  type DeliveryContext,
+} from "../utils/delivery-context.js";
 
 export type SystemEvent = {
   text: string;
   ts: number;
   contextKey?: string | null;
   origin?: CronOrigin;
+  deliveryContext?: DeliveryContext;
+  trusted?: boolean;
 };
 
 const MAX_EVENTS = 20;
@@ -29,6 +36,8 @@ type SystemEventOptions = {
   contextKey?: string | null;
   /** Origin context for routing replies (from cron jobs) */
   origin?: CronOrigin;
+  deliveryContext?: DeliveryContext;
+  trusted?: boolean;
 };
 
 function requireSessionKey(key?: string | null): string {
@@ -69,6 +78,13 @@ function getOrCreateSessionQueue(sessionKey: string): SessionQueue {
   return created;
 }
 
+function cloneSystemEvent(event: SystemEvent): SystemEvent {
+  return {
+    ...event,
+    ...(event.deliveryContext ? { deliveryContext: { ...event.deliveryContext } } : {}),
+  };
+}
+
 export function isSystemEventContextChanged(
   sessionKey: string,
   contextKey?: string | null,
@@ -86,6 +102,7 @@ export function enqueueSystemEvent(text: string, options: SystemEventOptions) {
     return false;
   }
   const normalizedContextKey = normalizeContextKey(options?.contextKey);
+  const normalizedDeliveryContext = normalizeDeliveryContext(options?.deliveryContext);
   entry.lastContextKey = normalizedContextKey;
   if (entry.lastText === cleaned) {
     return false;
@@ -96,6 +113,8 @@ export function enqueueSystemEvent(text: string, options: SystemEventOptions) {
     ts: Date.now(),
     contextKey: normalizedContextKey,
     origin: options?.origin,
+    deliveryContext: normalizedDeliveryContext,
+    trusted: options.trusted !== false,
   });
   if (entry.queue.length > MAX_EVENTS) {
     entry.queue.shift();
@@ -109,7 +128,7 @@ export function drainSystemEventEntries(sessionKey: string): SystemEvent[] {
   if (!entry || entry.queue.length === 0) {
     return [];
   }
-  const out = entry.queue.slice();
+  const out = entry.queue.map(cloneSystemEvent);
   entry.queue.length = 0;
   entry.lastText = null;
   entry.lastContextKey = null;
@@ -122,7 +141,7 @@ export function drainSystemEvents(sessionKey: string): string[] {
 }
 
 export function peekSystemEventEntries(sessionKey: string): SystemEvent[] {
-  return getSessionQueue(sessionKey)?.queue.map((event) => ({ ...event })) ?? [];
+  return getSessionQueue(sessionKey)?.queue.map(cloneSystemEvent) ?? [];
 }
 
 export function peekSystemEvents(sessionKey: string): string[] {
@@ -131,6 +150,16 @@ export function peekSystemEvents(sessionKey: string): string[] {
 
 export function hasSystemEvents(sessionKey: string) {
   return (getSessionQueue(sessionKey)?.queue.length ?? 0) > 0;
+}
+
+export function resolveSystemEventDeliveryContext(
+  events: readonly SystemEvent[],
+): DeliveryContext | undefined {
+  let resolved: DeliveryContext | undefined;
+  for (const event of events) {
+    resolved = mergeDeliveryContext(event.deliveryContext, resolved);
+  }
+  return resolved;
 }
 
 export function resetSystemEventsForTest() {

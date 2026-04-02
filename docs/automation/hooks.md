@@ -41,11 +41,9 @@ The hooks system allows you to:
 
 ### Bundled Hooks
 
-OpenClaw ships with six bundled hooks that are automatically discovered:
+OpenClaw ships with four bundled hooks that are automatically discovered:
 
 - **💾 session-memory**: Saves session context to your agent workspace (default `~/.openclaw/workspace/memory/`) when you issue `/new` or `/reset`
-- **📋 context-digest**: Maintains a rolling cross-session summary at `memory/context-digest.md` and injects open items into the system prompt
-- **🏷️ session-importance**: Classifies conversations by importance and archives significant ones under `memory/important/`
 - **📎 bootstrap-extra-files**: Injects additional workspace bootstrap files from configured glob/path patterns during `agent:bootstrap`
 - **📝 command-logger**: Logs all command events to `~/.openclaw/logs/commands.log`
 - **🚀 boot-md**: Runs `BOOT.md` when the gateway starts (requires internal hooks enabled)
@@ -131,7 +129,7 @@ Example `package.json`:
 }
 ```
 
-Each entry points to a hook directory containing `HOOK.md` and `handler.ts` (or `index.ts`).
+Each entry points to a hook directory containing `HOOK.md` and a handler file. The loader tries `handler.ts`, `handler.js`, `index.ts`, `index.js` in order.
 Hook packs can ship dependencies; they will be installed under `~/.openclaw/hooks/<id>`.
 Each `openclaw.hooks` entry must stay inside the package directory after symlink
 resolution; entries that escape are rejected.
@@ -238,6 +236,9 @@ Each event includes:
     sessionId?: string,
     // Agent bootstrap events (agent:bootstrap):
     bootstrapFiles?: WorkspaceBootstrapFile[],
+    sessionKey?: string,           // routing session key
+    sessionId?: string,            // internal session UUID
+    agentId?: string,              // resolved agent ID
     // Message events (see Message Events section for full details):
     from?: string,             // message:received
     to?: string,               // message:sent
@@ -267,6 +268,25 @@ Triggered when agent commands are issued:
 Internal hook payloads emit these as `type: "session"` with `action: "compact:before"` / `action: "compact:after"`; listeners subscribe with the combined keys above.
 Specific handler registration uses the literal key format `${type}:${action}`. For these events, register `session:compact:before` and `session:compact:after`.
 
+`session:compact:before` context fields:
+
+- `sessionId`: internal session UUID
+- `missingSessionKey`: true when no session key was available
+- `messageCount`: number of messages before compaction
+- `tokenCount`: token count before compaction (may be absent)
+- `messageCountOriginal`: message count from the full untruncated session history
+- `tokenCountOriginal`: token count of the full original history (may be absent)
+
+`session:compact:after` context fields (in addition to `sessionId` and `missingSessionKey`):
+
+- `messageCount`: message count after compaction
+- `tokenCount`: token count after compaction (may be absent)
+- `compactedCount`: number of messages that were compacted/removed
+- `summaryLength`: character length of the generated compaction summary
+- `tokensBefore`: token count from before compaction (for delta calculation)
+- `tokensAfter`: token count after compaction
+- `firstKeptEntryId`: ID of the first message entry retained after compaction
+
 ### Agent Events
 
 - **`agent:bootstrap`**: Before workspace bootstrap files are injected (hooks may mutate `context.bootstrapFiles`)
@@ -276,6 +296,72 @@ Specific handler registration uses the literal key format `${type}:${action}`. F
 Triggered when the gateway starts:
 
 - **`gateway:startup`**: After channels start and hooks are loaded
+
+### Session Patch Events
+
+Triggered when session properties are modified:
+
+- **`session:patch`**: When a session is updated
+
+#### Session Event Context
+
+Session events include rich context about the session and changes:
+
+```typescript
+{
+  sessionEntry: SessionEntry, // The complete updated session entry
+  patch: {                    // The patch object (only changed fields)
+    // Session identity & labeling
+    label?: string | null,           // Human-readable session label
+
+    // AI model configuration
+    model?: string | null,           // Model override (e.g., "claude-sonnet-4-6")
+    thinkingLevel?: string | null,   // Thinking level ("off"|"low"|"med"|"high")
+    verboseLevel?: string | null,    // Verbose output level
+    reasoningLevel?: string | null,  // Reasoning mode override
+    elevatedLevel?: string | null,   // Elevated mode override
+    responseUsage?: "off" | "tokens" | "full" | "on" | null, // Usage display mode ("on" is backwards-compat alias for "full")
+    fastMode?: boolean | null,                    // Fast/turbo mode toggle
+    spawnedWorkspaceDir?: string | null,          // Workspace dir override for spawned subagents
+    subagentRole?: "orchestrator" | "leaf" | null, // Subagent role assignment
+    subagentControlScope?: "children" | "none" | null, // Scope of subagent control
+
+    // Tool execution settings
+    execHost?: string | null,        // Exec host (sandbox|gateway|node)
+    execSecurity?: string | null,    // Security mode (deny|allowlist|full)
+    execAsk?: string | null,         // Approval mode (off|on-miss|always)
+    execNode?: string | null,        // Node ID for host=node
+
+    // Subagent coordination
+    spawnedBy?: string | null,       // Parent session key (for subagents)
+    spawnDepth?: number | null,      // Nesting depth (0 = root)
+
+    // Communication policies
+    sendPolicy?: "allow" | "deny" | null,          // Message send policy
+    groupActivation?: "mention" | "always" | null, // Group chat activation
+  },
+  cfg: OpenClawConfig            // Current gateway config
+}
+```
+
+**Security note:** Only privileged clients (including the Control UI) can trigger `session:patch` events. Standard WebChat clients are blocked from patching sessions, so the hook will not fire from those connections.
+
+See `SessionsPatchParamsSchema` in `src/gateway/protocol/schema/sessions.ts` for the complete type definition.
+
+#### Example: Session Patch Logger Hook
+
+```typescript
+const handler = async (event) => {
+  if (event.type !== "session" || event.action !== "patch") {
+    return;
+  }
+  const { patch } = event.context;
+  console.log(`[session-patch] Session updated: ${event.sessionKey}`);
+  console.log(`[session-patch] Changes:`, patch);
+};
+
+export default handler;
+```
 
 ### Message Events
 
@@ -399,20 +485,211 @@ These hooks are not event-stream listeners; they let plugins synchronously adjus
 
 ### Plugin Hook Events
 
+#### before_tool_call
+
+Runs before each tool call. Plugins can modify parameters, block the call, or request user approval.
+
+Return fields:
+
+- **`params`**: Override tool parameters (merged with original params)
+- **`block`**: Set to `true` to block the tool call
+- **`blockReason`**: Reason shown to the agent when blocked
+- **`requireApproval`**: Pause execution and wait for user approval via channels
+
+The `requireApproval` field triggers native platform approval (Telegram buttons, Discord components, `/approve` command) instead of relying on the agent to cooperate:
+
+```typescript
+{
+  requireApproval: {
+    title: "Sensitive operation",
+    description: "This tool call modifies production data",
+    severity: "warning",       // "info" | "warning" | "critical"
+    timeoutMs: 120000,         // default: 120s
+    timeoutBehavior: "deny",   // "allow" | "deny" (default)
+    onResolution: async (decision) => {
+      // Called after the user resolves: "allow-once", "allow-always", "deny", "timeout", or "cancelled"
+    },
+  }
+}
+```
+
+The `onResolution` callback is invoked with the final decision string after the approval resolves, times out, or is cancelled. It runs in-process within the plugin (not sent to the gateway). Use it to persist decisions, update caches, or perform cleanup.
+
+The `pluginId` field is stamped automatically by the hook runner from the plugin registration. When multiple plugins return `requireApproval`, the first one (highest priority) wins.
+
+`block` takes precedence over `requireApproval`: if the merged hook result has both `block: true` and a `requireApproval` field, the tool call is blocked immediately without triggering the approval flow. This ensures a higher-priority plugin's block cannot be overridden by a lower-priority plugin's approval request.
+
+If the gateway is unavailable or does not support plugin approvals, the tool call falls back to a soft block using the `description` as the block reason.
+
+#### before_install
+
+Runs after the built-in install security scan and before installation continues. OpenClaw fires this hook for interactive skill installs as well as plugin bundle, package, and single-file installs.
+
+Default behavior differs by target type:
+
+- Plugin installs fail closed on built-in scan `critical` findings and scan errors unless the operator explicitly uses `openclaw plugins install --dangerously-force-unsafe-install`.
+- Skill installs still surface built-in scan findings and scan errors as warnings and continue by default.
+
+Return fields:
+
+- **`findings`**: Additional scan findings to surface as warnings
+- **`block`**: Set to `true` to block the install
+- **`blockReason`**: Human-readable reason shown when blocked
+
+Event fields:
+
+- **`targetType`**: Install target category (`skill` or `plugin`)
+- **`targetName`**: Human-readable skill name or plugin id for the install target
+- **`sourcePath`**: Absolute path to the install target content being scanned
+- **`sourcePathKind`**: Whether the scanned content is a `file` or `directory`
+- **`origin`**: Normalized install origin when available (for example `openclaw-bundled`, `openclaw-workspace`, `plugin-bundle`, `plugin-package`, or `plugin-file`)
+- **`request`**: Provenance for the install request, including `kind`, `mode`, and optional `requestedSpecifier`
+- **`builtinScan`**: Structured result of the built-in scanner, including `status`, summary counts, findings, and optional `error`
+- **`skill`**: Skill install metadata when `targetType` is `skill`, including `installId` and the selected `installSpec`
+- **`plugin`**: Plugin install metadata when `targetType` is `plugin`, including the canonical `pluginId`, normalized `contentType`, optional `packageName` / `manifestId` / `version`, and `extensions`
+
+Example event (plugin package install):
+
+```json
+{
+  "targetType": "plugin",
+  "targetName": "acme-audit",
+  "sourcePath": "/var/folders/.../openclaw-plugin-acme-audit/package",
+  "sourcePathKind": "directory",
+  "origin": "plugin-package",
+  "request": {
+    "kind": "plugin-npm",
+    "mode": "install",
+    "requestedSpecifier": "@acme/openclaw-plugin-audit@1.4.2"
+  },
+  "builtinScan": {
+    "status": "ok",
+    "scannedFiles": 12,
+    "critical": 0,
+    "warn": 1,
+    "info": 0,
+    "findings": [
+      {
+        "severity": "warn",
+        "ruleId": "network_fetch",
+        "file": "dist/index.js",
+        "line": 88,
+        "message": "Dynamic network fetch detected during install review."
+      }
+    ]
+  },
+  "plugin": {
+    "pluginId": "acme-audit",
+    "contentType": "package",
+    "packageName": "@acme/openclaw-plugin-audit",
+    "manifestId": "acme-audit",
+    "version": "1.4.2",
+    "extensions": ["./dist/index.js"]
+  }
+}
+```
+
+Skill installs use the same event shape with `targetType: "skill"` and a `skill` object instead of `plugin`.
+
+Decision semantics:
+
+- `before_install`: `{ block: true }` is terminal and stops lower-priority handlers.
+- `before_install`: `{ block: false }` is treated as no decision.
+
+Use this hook for external security scanners, policy engines, or enterprise approval gates that need to audit install sources before they are installed.
+
+#### Compaction lifecycle
+
 Compaction lifecycle hooks exposed through the plugin hook runner:
 
 - **`before_compaction`**: Runs before compaction with count/token metadata
 - **`after_compaction`**: Runs after compaction with compaction summary metadata
 
-### Session Lifecycle Events
+### Complete Plugin Hook Reference
 
-- **`session:end`**: Fires when a session ends due to idle timeout or daily reset. Used by `context-digest` and `session-importance` hooks as a safety net to process the session even if `/new` was not explicitly issued.
+All 27 hooks registered via the Plugin SDK. Hooks marked **sequential** run in priority order and can modify results; **parallel** hooks are fire-and-forget.
+
+#### Model and prompt hooks
+
+| Hook                   | When                                         | Execution  | Returns                                                    |
+| ---------------------- | -------------------------------------------- | ---------- | ---------------------------------------------------------- |
+| `before_model_resolve` | Before model/provider lookup                 | Sequential | `{ modelOverride?, providerOverride? }`                    |
+| `before_prompt_build`  | After model resolved, session messages ready | Sequential | `{ systemPrompt?, prependContext?, appendSystemContext? }` |
+| `before_agent_start`   | Legacy combined hook (prefer the two above)  | Sequential | Union of both result shapes                                |
+| `llm_input`            | Immediately before the LLM API call          | Parallel   | `void`                                                     |
+| `llm_output`           | Immediately after LLM response received      | Parallel   | `void`                                                     |
+
+#### Agent lifecycle hooks
+
+| Hook                | When                                           | Execution | Returns |
+| ------------------- | ---------------------------------------------- | --------- | ------- |
+| `agent_end`         | After agent run completes (success or failure) | Parallel  | `void`  |
+| `before_reset`      | When `/new` or `/reset` clears a session       | Parallel  | `void`  |
+| `before_compaction` | Before compaction summarizes history           | Parallel  | `void`  |
+| `after_compaction`  | After compaction completes                     | Parallel  | `void`  |
+
+#### Session lifecycle hooks
+
+| Hook            | When                      | Execution | Returns |
+| --------------- | ------------------------- | --------- | ------- |
+| `session_start` | When a new session begins | Parallel  | `void`  |
+| `session_end`   | When a session ends       | Parallel  | `void`  |
+
+#### Message flow hooks
+
+| Hook                   | When                                              | Execution            | Returns                       |
+| ---------------------- | ------------------------------------------------- | -------------------- | ----------------------------- |
+| `inbound_claim`        | Before command/agent dispatch; first-claim wins   | Sequential           | `{ handled: boolean }`        |
+| `message_received`     | After an inbound message is received              | Parallel             | `void`                        |
+| `before_dispatch`      | After commands parsed, before model dispatch      | Sequential           | `{ handled: boolean, text? }` |
+| `message_sending`      | Before an outbound message is delivered           | Sequential           | `{ content?, cancel? }`       |
+| `message_sent`         | After an outbound message is delivered            | Parallel             | `void`                        |
+| `before_message_write` | Before a message is written to session transcript | **Sync**, sequential | `{ block?, message? }`        |
+
+#### Tool execution hooks
+
+| Hook                  | When                                          | Execution            | Returns                                               |
+| --------------------- | --------------------------------------------- | -------------------- | ----------------------------------------------------- |
+| `before_tool_call`    | Before each tool call                         | Sequential           | `{ params?, block?, blockReason?, requireApproval? }` |
+| `after_tool_call`     | After a tool call completes                   | Parallel             | `void`                                                |
+| `tool_result_persist` | Before a tool result is written to transcript | **Sync**, sequential | `{ message? }`                                        |
+
+#### Subagent hooks
+
+| Hook                       | When                                       | Execution  | Returns                           |
+| -------------------------- | ------------------------------------------ | ---------- | --------------------------------- |
+| `subagent_spawning`        | Before a subagent session is created       | Sequential | `{ status, threadBindingReady? }` |
+| `subagent_delivery_target` | After spawning, to resolve delivery target | Sequential | `{ origin? }`                     |
+| `subagent_spawned`         | After a subagent is fully spawned          | Parallel   | `void`                            |
+| `subagent_ended`           | When a subagent session terminates         | Parallel   | `void`                            |
+
+#### Gateway hooks
+
+| Hook            | When                                       | Execution | Returns |
+| --------------- | ------------------------------------------ | --------- | ------- |
+| `gateway_start` | After the gateway process is fully started | Parallel  | `void`  |
+| `gateway_stop`  | When the gateway is shutting down          | Parallel  | `void`  |
+
+#### Install hooks
+
+| Hook             | When                                                  | Execution  | Returns                               |
+| ---------------- | ----------------------------------------------------- | ---------- | ------------------------------------- |
+| `before_install` | After built-in security scan, before install proceeds | Sequential | `{ findings?, block?, blockReason? }` |
+
+<Note>
+Two hooks (`tool_result_persist` and `before_message_write`) are **synchronous only** — they must not return a Promise. Returning a Promise from these hooks is caught at runtime and the result is discarded with a warning.
+</Note>
+
+For full handler signatures and context types, see [Plugin Architecture](/plugins/architecture).
 
 ### Future Events
 
-Planned event types:
+The following event types are planned for the internal hook event stream.
+Note that `session_start` and `session_end` already exist as [Plugin Hook API](/plugins/architecture#provider-runtime-hooks) hooks
+but are not yet available as internal hook event keys in `HOOK.md` metadata:
 
-- **`session:start`**: When a new session begins
+- **`session:start`**: When a new session begins (planned for internal hook stream; available as plugin hook `session_start`)
+- **`session:end`**: When a session ends (planned for internal hook stream; available as plugin hook `session_end`)
 - **`agent:error`**: When an agent encounters an error
 
 ## Creating Custom Hooks
@@ -759,112 +1036,6 @@ Internal hooks must be enabled for this to run.
 openclaw hooks enable boot-md
 ```
 
-### context-digest
-
-Maintains a rolling cross-session digest at `memory/context-digest.md`. The "Open Items / Action Items" section is automatically injected into the agent's system prompt so the model has subconscious awareness of pending tasks without consuming significant token budget.
-
-**Events**: `command:new`, `command:reset`, `session:end`
-
-**Requirements**: `workspace.dir` must be configured
-
-**What it does**:
-
-1. Scans `sessions.json` for sessions updated within the configured window (default: 7 days)
-2. Reads transcripts (capped per session to control token use)
-3. Calls the LLM to generate a structured digest with four sections: Topics, Key Decisions, Open Items, and Important Context (falls back to a no-LLM summary if LLM is unavailable)
-4. Writes `memory/context-digest.md` (capped at 8 KB)
-5. On the next session start, the "Open Items" section is prepended to the system prompt as a read-only context hint
-
-**Output path**: `<workspace>/memory/context-digest.md`
-
-**Config**:
-
-| Option               | Type    | Default | Description                             |
-| -------------------- | ------- | ------- | --------------------------------------- |
-| `days`               | number  | 7       | Number of days to include in the digest |
-| `maxSessionMessages` | number  | 20      | Messages to read per session            |
-| `llmDigest`          | boolean | true    | Set to `false` for no-LLM fallback mode |
-
-```json
-{
-  "hooks": {
-    "internal": {
-      "entries": {
-        "context-digest": {
-          "enabled": true,
-          "days": 14,
-          "llmDigest": true
-        }
-      }
-    }
-  }
-}
-```
-
-**Enable**:
-
-```bash
-openclaw hooks enable context-digest
-```
-
-### session-importance
-
-Automatically identifies important conversations and archives them to `memory/important/` for permanent reference. Uses a two-stage pipeline: a fast multi-dimensional pre-filter (zero LLM cost for routine conversations) followed by LLM-based structured classification for sessions that pass the filter.
-
-**Events**: `command:new`, `command:reset`, `session:end`
-
-**Requirements**: `workspace.dir` must be configured
-
-**What it does**:
-
-1. Reads the previous session transcript
-2. **Stage 1 — Heuristic evaluation**: Scores the session across multiple signals — explicit intent keywords (`remember`, `记住`), code-block density, message depth, structured assistant replies, conversation turns, and domain keywords. Routine sessions are skipped at zero LLM cost.
-3. **Stage 2 — LLM classification**: For sessions that pass Stage 1, calls the LLM to extract category, slug, summary, key points, and action items. Falls back to keyword-only classification if LLM is unavailable.
-4. **Slug-based deduplication**: If a file with the same slug already exists, new content is appended with a timestamp divider instead of creating a duplicate.
-
-**Output path**: `<workspace>/memory/important/YYYY-MM-DD-<category>-<slug>.md`
-
-**Categories**:
-
-| Category    | When it applies                                     |
-| ----------- | --------------------------------------------------- |
-| `reference` | User explicitly asked to remember or save something |
-| `research`  | Experiments, datasets, methodology, literature      |
-| `project`   | Milestones, progress, deployments, releases         |
-| `decision`  | Architecture choices, trade-offs, comparisons       |
-| `routine`   | Everything else — silently skipped                  |
-
-**Config**:
-
-| Option           | Type     | Default | Description                                |
-| ---------------- | -------- | ------- | ------------------------------------------ |
-| `messages`       | number   | 30      | Messages to analyze per session            |
-| `llmClassify`    | boolean  | true    | Set to `false` for heuristic-only mode     |
-| `customKeywords` | string[] | `[]`    | Extra keywords that boost importance score |
-
-```json
-{
-  "hooks": {
-    "internal": {
-      "entries": {
-        "session-importance": {
-          "enabled": true,
-          "messages": 40,
-          "llmClassify": true,
-          "customKeywords": ["sprint", "OKR", "customer"]
-        }
-      }
-    }
-  }
-}
-```
-
-**Enable**:
-
-```bash
-openclaw hooks enable session-importance
-```
-
 ## Best Practices
 
 ### Keep Handlers Fast
@@ -934,10 +1105,8 @@ metadata: { "openclaw": { "events": ["command"] } } # General - more overhead
 
 The gateway logs hook loading at startup:
 
-```
-Registered hook: session-memory -> command:new
-Registered hook: context-digest -> command:new, command:reset, session:end
-Registered hook: session-importance -> command:new, command:reset, session:end
+```text
+Registered hook: session-memory -> command:new, command:reset
 Registered hook: bootstrap-extra-files -> agent:bootstrap
 Registered hook: command-logger -> command
 Registered hook: boot-md -> gateway:startup
