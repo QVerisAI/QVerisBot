@@ -42,9 +42,18 @@ type QverisExecutionResponse = {
   elapsed_time_ms: number;
 };
 
+function resolvePluginRootConfig(config?: OpenClawConfig): Record<string, unknown> | undefined {
+  const raw = config?.plugins?.entries?.qveris?.config;
+  return raw && typeof raw === "object" && !Array.isArray(raw)
+    ? (raw as Record<string, unknown>)
+    : undefined;
+}
+
 function resolveQverisRegion(config?: OpenClawConfig): QverisRegion {
   const qverisConfig = config?.tools?.qveris as Record<string, unknown> | undefined;
-  return qverisConfig?.region === "cn" ? "cn" : "global";
+  if (qverisConfig?.region === "cn") return "cn";
+  const pluginRoot = resolvePluginRootConfig(config);
+  return pluginRoot?.region === "cn" ? "cn" : "global";
 }
 
 function resolveQverisBaseUrl(
@@ -62,6 +71,13 @@ function resolveQverisBaseUrl(
     typeof globalQveris?.baseUrl === "string" ? globalQveris.baseUrl.trim() : "";
   if (fromGlobalConfig) {
     return fromGlobalConfig;
+  }
+
+  const pluginRoot = resolvePluginRootConfig(config);
+  const fromPluginRoot =
+    typeof pluginRoot?.baseUrl === "string" ? (pluginRoot.baseUrl as string).trim() : "";
+  if (fromPluginRoot) {
+    return fromPluginRoot;
   }
 
   const region = resolveQverisRegion(config);
@@ -98,6 +114,21 @@ function resolveQverisApiKey(
     });
     if (fromPluginEntry) {
       return fromPluginEntry;
+    }
+  }
+
+  // 2b. Check plugin config root: plugins.entries.qveris.config.apiKey
+  const pluginRootConfig = config?.plugins?.entries?.qveris?.config as
+    | Record<string, unknown>
+    | undefined;
+  if (pluginRootConfig?.apiKey) {
+    const fromPluginRoot = resolveWebSearchProviderCredential({
+      credentialValue: pluginRootConfig.apiKey,
+      path: "plugins.entries.qveris.config.apiKey",
+      envVars: [],
+    });
+    if (fromPluginRoot) {
+      return fromPluginRoot;
     }
   }
 
@@ -175,6 +206,7 @@ export function createQverisWebSearchProvider(): WebSearchProviderPlugin {
     id: "qveris",
     label: "QVeris",
     hint: "Requires QVeris API key · QVeris smart search",
+    onboardingScopes: ["text-inference"],
     credentialLabel: "QVeris API key",
     envVars: ["QVERIS_API_KEY"],
     placeholder: "qv-...",
@@ -182,16 +214,25 @@ export function createQverisWebSearchProvider(): WebSearchProviderPlugin {
     docsUrl: "https://docs.openclaw.ai/tools/web",
     autoDetectOrder: 25,
     credentialPath: "plugins.entries.qveris.config.webSearch.apiKey",
-    inactiveSecretPaths: ["plugins.entries.qveris.config.webSearch.apiKey"],
+    inactiveSecretPaths: [
+      "plugins.entries.qveris.config.webSearch.apiKey",
+      "plugins.entries.qveris.config.apiKey",
+    ],
     getCredentialValue: (searchConfig?: Record<string, unknown>) =>
       getScopedCredentialValue(searchConfig, "qveris"),
     setCredentialValue: (searchConfigTarget: Record<string, unknown>, value: unknown) =>
       setScopedCredentialValue(searchConfigTarget, "qveris", value),
     getConfiguredCredentialValue: (config?: OpenClawConfig) => {
-      // Also check global tools.qveris.apiKey as a fallback
       const pluginVal = resolveProviderWebSearchPluginConfig(config, "qveris")?.apiKey;
       if (pluginVal) {
         return pluginVal;
+      }
+      // Check plugin config root apiKey (plugins.entries.qveris.config.apiKey)
+      const pluginRootCfg = config?.plugins?.entries?.qveris?.config as
+        | Record<string, unknown>
+        | undefined;
+      if (pluginRootCfg?.apiKey) {
+        return pluginRootCfg.apiKey;
       }
       const globalQveris = config?.tools?.qveris as Record<string, unknown> | undefined;
       return globalQveris?.apiKey;

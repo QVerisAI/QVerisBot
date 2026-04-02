@@ -3,6 +3,9 @@
   "providerAuthEnvVars": {
     "qveris": ["QVERIS_API_KEY"]
   },
+  "contracts": {
+    "webSearchProviders": ["qveris"]
+  },
   "uiHints": {
     "webSearch.apiKey": {
       "label": "QVeris API Key",
@@ -29,6 +32,43 @@
             "type": "string"
           }
         }
+      },
+      "apiKey": {
+        "type": ["string", "object"]
+      },
+      "enabled": {
+        "type": "boolean"
+      },
+      "region": {
+        "type": "string",
+        "enum": ["global", "cn"]
+      },
+      "baseUrl": {
+        "type": "string"
+      },
+      "timeoutSeconds": {
+        "type": "integer"
+      },
+      "searchTimeoutSeconds": {
+        "type": "integer"
+      },
+      "executeTimeoutSeconds": {
+        "type": "integer"
+      },
+      "maxResponseSize": {
+        "type": "integer"
+      },
+      "searchLimit": {
+        "type": "integer"
+      },
+      "autoMaterializeFullContent": {
+        "type": "boolean"
+      },
+      "fullContentMaxBytes": {
+        "type": "integer"
+      },
+      "fullContentTimeoutSeconds": {
+        "type": "integer"
       }
     }
   }
