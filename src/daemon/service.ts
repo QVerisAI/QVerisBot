@@ -1,3 +1,4 @@
+import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
 import {
   installLaunchAgent,
   isLaunchAgentLoaded,
@@ -153,7 +154,7 @@ export function describeGatewayServiceRestart(
     return {
       scheduled: true,
       daemonActionResult: "scheduled",
-      message: `restart scheduled, ${serviceNoun.toLowerCase()} will restart momentarily`,
+      message: `restart scheduled, ${normalizeLowercaseStringOrEmpty(serviceNoun)} will restart momentarily`,
       progressMessage: `${serviceNoun} service restart scheduled.`,
     };
   }

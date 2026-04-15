@@ -6,10 +6,12 @@ import { formatRelativeTimestamp, formatDurationHuman } from "../format.ts";
 import type { GatewayHelloOk } from "../gateway.ts";
 import { icons } from "../icons.ts";
 import type { UiSettings } from "../storage.ts";
+import { normalizeLowercaseStringOrEmpty } from "../string-coerce.ts";
 import type {
   AttentionItem,
   CronJob,
   CronStatus,
+  ModelAuthStatusResult,
   SessionsListResult,
   SessionsUsageResult,
   SkillStatusReport,
@@ -37,7 +39,9 @@ export type OverviewProps = {
   cronEnabled: boolean | null;
   cronNext: number | null;
   lastChannelsRefresh: number | null;
+  warnQueryToken: boolean;
   // New dashboard data
+  modelAuthStatus: ModelAuthStatusResult | null;
   usageResult: SessionsUsageResult | null;
   sessionsResult: SessionsListResult | null;
   skillsReport: SkillStatusReport | null;
@@ -191,6 +195,25 @@ export function renderOverview(props: OverviewProps) {
     `;
   })();
 
+  const queryTokenHint = (() => {
+    if (props.connected || !props.lastError || !props.warnQueryToken) {
+      return null;
+    }
+    const lower = normalizeLowercaseStringOrEmpty(props.lastError);
+    const authFailed = lower.includes("unauthorized") || lower.includes("device identity required");
+    if (!authFailed) {
+      return null;
+    }
+    return html`
+      <div class="muted" style="margin-top: 8px">
+        Auth token must be passed as a URL fragment:
+        <span class="mono">#token=&lt;token&gt;</span>. Query parameters (<span class="mono"
+          >?token=</span
+        >) may appear in server logs.
+      </div>
+    `;
+  })();
+
   const currentLocale = isSupportedLocale(props.settings.locale)
     ? props.settings.locale
     : i18n.getLocale();
@@ -221,11 +244,11 @@ export function renderOverview(props: OverviewProps) {
             : html`
                 <label class="field">
                   <span>${t("overview.access.token")}</span>
-                  <div style="display: flex; align-items: center; gap: 8px;">
+                  <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
                     <input
                       type=${props.showGatewayToken ? "text" : "password"}
                       autocomplete="off"
-                      style="flex: 1;"
+                      style="flex: 1 1 0%; min-width: 0; box-sizing: border-box;"
                       .value=${props.settings.token}
                       @input=${(e: Event) => {
                         const v = (e.target as HTMLInputElement).value;
@@ -236,7 +259,7 @@ export function renderOverview(props: OverviewProps) {
                     <button
                       type="button"
                       class="btn btn--icon ${props.showGatewayToken ? "active" : ""}"
-                      style="width: 36px; height: 36px;"
+                      style="flex-shrink: 0; width: 36px; height: 36px; box-sizing: border-box;"
                       title=${props.showGatewayToken ? "Hide token" : "Show token"}
                       aria-label="Toggle token visibility"
                       aria-pressed=${props.showGatewayToken}
@@ -248,11 +271,11 @@ export function renderOverview(props: OverviewProps) {
                 </label>
                 <label class="field">
                   <span>${t("overview.access.password")}</span>
-                  <div style="display: flex; align-items: center; gap: 8px;">
+                  <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
                     <input
                       type=${props.showGatewayPassword ? "text" : "password"}
                       autocomplete="off"
-                      style="flex: 1;"
+                      style="flex: 1 1 0%; min-width: 0; width: 100%; box-sizing: border-box;"
                       .value=${props.password}
                       @input=${(e: Event) => {
                         const v = (e.target as HTMLInputElement).value;
@@ -263,7 +286,7 @@ export function renderOverview(props: OverviewProps) {
                     <button
                       type="button"
                       class="btn btn--icon ${props.showGatewayPassword ? "active" : ""}"
-                      style="width: 36px; height: 36px;"
+                      style="flex-shrink: 0; width: 36px; height: 36px; box-sizing: border-box;"
                       title=${props.showGatewayPassword ? "Hide password" : "Show password"}
                       aria-label="Toggle password visibility"
                       aria-pressed=${props.showGatewayPassword}
@@ -377,6 +400,7 @@ export function renderOverview(props: OverviewProps) {
           ? html`<div class="callout danger" style="margin-top: 14px;">
               <div>${props.lastError}</div>
               ${pairingHint ?? ""} ${authHint ?? ""} ${insecureContextHint ?? ""}
+              ${queryTokenHint ?? ""}
             </div>`
           : html`
               <div class="callout" style="margin-top: 14px">
@@ -394,6 +418,7 @@ export function renderOverview(props: OverviewProps) {
       skillsReport: props.skillsReport,
       cronJobs: props.cronJobs,
       cronStatus: props.cronStatus,
+      modelAuthStatus: props.modelAuthStatus,
       presenceCount: props.presenceCount,
       onNavigate: props.onNavigate,
     })}

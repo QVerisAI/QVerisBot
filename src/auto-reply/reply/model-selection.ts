@@ -11,21 +11,30 @@ import {
   normalizeModelRef,
   normalizeProviderId,
   resolveModelRefFromString,
+  resolvePersistedOverrideModelRef,
   resolveReasoningDefault,
   resolveThinkingDefault,
 } from "../../agents/model-selection.js";
-import { resolveSessionParentSessionKey } from "../../channels/plugins/session-conversation.js";
-import type { OpenClawConfig } from "../../config/config.js";
 import type { SessionEntry } from "../../config/sessions/types.js";
+import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { enqueueSystemEvent } from "../../infra/system-events.js";
 import { applyModelOverrideToSessionEntry } from "../../sessions/model-overrides.js";
+import { normalizeLowercaseStringOrEmpty } from "../../shared/string-coerce.js";
 import type { ThinkLevel } from "./directives.js";
+import { resolveStoredModelOverride } from "./stored-model-override.js";
 
 export type ModelDirectiveSelection = {
   provider: string;
   model: string;
   isDefault: boolean;
   alias?: string;
+};
+
+export type AmbiguousCandidate = {
+  provider: string;
+  model: string;
+  alias?: string;
+  score: number;
 };
 
 type ModelCatalog = ModelCatalogEntry[];
@@ -41,6 +50,23 @@ type ModelSelectionState = {
   resolveDefaultReasoningLevel: () => Promise<"on" | "off">;
   needsModelCatalog: boolean;
 };
+
+export function createFastTestModelSelectionState(params: {
+  agentCfg: NonNullable<NonNullable<OpenClawConfig["agents"]>["defaults"]> | undefined;
+  provider: string;
+  model: string;
+}): ModelSelectionState {
+  return {
+    provider: params.provider,
+    model: params.model,
+    allowedModelKeys: new Set<string>(),
+    allowedModelCatalog: [],
+    resetModelOverride: false,
+    resolveDefaultThinkingLevel: async () => params.agentCfg?.thinkingDefault as ThinkLevel,
+    resolveDefaultReasoningLevel: async () => "off",
+    needsModelCatalog: false,
+  };
+}
 
 function shouldLogModelSelectionTiming(): boolean {
   return process.env.OPENCLAW_DEBUG_INGRESS_TIMING === "1";
@@ -121,64 +147,6 @@ function boundedLevenshteinDistance(a: string, b: string, maxDistance: number): 
   return dist;
 }
 
-export type StoredModelOverride = {
-  provider?: string;
-  model: string;
-  source: "session" | "parent";
-};
-
-function resolveModelOverrideFromEntry(entry?: SessionEntry): {
-  provider?: string;
-  model: string;
-} | null {
-  const model = entry?.modelOverride?.trim();
-  if (!model) {
-    return null;
-  }
-  const provider = entry?.providerOverride?.trim() || undefined;
-  return { provider, model };
-}
-
-function resolveParentSessionKeyCandidate(params: {
-  sessionKey?: string;
-  parentSessionKey?: string;
-}): string | null {
-  const explicit = params.parentSessionKey?.trim();
-  if (explicit && explicit !== params.sessionKey) {
-    return explicit;
-  }
-  const derived = resolveSessionParentSessionKey(params.sessionKey);
-  if (derived && derived !== params.sessionKey) {
-    return derived;
-  }
-  return null;
-}
-
-export function resolveStoredModelOverride(params: {
-  sessionEntry?: SessionEntry;
-  sessionStore?: Record<string, SessionEntry>;
-  sessionKey?: string;
-  parentSessionKey?: string;
-}): StoredModelOverride | null {
-  const direct = resolveModelOverrideFromEntry(params.sessionEntry);
-  if (direct) {
-    return { ...direct, source: "session" };
-  }
-  const parentKey = resolveParentSessionKeyCandidate({
-    sessionKey: params.sessionKey,
-    parentSessionKey: params.parentSessionKey,
-  });
-  if (!parentKey || !params.sessionStore) {
-    return null;
-  }
-  const parentEntry = params.sessionStore[parentKey];
-  const parentOverride = resolveModelOverrideFromEntry(parentEntry);
-  if (!parentOverride) {
-    return null;
-  }
-  return { ...parentOverride, source: "parent" };
-}
-
 function scoreFuzzyMatch(params: {
   provider: string;
   model: string;
@@ -196,9 +164,9 @@ function scoreFuzzyMatch(params: {
 } {
   const provider = normalizeProviderId(params.provider);
   const model = params.model;
-  const fragment = params.fragment.trim().toLowerCase();
-  const providerLower = provider.toLowerCase();
-  const modelLower = model.toLowerCase();
+  const fragment = normalizeLowercaseStringOrEmpty(params.fragment);
+  const providerLower = normalizeLowercaseStringOrEmpty(provider);
+  const modelLower = normalizeLowercaseStringOrEmpty(model);
   const haystack = `${providerLower}/${modelLower}`;
   const key = modelKey(provider, model);
 
@@ -244,7 +212,7 @@ function scoreFuzzyMatch(params: {
 
   const aliases = params.aliasIndex.byKey.get(key) ?? [];
   for (const alias of aliases) {
-    score += scoreFragment(alias.toLowerCase(), {
+    score += scoreFragment(normalizeLowercaseStringOrEmpty(alias), {
       exact: 140,
       starts: 90,
       includes: 60,
@@ -331,13 +299,6 @@ export async function createModelSelectionState(params: {
   let model = params.model;
 
   const hasAllowlist = agentCfg?.models && Object.keys(agentCfg.models).length > 0;
-  const initialStoredOverride = resolveStoredModelOverride({
-    sessionEntry,
-    sessionStore,
-    sessionKey,
-    parentSessionKey,
-  });
-  const hasStoredOverride = Boolean(initialStoredOverride);
   const configuredModelCatalog = buildConfiguredModelCatalog({ cfg });
   const needsModelCatalog = params.hasModelDirective;
 
@@ -346,6 +307,11 @@ export async function createModelSelectionState(params: {
   let modelCatalog: ModelCatalog | null = null;
   let resetModelOverride = false;
   const agentEntry = params.agentId ? resolveAgentConfig(cfg, params.agentId) : undefined;
+  const directStoredOverride = resolvePersistedOverrideModelRef({
+    defaultProvider,
+    overrideProvider: sessionEntry?.providerOverride,
+    overrideModel: sessionEntry?.modelOverride,
+  });
 
   if (needsModelCatalog) {
     modelCatalog = await (await loadModelCatalogRuntime()).loadModelCatalog({ config: cfg });
@@ -381,33 +347,34 @@ export async function createModelSelectionState(params: {
     logStage("configured-catalog-ready", `entries=${configuredModelCatalog.length}`);
   }
 
-  if (sessionEntry && sessionStore && sessionKey && hasStoredOverride) {
-    const overrideProvider = sessionEntry.providerOverride?.trim() || defaultProvider;
-    const overrideModel = sessionEntry.modelOverride?.trim();
-    if (overrideModel) {
-      const normalizedOverride = normalizeModelRef(overrideProvider, overrideModel);
-      const key = modelKey(normalizedOverride.provider, normalizedOverride.model);
-      if (allowedModelKeys.size > 0 && !allowedModelKeys.has(key)) {
-        const { updated } = applyModelOverrideToSessionEntry({
-          entry: sessionEntry,
-          selection: { provider: defaultProvider, model: defaultModel, isDefault: true },
-        });
-        if (updated) {
-          sessionStore[sessionKey] = sessionEntry;
-          if (storePath) {
-            await (
-              await loadSessionStoreRuntime()
-            ).updateSessionStore(storePath, (store) => {
-              store[sessionKey] = sessionEntry;
-            });
-          }
-          enqueueSystemEvent(
-            `Model override ${overrideProvider}/${overrideModel} is no longer in the allowed list and was reset to default (${defaultProvider}/${defaultModel}).`,
-            { sessionKey },
-          );
+  if (sessionEntry && sessionStore && sessionKey && directStoredOverride) {
+    const normalizedOverride = normalizeModelRef(
+      directStoredOverride.provider,
+      directStoredOverride.model,
+    );
+    const key = modelKey(normalizedOverride.provider, normalizedOverride.model);
+    if (allowedModelKeys.size > 0 && !allowedModelKeys.has(key)) {
+      const { updated } = applyModelOverrideToSessionEntry({
+        entry: sessionEntry,
+        selection: { provider: defaultProvider, model: defaultModel, isDefault: true },
+      });
+      if (updated) {
+        sessionStore[sessionKey] = sessionEntry;
+        if (storePath) {
+          await (
+            await loadSessionStoreRuntime()
+          ).updateSessionStore(storePath, (store) => {
+            store[sessionKey] = sessionEntry;
+          });
         }
-        resetModelOverride = updated;
       }
+      if (updated) {
+        enqueueSystemEvent(
+          `Model override ${directStoredOverride.provider}/${directStoredOverride.model} is no longer in the allowed list and was reset to default (${defaultProvider}/${defaultModel}).`,
+          { sessionKey },
+        );
+      }
+      resetModelOverride = updated;
     }
   }
 
@@ -416,6 +383,7 @@ export async function createModelSelectionState(params: {
     sessionStore,
     sessionKey,
     parentSessionKey,
+    defaultProvider,
   });
   // Skip stored session model override only when an explicit heartbeat.model
   // was resolved. Heartbeat runs without heartbeat.model should still inherit
@@ -503,20 +471,13 @@ export async function createModelSelectionState(params: {
   };
 }
 
-export type AmbiguousCandidate = {
-  provider: string;
-  model: string;
-  alias?: string;
-  score: number;
-};
-
 export function resolveModelDirectiveSelection(params: {
   raw: string;
   defaultProvider: string;
   defaultModel: string;
   aliasIndex: ModelAliasIndex;
   allowedModelKeys: Set<string>;
-  /** When true, returns ambiguousCandidates instead of auto-picking when top scores are close. */
+  /** When true, return top candidates when the match is ambiguous. */
   detectAmbiguity?: boolean;
 }): {
   selection?: ModelDirectiveSelection;
@@ -527,7 +488,7 @@ export function resolveModelDirectiveSelection(params: {
     params;
 
   const rawTrimmed = raw.trim();
-  const rawLower = rawTrimmed.toLowerCase();
+  const rawLower = normalizeLowercaseStringOrEmpty(rawTrimmed);
 
   const pickAliasForKey = (provider: string, model: string): string | undefined =>
     aliasIndex.byKey.get(modelKey(provider, model))?.[0];
@@ -550,7 +511,7 @@ export function resolveModelDirectiveSelection(params: {
     error?: string;
     ambiguousCandidates?: AmbiguousCandidate[];
   } => {
-    const fragment = params.fragment.trim().toLowerCase();
+    const fragment = normalizeLowercaseStringOrEmpty(params.fragment);
     if (!fragment) {
       return {};
     }
@@ -640,8 +601,6 @@ export function resolveModelDirectiveSelection(params: {
       return {};
     }
 
-    // Ambiguity detection: when top-2 scores are close, surface candidates
-    // instead of auto-picking. Only active when caller opts in.
     const AMBIGUITY_GAP = 30;
     const secondScored = scored[1];
     if (
@@ -650,16 +609,18 @@ export function resolveModelDirectiveSelection(params: {
       secondScored.score >= minScore &&
       bestScored.score - secondScored.score < AMBIGUITY_GAP
     ) {
-      const topCandidates = scored
-        .filter((s) => s.score >= minScore && bestScored.score - s.score < AMBIGUITY_GAP)
-        .slice(0, 5)
-        .map((s) => ({
-          provider: s.candidate.provider,
-          model: s.candidate.model,
-          alias: pickAliasForKey(s.candidate.provider, s.candidate.model),
-          score: s.score,
-        }));
-      return { ambiguousCandidates: topCandidates };
+      return {
+        ambiguousCandidates: scored
+          .filter((candidate) => candidate.score >= minScore)
+          .filter((candidate) => bestScored.score - candidate.score < AMBIGUITY_GAP)
+          .slice(0, 5)
+          .map((candidate) => ({
+            provider: candidate.candidate.provider,
+            model: candidate.candidate.model,
+            alias: pickAliasForKey(candidate.candidate.provider, candidate.candidate.model),
+            score: candidate.score,
+          })),
+      };
     }
 
     return { selection: buildSelection(best.provider, best.model) };

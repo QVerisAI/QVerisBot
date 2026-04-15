@@ -1,21 +1,51 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { Type } from "@sinclair/typebox";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { jsonResult } from "../../agents/tools/common.js";
 import type { ChannelPlugin } from "../../channels/plugins/types.js";
 import type { OpenClawConfig } from "../../config/config.js";
-import { setActivePluginRegistry } from "../../plugins/runtime.js";
+import { loadWebMedia } from "../../media/web-media.js";
+import { getActivePluginRegistry, setActivePluginRegistry } from "../../plugins/runtime.js";
 import {
   createChannelTestPluginBase,
   createTestRegistry,
 } from "../../test-utils/channel-plugins.js";
 import { resolvePreferredOpenClawTmpDir } from "../tmp-openclaw-dir.js";
+import { runMessageAction } from "./message-action-runner.js";
 
 const onePixelPng = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5m8gAAAABJRU5ErkJggg==",
   "base64",
 );
+
+const channelResolutionMocks = vi.hoisted(() => ({
+  resolveOutboundChannelPlugin: vi.fn(),
+  executeSendAction: vi.fn(),
+  executePollAction: vi.fn(),
+}));
+
+vi.mock("./channel-resolution.js", () => ({
+  resolveOutboundChannelPlugin: channelResolutionMocks.resolveOutboundChannelPlugin,
+  resetOutboundChannelResolutionStateForTest: vi.fn(),
+}));
+
+vi.mock("./outbound-send-service.js", () => ({
+  executeSendAction: channelResolutionMocks.executeSendAction,
+  executePollAction: channelResolutionMocks.executePollAction,
+}));
+
+vi.mock("./outbound-session.js", () => ({
+  ensureOutboundSessionEntry: vi.fn(async () => undefined),
+  resolveOutboundSessionRoute: vi.fn(async () => null),
+}));
+
+vi.mock("./message-action-threading.js", async () => {
+  const { createOutboundThreadingMock } =
+    await import("./message-action-threading.test-helpers.js");
+  return createOutboundThreadingMock();
+});
 
 vi.mock("../../media/web-media.js", async () => {
   const actual = await vi.importActual<typeof import("../../media/web-media.js")>(
@@ -89,11 +119,7 @@ async function expectSandboxMediaRewrite(params: {
   );
 }
 
-type MessageActionRunnerModule = typeof import("./message-action-runner.js");
-type WebMediaModule = typeof import("../../media/web-media.js");
-
-let runMessageAction: MessageActionRunnerModule["runMessageAction"];
-let loadWebMedia: WebMediaModule["loadWebMedia"];
+let actualLoadWebMedia: typeof loadWebMedia;
 
 const slackPlugin: ChannelPlugin = {
   ...createChannelTestPluginBase({
@@ -128,10 +154,54 @@ const slackPlugin: ChannelPlugin = {
 
 describe("runMessageAction media behavior", () => {
   beforeEach(async () => {
-    vi.resetModules();
-    ({ runMessageAction } = await import("./message-action-runner.js"));
-    ({ loadWebMedia } = await import("../../media/web-media.js"));
+    actualLoadWebMedia ??= (
+      await vi.importActual<typeof import("../../media/web-media.js")>("../../media/web-media.js")
+    ).loadWebMedia;
+    vi.restoreAllMocks();
     vi.clearAllMocks();
+    channelResolutionMocks.resolveOutboundChannelPlugin.mockReset();
+    channelResolutionMocks.resolveOutboundChannelPlugin.mockImplementation(
+      ({ channel }: { channel: string }) =>
+        getActivePluginRegistry()?.channels.find((entry) => entry?.plugin?.id === channel)?.plugin,
+    );
+    channelResolutionMocks.executeSendAction.mockReset();
+    channelResolutionMocks.executeSendAction.mockImplementation(
+      async ({
+        ctx,
+        to,
+        message,
+        mediaUrl,
+        mediaUrls,
+      }: {
+        ctx: { channel: string; dryRun: boolean };
+        to: string;
+        message: string;
+        mediaUrl?: string;
+        mediaUrls?: string[];
+      }) => ({
+        handledBy: "core" as const,
+        payload: {
+          channel: ctx.channel,
+          to,
+          message,
+          mediaUrl,
+          mediaUrls,
+          dryRun: ctx.dryRun,
+        },
+        sendResult: {
+          channel: ctx.channel,
+          messageId: "msg-test",
+          ...(mediaUrl ? { mediaUrl } : {}),
+          ...(mediaUrls ? { mediaUrls } : {}),
+        },
+      }),
+    );
+    channelResolutionMocks.executePollAction.mockReset();
+    channelResolutionMocks.executePollAction.mockImplementation(async () => {
+      throw new Error("executePollAction should not run in media tests");
+    });
+    vi.mocked(loadWebMedia).mockReset();
+    vi.mocked(loadWebMedia).mockImplementation(actualLoadWebMedia);
   });
 
   describe("sendAttachment hydration", () => {
@@ -265,7 +335,7 @@ describe("runMessageAction media behavior", () => {
       const call = vi.mocked(loadWebMedia).mock.calls[0];
       expect(call?.[1]).toEqual(
         expect.objectContaining({
-          localRoots: "any",
+          localRoots: expect.any(Array),
           readFile: expect.any(Function),
           hostReadCapability: true,
         }),
@@ -452,6 +522,139 @@ describe("runMessageAction media behavior", () => {
           cfg: { tools: { fs: { workspaceOnly: true } } },
         });
       }
+    });
+  });
+
+  describe("plugin-owned media-source discovery routing", () => {
+    const profilePlugin: ChannelPlugin = {
+      ...createChannelTestPluginBase({
+        id: "profile-demo",
+        label: "Profile Demo",
+        capabilities: { chatTypes: ["direct"] },
+        config: {
+          listAccountIds: () => ["default"],
+          isConfigured: () => true,
+        },
+      }),
+      outbound: {
+        deliveryMode: "direct",
+        resolveTarget: ({ to }) => ({ ok: true, to: to?.trim() ?? "profile-demo-target" }),
+        sendText: async () => ({ channel: "profile-demo", messageId: "msg-test" }),
+        sendMedia: async () => ({ channel: "profile-demo", messageId: "msg-test" }),
+      },
+      actions: {
+        describeMessageTool: () => ({
+          actions: ["send", "set-profile"],
+          mediaSourceParams: {
+            "set-profile": ["avatarPath", "avatarUrl"],
+          },
+          schema: {
+            properties: {
+              avatarPath: Type.Optional(Type.String({ description: "Local avatar path" })),
+              avatarUrl: Type.Optional(Type.String({ description: "Remote avatar URL" })),
+              displayName: Type.Optional(Type.String()),
+            },
+          },
+        }),
+        supportsAction: ({ action }) => action === "set-profile" || action === "send",
+        handleAction: async ({ params, mediaLocalRoots }) =>
+          jsonResult({
+            ok: true,
+            avatarPath: params.avatarPath,
+            avatarUrl: params.avatarUrl,
+            mediaLocalRoots,
+          }),
+      },
+    };
+
+    beforeEach(() => {
+      setActivePluginRegistry(
+        createTestRegistry([
+          {
+            pluginId: "profile-demo",
+            source: "test",
+            plugin: profilePlugin,
+          },
+        ]),
+      );
+    });
+
+    afterEach(() => {
+      setActivePluginRegistry(createTestRegistry([]));
+    });
+
+    it("rewrites plugin-owned sandbox media params and preserves mxc URLs", async () => {
+      await withSandbox(async (sandboxDir) => {
+        const result = await runMessageAction({
+          cfg: {} as OpenClawConfig,
+          action: "set-profile",
+          params: {
+            channel: "profile-demo",
+            avatarPath: "/workspace/avatars/profile.png",
+            avatarUrl: "mxc://matrix.org/abc123def456",
+          },
+          sandboxRoot: sandboxDir,
+        });
+
+        expect(result.kind).toBe("action");
+        expect(result.payload).toMatchObject({
+          ok: true,
+          avatarPath: path.join(sandboxDir, "avatars", "profile.png"),
+          avatarUrl: "mxc://matrix.org/abc123def456",
+        });
+      });
+    });
+
+    it("routes plugin-owned host media hints into local-root expansion", async () => {
+      const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "msg-profile-media-"));
+      try {
+        const avatarPath = path.join(tempDir, "profile.png");
+        await fs.writeFile(avatarPath, onePixelPng);
+
+        const result = await runMessageAction({
+          cfg: {
+            tools: { fs: { workspaceOnly: false } },
+          } as OpenClawConfig,
+          action: "set-profile",
+          params: {
+            channel: "profile-demo",
+            avatarPath,
+          },
+        });
+
+        expect(result.kind).toBe("action");
+        expect((result.payload as { mediaLocalRoots?: string[] }).mediaLocalRoots).toEqual(
+          expect.arrayContaining([tempDir]),
+        );
+      } finally {
+        await fs.rm(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("does not apply set-profile media params to send actions", async () => {
+      await withSandbox(async (sandboxDir) => {
+        const avatarUrl = "data:text/plain;base64,SGVsbG8=";
+        const result = await runMessageAction({
+          cfg: {} as OpenClawConfig,
+          action: "send",
+          dryRun: true,
+          params: {
+            channel: "profile-demo",
+            target: "@profile-demo",
+            message: "hi",
+            avatarUrl,
+          },
+          sandboxRoot: sandboxDir,
+        });
+
+        expect(result.kind).toBe("send");
+        if (result.kind !== "send") {
+          throw new Error("expected send result");
+        }
+        expect(result.sendResult).toMatchObject({
+          channel: "profile-demo",
+        });
+      });
     });
   });
 

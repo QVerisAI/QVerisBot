@@ -9,6 +9,7 @@ import {
   resolveNpmDistTagMirrorAuth as resolveNpmDistTagMirrorAuthBase,
   parseReleaseVersion as parseReleaseVersionBase,
 } from "./lib/npm-publish-plan.mjs";
+import { WORKSPACE_TEMPLATE_PACK_PATHS } from "./lib/workspace-bootstrap-smoke.mjs";
 
 type PackageJson = {
   name?: string;
@@ -54,8 +55,33 @@ export type NpmDistTagMirrorAuth = {
 };
 const EXPECTED_REPOSITORY_URL = "https://github.com/openclaw/openclaw";
 const MAX_CALVER_DISTANCE_DAYS = 2;
-const REQUIRED_PACKED_PATHS = ["dist/control-ui/index.html"];
+const LEGACY_UPDATE_COMPAT_PACKED_PATHS = [
+  "dist/extensions/qa-channel/runtime-api.js",
+  "dist/extensions/qa-lab/runtime-api.js",
+] as const;
+const REQUIRED_PACKED_PATHS = [
+  "dist/control-ui/index.html",
+  ...LEGACY_UPDATE_COMPAT_PACKED_PATHS,
+  ...WORKSPACE_TEMPLATE_PACK_PATHS,
+];
 const CONTROL_UI_ASSET_PREFIX = "dist/control-ui/assets/";
+const FORBIDDEN_PACKED_PATH_RULES = [
+  {
+    prefix: "docs/.generated/",
+    describe: (packedPath: string) =>
+      `npm package must not include generated docs artifact "${packedPath}".`,
+  },
+  {
+    prefix: "dist/extensions/qa-channel/",
+    describe: (packedPath: string) =>
+      `npm package must not include private QA channel artifact "${packedPath}".`,
+  },
+  {
+    prefix: "dist/extensions/qa-lab/",
+    describe: (packedPath: string) =>
+      `npm package must not include private QA lab artifact "${packedPath}".`,
+  },
+] as const;
 const NPM_PACK_MAX_BUFFER_BYTES = 64 * 1024 * 1024;
 const skipPackValidationEnv = "OPENCLAW_NPM_RELEASE_SKIP_PACK_CHECK";
 
@@ -437,7 +463,27 @@ function collectPackedTarballErrors(): string[] {
       .filter((path): path is string => typeof path === "string" && path.length > 0),
   );
 
-  return collectControlUiPackErrors(packedPaths);
+  return [
+    ...collectControlUiPackErrors(packedPaths),
+    ...collectForbiddenPackedPathErrors(packedPaths),
+  ];
+}
+
+export function collectForbiddenPackedPathErrors(paths: Iterable<string>): string[] {
+  const errors: string[] = [];
+  for (const packedPath of paths) {
+    if ((LEGACY_UPDATE_COMPAT_PACKED_PATHS as readonly string[]).includes(packedPath)) {
+      continue;
+    }
+    const matchedRule = FORBIDDEN_PACKED_PATH_RULES.find((rule) =>
+      packedPath.startsWith(rule.prefix),
+    );
+    if (!matchedRule) {
+      continue;
+    }
+    errors.push(matchedRule.describe(packedPath));
+  }
+  return errors.toSorted((left, right) => left.localeCompare(right));
 }
 
 function main(): number {

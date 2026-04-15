@@ -40,7 +40,7 @@ EXPECTED_VERSION="${QVERISBOT_INSTALL_EXPECT_VERSION:-${OPENCLAW_INSTALL_EXPECT_
 if [[ -n "$EXPECTED_VERSION" ]]; then
   LATEST_VERSION="$EXPECTED_VERSION"
 else
-  LATEST_VERSION="$(npm view "$PACKAGE_NAME" version)"
+  LATEST_VERSION="$(quiet_npm view "$PACKAGE_NAME" version)"
 fi
 echo "==> Verify CLI installed: $CLI_NAME"
 CMD_PATH="$(command -v "$CLI_NAME" || true)"
