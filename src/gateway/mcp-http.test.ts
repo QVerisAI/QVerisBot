@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { getFreePortBlockWithPermissionFallback } from "../test-utils/ports.js";
+import {
+  canListenOnLoopbackForTests,
+  getFreePortBlockWithPermissionFallback,
+} from "../test-utils/ports.js";
 
 const resolveGatewayScopedToolsMock = vi.hoisted(() =>
   vi.fn(() => ({
@@ -39,6 +42,7 @@ import {
 } from "./mcp-http.js";
 
 let server: Awaited<ReturnType<typeof startMcpLoopbackServer>> | undefined;
+const CAN_RUN_LOOPBACK_TESTS = canListenOnLoopbackForTests();
 
 async function sendRaw(params: {
   port: number;
@@ -56,29 +60,31 @@ async function sendRaw(params: {
   });
 }
 
-beforeEach(() => {
-  resolveGatewayScopedToolsMock.mockClear();
-  resolveGatewayScopedToolsMock.mockReturnValue({
-    agentId: "main",
-    tools: [
-      {
-        name: "message",
-        description: "send a message",
-        parameters: { type: "object", properties: {} },
-        execute: async () => ({
-          content: [{ type: "text", text: "ok" }],
-        }),
-      },
-    ],
+if (CAN_RUN_LOOPBACK_TESTS) {
+  beforeEach(() => {
+    resolveGatewayScopedToolsMock.mockClear();
+    resolveGatewayScopedToolsMock.mockReturnValue({
+      agentId: "main",
+      tools: [
+        {
+          name: "message",
+          description: "send a message",
+          parameters: { type: "object", properties: {} },
+          execute: async () => ({
+            content: [{ type: "text", text: "ok" }],
+          }),
+        },
+      ],
+    });
   });
-});
 
-afterEach(async () => {
-  await server?.close();
-  server = undefined;
-});
+  afterEach(async () => {
+    await server?.close();
+    server = undefined;
+  });
+}
 
-describe("mcp loopback server", () => {
+describe.skipIf(!CAN_RUN_LOOPBACK_TESTS)("mcp loopback server", () => {
   it("passes session, account, and message channel headers into shared tool resolution", async () => {
     const port = await getFreePortBlockWithPermissionFallback({
       offsets: [0],

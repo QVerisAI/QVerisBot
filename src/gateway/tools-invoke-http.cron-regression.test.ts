@@ -1,6 +1,7 @@
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { canListenOnLoopbackForTests } from "../test-utils/ports.js";
 
 const TEST_GATEWAY_TOKEN = "test-gateway-token-1234567890";
 const resolveToolLoopDetectionConfig = () => ({ warnAt: 3 });
@@ -73,44 +74,47 @@ const { handleToolsInvokeHttpRequest } = await import("./tools-invoke-http.js");
 
 let port = 0;
 let server: ReturnType<typeof createServer> | undefined;
+const CAN_RUN_LOOPBACK_TESTS = canListenOnLoopbackForTests();
 
-beforeAll(async () => {
-  server = createServer((req, res) => {
-    void (async () => {
-      const handled = await handleToolsInvokeHttpRequest(req, res, {
-        auth: { mode: "token", token: TEST_GATEWAY_TOKEN, allowTailscale: false },
+if (CAN_RUN_LOOPBACK_TESTS) {
+  beforeAll(async () => {
+    server = createServer((req, res) => {
+      void (async () => {
+        const handled = await handleToolsInvokeHttpRequest(req, res, {
+          auth: { mode: "token", token: TEST_GATEWAY_TOKEN, allowTailscale: false },
+        });
+        if (handled) {
+          return;
+        }
+        res.statusCode = 404;
+        res.end("not found");
+      })().catch((err) => {
+        res.statusCode = 500;
+        res.end(String(err));
       });
-      if (handled) {
-        return;
-      }
-      res.statusCode = 404;
-      res.end("not found");
-    })().catch((err) => {
-      res.statusCode = 500;
-      res.end(String(err));
+    });
+    await new Promise<void>((resolve, reject) => {
+      server?.once("error", reject);
+      server?.listen(0, "127.0.0.1", () => {
+        const address = server?.address() as AddressInfo | null;
+        port = address?.port ?? 0;
+        resolve();
+      });
     });
   });
-  await new Promise<void>((resolve, reject) => {
-    server?.once("error", reject);
-    server?.listen(0, "127.0.0.1", () => {
-      const address = server?.address() as AddressInfo | null;
-      port = address?.port ?? 0;
-      resolve();
-    });
+
+  afterAll(async () => {
+    if (!server) {
+      return;
+    }
+    await new Promise<void>((resolve) => server?.close(() => resolve()));
+    server = undefined;
   });
-});
 
-afterAll(async () => {
-  if (!server) {
-    return;
-  }
-  await new Promise<void>((resolve) => server?.close(() => resolve()));
-  server = undefined;
-});
-
-beforeEach(() => {
-  cfg = {};
-});
+  beforeEach(() => {
+    cfg = {};
+  });
+}
 
 async function invoke(tool: string, scopes = "operator.write") {
   return await fetch(`http://127.0.0.1:${port}/tools/invoke`, {
@@ -124,7 +128,7 @@ async function invoke(tool: string, scopes = "operator.write") {
   });
 }
 
-describe("tools invoke HTTP denylist", () => {
+describe.skipIf(!CAN_RUN_LOOPBACK_TESTS)("tools invoke HTTP denylist", () => {
   it("blocks cron and gateway by default", async () => {
     const gatewayRes = await invoke("gateway");
     const cronRes = await invoke("cron", "operator.admin");

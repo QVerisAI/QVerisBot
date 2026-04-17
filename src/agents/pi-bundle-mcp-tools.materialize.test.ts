@@ -1,6 +1,7 @@
 import { createRequire } from "node:module";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { canListenOnLoopbackForTests } from "../test-utils/ports.js";
 import {
   cleanupBundleMcpHarness,
   makeTempDir,
@@ -14,6 +15,7 @@ import { createBundleMcpToolRuntime } from "./pi-bundle-mcp-tools.js";
 const require = createRequire(import.meta.url);
 const SDK_SERVER_MCP_PATH = require.resolve("@modelcontextprotocol/sdk/server/mcp.js");
 const SDK_SERVER_STDIO_PATH = require.resolve("@modelcontextprotocol/sdk/server/stdio.js");
+const CAN_RUN_LOOPBACK_TESTS = canListenOnLoopbackForTests();
 
 afterEach(async () => {
   await cleanupBundleMcpHarness();
@@ -114,7 +116,7 @@ describe("createBundleMcpToolRuntime", () => {
     }
   });
 
-  it("loads configured SSE MCP tools via url", async () => {
+  it.skipIf(!CAN_RUN_LOOPBACK_TESTS)("loads configured SSE MCP tools via url", async () => {
     vi.useRealTimers();
     const sseServer = await startSseProbeServer();
 

@@ -505,10 +505,10 @@ describe("test-projects args", () => {
           totalMemoryBytes: 16 * 1024 ** 3,
         },
       ),
-    ).toBe(4);
+    ).toBe(1);
   });
 
-  it("gives parallel Vitest shards separate filesystem module caches", () => {
+  it("disables the experimental filesystem module cache by default for parallel shards", () => {
     const specs = applyParallelVitestCachePaths(
       [
         {
@@ -523,6 +523,33 @@ describe("test-projects args", () => {
       {
         cwd: "/repo",
         env: {},
+      },
+    );
+
+    expect(specs[0]?.env).toMatchObject({
+      KEEP_ME: "1",
+      OPENCLAW_VITEST_FS_MODULE_CACHE: "0",
+    });
+    expect(specs[1]?.env.OPENCLAW_VITEST_FS_MODULE_CACHE).toBe("0");
+  });
+
+  it("assigns separate filesystem module cache paths when explicitly enabled", () => {
+    const specs = applyParallelVitestCachePaths(
+      [
+        {
+          config: "test/vitest/vitest.gateway.config.ts",
+          env: { KEEP_ME: "1" },
+        },
+        {
+          config: "test/vitest/vitest.gateway-server.config.ts",
+          env: {},
+        },
+      ],
+      {
+        cwd: "/repo",
+        env: {
+          OPENCLAW_VITEST_PARALLEL_FS_CACHE_PATHS: "1",
+        },
       },
     );
 

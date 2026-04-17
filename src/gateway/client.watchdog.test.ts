@@ -3,6 +3,7 @@ import { createServer } from "node:net";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { WebSocket, WebSocketServer } from "ws";
 import { rawDataToString } from "../infra/ws.js";
+import { canListenOnLoopbackForTests } from "../test-utils/ports.js";
 import { GatewayClient, resolveGatewayClientConnectChallengeTimeoutMs } from "./client.js";
 import {
   DEFAULT_PREAUTH_HANDSHAKE_TIMEOUT_MS,
@@ -61,22 +62,25 @@ function trackSettlement(promise: Promise<unknown>): () => boolean {
 describe("GatewayClient", () => {
   let wss: WebSocketServer | null = null;
   let httpsServer: ReturnType<typeof createHttpsServer> | null = null;
+  const CAN_RUN_LOOPBACK_TESTS = canListenOnLoopbackForTests();
 
-  afterEach(async () => {
-    if (wss) {
-      for (const client of wss.clients) {
-        client.terminate();
+  if (CAN_RUN_LOOPBACK_TESTS) {
+    afterEach(async () => {
+      if (wss) {
+        for (const client of wss.clients) {
+          client.terminate();
+        }
+        await new Promise<void>((resolve) => wss?.close(() => resolve()));
+        wss = null;
       }
-      await new Promise<void>((resolve) => wss?.close(() => resolve()));
-      wss = null;
-    }
-    if (httpsServer) {
-      httpsServer.closeAllConnections?.();
-      httpsServer.closeIdleConnections?.();
-      await new Promise<void>((resolve) => httpsServer?.close(() => resolve()));
-      httpsServer = null;
-    }
-  });
+      if (httpsServer) {
+        httpsServer.closeAllConnections?.();
+        httpsServer.closeIdleConnections?.();
+        await new Promise<void>((resolve) => httpsServer?.close(() => resolve()));
+        httpsServer = null;
+      }
+    });
+  }
 
   test("prefers connectChallengeTimeoutMs and still honors the legacy alias", () => {
     expect(resolveGatewayClientConnectChallengeTimeoutMs({})).toBe(
@@ -96,54 +100,58 @@ describe("GatewayClient", () => {
     ).toBe(5_000);
   });
 
-  test("closes on missing ticks", async () => {
-    const port = await getFreePort();
-    wss = new WebSocketServer({ port, host: "127.0.0.1" });
+  test.skipIf(!CAN_RUN_LOOPBACK_TESTS)(
+    "closes on missing ticks",
+    async () => {
+      const port = await getFreePort();
+      wss = new WebSocketServer({ port, host: "127.0.0.1" });
 
-    wss.on("connection", (socket) => {
-      socket.once("message", (data) => {
-        const first = JSON.parse(rawDataToString(data)) as { id?: string };
-        const id = first.id ?? "connect";
-        // Respond with tiny tick interval to trigger watchdog quickly.
-        const helloOk = {
-          type: "hello-ok",
-          protocol: 2,
-          server: { version: "dev", connId: "c1" },
-          features: { methods: [], events: [] },
-          snapshot: {
-            presence: [],
-            health: {},
-            stateVersion: { presence: 1, health: 1 },
-            uptimeMs: 1,
-          },
-          policy: {
-            maxPayload: 512 * 1024,
-            maxBufferedBytes: 1024 * 1024,
-            tickIntervalMs: 5,
-          },
-        };
-        socket.send(JSON.stringify({ type: "res", id, ok: true, payload: helloOk }));
+      wss.on("connection", (socket) => {
+        socket.once("message", (data) => {
+          const first = JSON.parse(rawDataToString(data)) as { id?: string };
+          const id = first.id ?? "connect";
+          // Respond with tiny tick interval to trigger watchdog quickly.
+          const helloOk = {
+            type: "hello-ok",
+            protocol: 2,
+            server: { version: "dev", connId: "c1" },
+            features: { methods: [], events: [] },
+            snapshot: {
+              presence: [],
+              health: {},
+              stateVersion: { presence: 1, health: 1 },
+              uptimeMs: 1,
+            },
+            policy: {
+              maxPayload: 512 * 1024,
+              maxBufferedBytes: 1024 * 1024,
+              tickIntervalMs: 5,
+            },
+          };
+          socket.send(JSON.stringify({ type: "res", id, ok: true, payload: helloOk }));
+        });
       });
-    });
 
-    const closed = new Promise<{ code: number; reason: string }>((resolve) => {
-      const client = new GatewayClient({
-        url: `ws://127.0.0.1:${port}`,
-        connectChallengeTimeoutMs: 0,
-        tickWatchMinIntervalMs: 5,
-        onClose: (code, reason) => resolve({ code, reason }),
+      const closed = new Promise<{ code: number; reason: string }>((resolve) => {
+        const client = new GatewayClient({
+          url: `ws://127.0.0.1:${port}`,
+          connectChallengeTimeoutMs: 0,
+          tickWatchMinIntervalMs: 5,
+          onClose: (code, reason) => resolve({ code, reason }),
+        });
+        client.start();
       });
-      client.start();
-    });
 
-    const res = await closed;
-    // Depending on auth/challenge timing in the harness, the client can either
-    // hit the tick watchdog (4000) or close with policy violation (1008).
-    expect([4000, 1008]).toContain(res.code);
-    if (res.code === 4000) {
-      expect(res.reason).toContain("tick timeout");
-    }
-  }, 4000);
+      const res = await closed;
+      // Depending on auth/challenge timing in the harness, the client can either
+      // hit the tick watchdog (4000) or close with policy violation (1008).
+      expect([4000, 1008]).toContain(res.code);
+      if (res.code === 4000) {
+        expect(res.reason).toContain("tick timeout");
+      }
+    },
+    4000,
+  );
 
   test("times out unresolved requests and clears pending state", async () => {
     vi.useFakeTimers();
@@ -227,7 +235,7 @@ describe("GatewayClient", () => {
     }
   });
 
-  test("rejects mismatched tls fingerprint", async () => {
+  test.skipIf(!CAN_RUN_LOOPBACK_TESTS)("rejects mismatched tls fingerprint", async () => {
     const key = [
       "-----BEGIN PRIVATE KEY-----", // pragma: allowlist secret
       "MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDrur5CWp4psMMb",

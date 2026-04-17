@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   acquireLocalHeavyCheckLockSync,
   applyLocalOxlintPolicy,
@@ -20,6 +20,10 @@ const ROOMY_HOST = {
   totalMemoryBytes: 128 * GIB,
   logicalCpuCount: 16,
 };
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 function makeEnv(overrides: Record<string, string | undefined> = {}) {
   return {
@@ -342,5 +346,57 @@ describe("local-heavy-check-runtime", () => {
 
     release();
     expect(fs.existsSync(heavyCheckLockDir)).toBe(false);
+  });
+
+  it("continues without the heavy-check lock when the lock root is not writable", () => {
+    const cwd = createTempDir("openclaw-local-heavy-check-permission-root-");
+    const realMkdirSync = fs.mkdirSync;
+    const mkdirSync = vi.spyOn(fs, "mkdirSync");
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    mkdirSync.mockImplementation((target, options) => {
+      if (String(target).endsWith(`${path.sep}openclaw-local-checks`)) {
+        const error = new Error("permission denied") as NodeJS.ErrnoException;
+        error.code = "EPERM";
+        throw error;
+      }
+      return realMkdirSync.call(fs, target, options as fs.MakeDirectoryOptions);
+    });
+
+    const release = acquireLocalHeavyCheckLockSync({
+      cwd,
+      env: makeEnv(),
+      toolName: "test",
+    });
+
+    expect(release).toBeTypeOf("function");
+    expect(consoleError).toHaveBeenCalledWith(
+      expect.stringContaining("[test] local heavy-check lock unavailable"),
+    );
+  });
+
+  it("continues without the heavy-check lock when the lock dir itself is not writable", () => {
+    const cwd = createTempDir("openclaw-local-heavy-check-permission-lock-");
+    const realMkdirSync = fs.mkdirSync;
+    const mkdirSync = vi.spyOn(fs, "mkdirSync");
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    mkdirSync.mockImplementation((target, options) => {
+      if (String(target).endsWith(`${path.sep}heavy-check.lock`)) {
+        const error = new Error("permission denied") as NodeJS.ErrnoException;
+        error.code = "EPERM";
+        throw error;
+      }
+      return realMkdirSync.call(fs, target, options as fs.MakeDirectoryOptions);
+    });
+
+    const release = acquireLocalHeavyCheckLockSync({
+      cwd,
+      env: makeEnv(),
+      toolName: "test",
+    });
+
+    expect(release).toBeTypeOf("function");
+    expect(consoleError).toHaveBeenCalledWith(
+      expect.stringContaining("[test] local heavy-check lock unavailable"),
+    );
   });
 });

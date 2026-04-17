@@ -88,7 +88,9 @@ const UI_VITEST_CONFIG = "test/vitest/vitest.ui.config.ts";
 const UTILS_VITEST_CONFIG = "test/vitest/vitest.utils.config.ts";
 const WIZARD_VITEST_CONFIG = "test/vitest/vitest.wizard.config.ts";
 const INCLUDE_FILE_ENV_KEY = "OPENCLAW_VITEST_INCLUDE_FILE";
+const FS_MODULE_CACHE_ENV_KEY = "OPENCLAW_VITEST_FS_MODULE_CACHE";
 const FS_MODULE_CACHE_PATH_ENV_KEY = "OPENCLAW_VITEST_FS_MODULE_CACHE_PATH";
+const PARALLEL_FS_MODULE_CACHE_PATHS_ENV_KEY = "OPENCLAW_VITEST_PARALLEL_FS_CACHE_PATHS";
 const CHANGED_ARGS_PATTERN = /^--changed(?:=(.+))?$/u;
 const VITEST_CONFIG_BY_KIND = {
   acp: ACP_VITEST_CONFIG,
@@ -663,6 +665,11 @@ function parsePositiveInt(value) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
+function isTruthyEnvValue(value) {
+  const normalized = value?.trim().toLowerCase();
+  return normalized === "1" || normalized === "true";
+}
+
 function hasConservativeVitestWorkerBudget(env) {
   const workerBudget = parsePositiveInt(
     env.OPENCLAW_VITEST_MAX_WORKERS ?? env.OPENCLAW_TEST_WORKERS,
@@ -704,13 +711,36 @@ function sanitizeVitestCachePathSegment(value) {
 
 export function applyParallelVitestCachePaths(specs, params = {}) {
   const baseEnv = params.env ?? process.env;
+  const enableParallelFsCachePaths = isTruthyEnvValue(
+    baseEnv[PARALLEL_FS_MODULE_CACHE_PATHS_ENV_KEY],
+  );
+  // Per-shard fs-module cache paths currently trip a Node/Vitest loader bug in
+  // some non-isolated suites (for example src/commands/agent.acp.test.ts), and
+  // the shared experimental cache is unstable across concurrent full-suite
+  // shards. Disable the experimental fs cache for parallel shard runs unless a
+  // caller explicitly opts into sharded cache paths.
   if (baseEnv[FS_MODULE_CACHE_PATH_ENV_KEY]?.trim()) {
+    return specs;
+  }
+  if (!enableParallelFsCachePaths && baseEnv[FS_MODULE_CACHE_ENV_KEY]?.trim()) {
     return specs;
   }
   const cwd = params.cwd ?? process.cwd();
   return specs.map((spec, index) => {
     if (spec.env?.[FS_MODULE_CACHE_PATH_ENV_KEY]?.trim()) {
       return spec;
+    }
+    if (!enableParallelFsCachePaths) {
+      if (spec.env?.[FS_MODULE_CACHE_ENV_KEY]?.trim()) {
+        return spec;
+      }
+      return {
+        ...spec,
+        env: {
+          ...spec.env,
+          [FS_MODULE_CACHE_ENV_KEY]: "0",
+        },
+      };
     }
     const cacheSegment = sanitizeVitestCachePathSegment(`${index}-${spec.config}`);
     return {

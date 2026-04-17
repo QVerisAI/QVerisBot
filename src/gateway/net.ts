@@ -298,12 +298,18 @@ export function __resetContainerCacheForTest(): void {
 export async function resolveGatewayBindHost(
   bind: GatewayBindMode | undefined,
   customHost?: string,
+  opts?: {
+    canBindToHost?: (host: string) => Promise<boolean>;
+    isContainerEnvironment?: () => boolean;
+  },
 ): Promise<string> {
   const mode = bind ?? "loopback";
+  const canBind = opts?.canBindToHost ?? canBindToHost;
+  const detectContainerEnvironment = opts?.isContainerEnvironment ?? isContainerEnvironment;
 
   if (mode === "loopback") {
     // 127.0.0.1 rarely fails, but handle gracefully
-    if (await canBindToHost("127.0.0.1")) {
+    if (await canBind("127.0.0.1")) {
       return "127.0.0.1";
     }
     return "0.0.0.0"; // extreme fallback
@@ -311,10 +317,10 @@ export async function resolveGatewayBindHost(
 
   if (mode === "tailnet") {
     const tailnetIP = pickPrimaryTailnetIPv4();
-    if (tailnetIP && (await canBindToHost(tailnetIP))) {
+    if (tailnetIP && (await canBind(tailnetIP))) {
       return tailnetIP;
     }
-    if (await canBindToHost("127.0.0.1")) {
+    if (await canBind("127.0.0.1")) {
       return "127.0.0.1";
     }
     return "0.0.0.0";
@@ -330,7 +336,7 @@ export async function resolveGatewayBindHost(
       return "0.0.0.0";
     } // invalid config → fall back to all
 
-    if (isValidIPv4(host) && (await canBindToHost(host))) {
+    if (isValidIPv4(host) && (await canBind(host))) {
       return host;
     }
     // Custom IP failed → fall back to LAN
@@ -340,10 +346,10 @@ export async function resolveGatewayBindHost(
   if (mode === "auto") {
     // Inside a container, loopback is unreachable from the host network
     // namespace, so prefer 0.0.0.0 to make port-forwarding work.
-    if (isContainerEnvironment()) {
+    if (detectContainerEnvironment()) {
       return "0.0.0.0";
     }
-    if (await canBindToHost("127.0.0.1")) {
+    if (await canBind("127.0.0.1")) {
       return "127.0.0.1";
     }
     return "0.0.0.0";

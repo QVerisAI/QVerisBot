@@ -248,7 +248,7 @@ describe("scripts/test-projects local heavy-check lock", () => {
 });
 
 describe("scripts/test-projects full-suite sharding", () => {
-  it("uses the large host-aware local profile on roomy local hosts", () => {
+  it("keeps 48 GB local hosts on the smaller host-aware full-suite profile", () => {
     expect(
       resolveParallelFullSuiteConcurrency(
         61,
@@ -257,6 +257,20 @@ describe("scripts/test-projects full-suite sharding", () => {
           cpuCount: 14,
           loadAverage1m: 0,
           totalMemoryBytes: 48 * 1024 ** 3,
+        },
+      ),
+    ).toBe(1);
+  });
+
+  it("uses the large host-aware local profile on 64 GB hosts", () => {
+    expect(
+      resolveParallelFullSuiteConcurrency(
+        61,
+        {},
+        {
+          cpuCount: 14,
+          loadAverage1m: 0,
+          totalMemoryBytes: 64 * 1024 ** 3,
         },
       ),
     ).toBe(10);
@@ -590,13 +604,32 @@ describe("scripts/test-projects full-suite sharding", () => {
 });
 
 describe("scripts/test-projects parallel cache paths", () => {
-  it("assigns isolated Vitest fs-module cache paths per parallel shard", () => {
+  it("disables the experimental fs-module cache by default for parallel shards", () => {
     const specs = applyParallelVitestCachePaths(
       [
         { config: "test/vitest/vitest.gateway.config.ts", env: {}, pnpmArgs: [] },
         { config: "test/vitest/vitest.extension-matrix.config.ts", env: {}, pnpmArgs: [] },
       ],
       { cwd: "/repo", env: {} },
+    );
+
+    expect(specs.map((spec) => spec.env)).toEqual([
+      {
+        OPENCLAW_VITEST_FS_MODULE_CACHE: "0",
+      },
+      {
+        OPENCLAW_VITEST_FS_MODULE_CACHE: "0",
+      },
+    ]);
+  });
+
+  it("assigns isolated Vitest fs-module cache paths per parallel shard when explicitly enabled", () => {
+    const specs = applyParallelVitestCachePaths(
+      [
+        { config: "test/vitest/vitest.gateway.config.ts", env: {}, pnpmArgs: [] },
+        { config: "test/vitest/vitest.extension-matrix.config.ts", env: {}, pnpmArgs: [] },
+      ],
+      { cwd: "/repo", env: { OPENCLAW_VITEST_PARALLEL_FS_CACHE_PATHS: "1" } },
     );
 
     expect(specs.map((spec) => spec.env)).toEqual([
@@ -626,5 +659,14 @@ describe("scripts/test-projects parallel cache paths", () => {
     );
 
     expect(spec?.env.OPENCLAW_VITEST_FS_MODULE_CACHE_PATH).toBeUndefined();
+  });
+
+  it("respects an explicit fs-module cache mode override", () => {
+    const [spec] = applyParallelVitestCachePaths(
+      [{ config: "test/vitest/vitest.gateway.config.ts", env: {}, pnpmArgs: [] }],
+      { cwd: "/repo", env: { OPENCLAW_VITEST_FS_MODULE_CACHE: "1" } },
+    );
+
+    expect(spec?.env.OPENCLAW_VITEST_FS_MODULE_CACHE).toBeUndefined();
   });
 });

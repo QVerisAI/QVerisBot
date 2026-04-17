@@ -2,6 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import type { AddressInfo } from "node:net";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { runBeforeToolCallHook as runBeforeToolCallHookType } from "../agents/pi-tools.before-tool-call.js";
+import { canListenOnLoopbackForTests } from "../test-utils/ports.js";
 
 type RunBeforeToolCallHook = typeof runBeforeToolCallHookType;
 type RunBeforeToolCallHookArgs = Parameters<RunBeforeToolCallHook>[0];
@@ -201,65 +202,68 @@ let pluginHttpHandlers: Array<(req: IncomingMessage, res: ServerResponse) => Pro
 
 let sharedPort = 0;
 let sharedServer: ReturnType<typeof createServer> | undefined;
+const CAN_RUN_LOOPBACK_TESTS = canListenOnLoopbackForTests();
 
-beforeAll(async () => {
-  sharedServer = createServer((req, res) => {
-    void (async () => {
-      const handled = await handleToolsInvokeHttpRequest(req, res, {
-        auth: { mode: "none", allowTailscale: false },
-      });
-      if (handled) {
-        return;
-      }
-      for (const handler of pluginHttpHandlers) {
-        if (await handler(req, res)) {
+if (CAN_RUN_LOOPBACK_TESTS) {
+  beforeAll(async () => {
+    sharedServer = createServer((req, res) => {
+      void (async () => {
+        const handled = await handleToolsInvokeHttpRequest(req, res, {
+          auth: { mode: "none", allowTailscale: false },
+        });
+        if (handled) {
           return;
         }
-      }
-      res.statusCode = 404;
-      res.end("not found");
-    })().catch((err) => {
-      res.statusCode = 500;
-      res.end(String(err));
+        for (const handler of pluginHttpHandlers) {
+          if (await handler(req, res)) {
+            return;
+          }
+        }
+        res.statusCode = 404;
+        res.end("not found");
+      })().catch((err) => {
+        res.statusCode = 500;
+        res.end(String(err));
+      });
+    });
+
+    await new Promise<void>((resolve, reject) => {
+      sharedServer?.once("error", reject);
+      sharedServer?.listen(0, "127.0.0.1", () => {
+        const address = sharedServer?.address() as AddressInfo | null;
+        sharedPort = address?.port ?? 0;
+        resolve();
+      });
     });
   });
 
-  await new Promise<void>((resolve, reject) => {
-    sharedServer?.once("error", reject);
-    sharedServer?.listen(0, "127.0.0.1", () => {
-      const address = sharedServer?.address() as AddressInfo | null;
-      sharedPort = address?.port ?? 0;
-      resolve();
-    });
+  afterAll(async () => {
+    const server = sharedServer;
+    if (!server) {
+      return;
+    }
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    sharedServer = undefined;
   });
-});
 
-afterAll(async () => {
-  const server = sharedServer;
-  if (!server) {
-    return;
-  }
-  await new Promise<void>((resolve) => server.close(() => resolve()));
-  sharedServer = undefined;
-});
-
-beforeEach(() => {
-  delete process.env.OPENCLAW_GATEWAY_TOKEN;
-  delete process.env.OPENCLAW_GATEWAY_PASSWORD;
-  pluginHttpHandlers = [];
-  cfg = {};
-  lastCreateOpenClawToolsContext = undefined;
-  hookMocks.resolveToolLoopDetectionConfig.mockClear();
-  hookMocks.resolveToolLoopDetectionConfig.mockImplementation(() => ({ warnAt: 3 }));
-  hookMocks.runBeforeToolCallHook.mockClear();
-  hookMocks.runBeforeToolCallHook.mockImplementation(
-    async (args: RunBeforeToolCallHookArgs): Promise<RunBeforeToolCallHookResult> => ({
-      blocked: false,
-      params: args.params,
-    }),
-  );
-  vi.mocked(authorizeHttpGatewayConnect).mockResolvedValue({ ok: true });
-});
+  beforeEach(() => {
+    delete process.env.OPENCLAW_GATEWAY_TOKEN;
+    delete process.env.OPENCLAW_GATEWAY_PASSWORD;
+    pluginHttpHandlers = [];
+    cfg = {};
+    lastCreateOpenClawToolsContext = undefined;
+    hookMocks.resolveToolLoopDetectionConfig.mockClear();
+    hookMocks.resolveToolLoopDetectionConfig.mockImplementation(() => ({ warnAt: 3 }));
+    hookMocks.runBeforeToolCallHook.mockClear();
+    hookMocks.runBeforeToolCallHook.mockImplementation(
+      async (args: RunBeforeToolCallHookArgs): Promise<RunBeforeToolCallHookResult> => ({
+        blocked: false,
+        params: args.params,
+      }),
+    );
+    vi.mocked(authorizeHttpGatewayConnect).mockResolvedValue({ ok: true });
+  });
+}
 
 const gatewayAuthHeaders = () => ({ "x-openclaw-scopes": "operator.write" });
 const gatewayAdminHeaders = () => ({ "x-openclaw-scopes": "operator.admin" });
@@ -394,7 +398,7 @@ const setMainAllowedTools = (params: {
   };
 };
 
-describe("POST /tools/invoke", () => {
+describe.skipIf(!CAN_RUN_LOOPBACK_TESTS)("POST /tools/invoke", () => {
   it("invokes a tool and returns {ok:true,result}", async () => {
     allowAgentsListForMain();
     const res = await invokeAgentsListAuthed({ sessionKey: "main" });
