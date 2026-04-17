@@ -585,7 +585,7 @@ export function buildAgentSystemPrompt(params: {
     session_status:
       "Show a /status-equivalent status card (usage + time + Reasoning/Verbose/Elevated); use for model-use questions (📊 session_status); optional per-session model override",
     switch_model:
-      'Switch the AI model for this session. When the user asks to change or switch models, call this tool with the model name. Accepts aliases, partial names, or full provider/model. model=default resets to the configured default for the next message.',
+      "Switch the AI model for this session. When the user asks to change or switch models, call this tool with the model name. Accepts aliases, partial names, or full provider/model. model=default resets to the configured default for the next message.",
     image: "Analyze an image with the configured image model",
     image_generate: "Generate images with the configured image-generation model",
     qveris_discover:

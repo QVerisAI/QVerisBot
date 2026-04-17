@@ -358,11 +358,13 @@ async function runStep(opts: RunStepOptions): Promise<UpdateStepResult> {
 }
 
 function normalizeTag(tag?: string) {
-  return normalizePackageTagInput(tag, [
-    LEGACY_PACKAGE_NAME,
-    LEGACY_PACKAGE_NAME_UNSCOPED,
-    DEFAULT_PACKAGE_NAME,
-  ]) ?? "latest";
+  return (
+    normalizePackageTagInput(tag, [
+      LEGACY_PACKAGE_NAME,
+      LEGACY_PACKAGE_NAME_UNSCOPED,
+      DEFAULT_PACKAGE_NAME,
+    ]) ?? "latest"
+  );
 }
 
 function shouldRetryWindowsInstallIgnoringScripts(manager: "pnpm" | "bun" | "npm"): boolean {
