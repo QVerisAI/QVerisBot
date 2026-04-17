@@ -3,6 +3,7 @@ import http from "node:http";
 import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
+import { canListenOnLoopbackForTests } from "../test-utils/ports.js";
 import {
   writeBundleProbeMcpServer,
   writeClaudeBundle,
@@ -46,6 +47,9 @@ export async function waitForFileText(filePath: string, timeoutMs = 5_000): Prom
 export async function startSseProbeServer(
   probeText = "FROM-SSE",
 ): Promise<{ port: number; close: () => Promise<void> }> {
+  if (!canListenOnLoopbackForTests()) {
+    throw new Error("loopback listen unavailable for SSE MCP probe server");
+  }
   const { McpServer } = await import(SDK_SERVER_MCP_PATH);
   const { SSEServerTransport } = await import(SDK_SERVER_SSE_PATH);
 
@@ -76,8 +80,12 @@ export async function startSseProbeServer(
     }
   });
 
-  await new Promise<void>((resolve) => {
-    httpServer.listen(0, "127.0.0.1", resolve);
+  await new Promise<void>((resolve, reject) => {
+    httpServer.once("error", reject);
+    httpServer.listen(0, "127.0.0.1", () => {
+      httpServer.off("error", reject);
+      resolve();
+    });
   });
   const address = httpServer.address();
   const port = typeof address === "object" && address ? address.port : 0;

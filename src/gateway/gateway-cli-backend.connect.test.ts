@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { clearConfigCache, clearRuntimeConfigSnapshot } from "../config/config.js";
 import { clearSessionStoreCacheForTest } from "../config/sessions/store.js";
 import { captureEnv } from "../test-utils/env.js";
+import { canListenOnLoopbackForTests } from "../test-utils/ports.js";
 import {
   connectTestGatewayClient,
   ensurePairedTestGatewayClientIdentity,
@@ -13,14 +14,17 @@ import {
 import { startGatewayServer } from "./server.js";
 
 const GATEWAY_CONNECT_TIMEOUT_MS = 90_000;
+const CAN_RUN_LOOPBACK_TESTS = canListenOnLoopbackForTests();
 
-describe("gateway cli backend connect", () => {
+if (CAN_RUN_LOOPBACK_TESTS) {
   afterEach(() => {
     clearRuntimeConfigSnapshot();
     clearConfigCache();
     clearSessionStoreCacheForTest();
   });
+}
 
+describe.skipIf(!CAN_RUN_LOOPBACK_TESTS)("gateway cli backend connect", () => {
   it(
     "connects a same-process test gateway client in minimal mode",
     async () => {

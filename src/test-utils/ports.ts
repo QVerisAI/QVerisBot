@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { createServer } from "node:net";
 import { isMainThread, threadId } from "node:worker_threads";
 
@@ -32,6 +33,18 @@ async function getOsFreePort(): Promise<number> {
 }
 
 let nextTestPortOffset = 0;
+let loopbackListenAvailabilityForTests: boolean | undefined;
+
+const LOOPBACK_LISTEN_PROBE_SOURCE = `
+const net = require("node:net");
+const server = net.createServer();
+const timer = setTimeout(() => process.exit(2), 1_000);
+timer.unref();
+server.once("error", () => process.exit(1));
+server.listen(0, "127.0.0.1", () => {
+  server.close(() => process.exit(0));
+});
+`;
 
 /**
  * Allocate a deterministic per-worker port block.
@@ -104,4 +117,21 @@ export async function getFreePortBlockWithPermissionFallback(params: {
     }
     throw err;
   }
+}
+
+/**
+ * Some sandboxes deny loopback listens entirely even though the test logic is
+ * otherwise correct. Probe that capability once so loopback integration suites
+ * can skip themselves instead of failing the whole run on environment policy.
+ */
+export function canListenOnLoopbackForTests(): boolean {
+  if (loopbackListenAvailabilityForTests !== undefined) {
+    return loopbackListenAvailabilityForTests;
+  }
+  const probe = spawnSync(process.execPath, ["-e", LOOPBACK_LISTEN_PROBE_SOURCE], {
+    stdio: "ignore",
+    timeout: 2_000,
+  });
+  loopbackListenAvailabilityForTests = probe.status === 0;
+  return loopbackListenAvailabilityForTests;
 }

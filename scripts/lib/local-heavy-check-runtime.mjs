@@ -193,7 +193,15 @@ export function acquireLocalHeavyCheckLockSync(params) {
   let waitingLogged = false;
   let lastProgressAt = 0;
 
-  fs.mkdirSync(locksDir, { recursive: true });
+  try {
+    fs.mkdirSync(locksDir, { recursive: true });
+  } catch (error) {
+    if (isPermissionDeniedLockError(error)) {
+      logLockUnavailable(params, locksDir, error);
+      return () => {};
+    }
+    throw error;
+  }
   if (!params.lockName) {
     cleanupLegacyLockDirs(locksDir, staleLockMs);
   }
@@ -212,6 +220,15 @@ export function acquireLocalHeavyCheckLockSync(params) {
         fs.rmSync(lockDir, { recursive: true, force: true });
       };
     } catch (error) {
+      if (isPermissionDeniedLockError(error)) {
+        try {
+          fs.rmSync(lockDir, { recursive: true, force: true });
+        } catch {
+          // Best-effort cleanup only.
+        }
+        logLockUnavailable(params, lockDir, error);
+        return () => {};
+      }
       if (!isAlreadyExistsError(error)) {
         throw error;
       }
@@ -255,6 +272,19 @@ export function acquireLocalHeavyCheckLockSync(params) {
       sleepSync(pollMs);
     }
   }
+}
+
+function logLockUnavailable(params, lockPath, error) {
+  const code =
+    typeof error === "object" && error !== null && "code" in error ? String(error.code) : "ERR";
+  console.error(
+    `[${params.toolName}] local heavy-check lock unavailable at ${lockPath} (${code}); continuing without the lock.`,
+  );
+}
+
+function isPermissionDeniedLockError(error) {
+  const code = error?.code;
+  return code === "EACCES" || code === "EPERM" || code === "EROFS";
 }
 
 export function resolveGitCommonDir(cwd) {

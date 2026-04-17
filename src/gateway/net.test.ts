@@ -571,7 +571,11 @@ describe("resolveGatewayBindHost", () => {
   });
 
   it("returns 127.0.0.1 for loopback mode", async () => {
-    expect(await resolveGatewayBindHost("loopback")).toBe("127.0.0.1");
+    expect(
+      await resolveGatewayBindHost("loopback", undefined, {
+        canBindToHost: async () => true,
+      }),
+    ).toBe("127.0.0.1");
   });
 
   it("returns 0.0.0.0 for lan mode", async () => {
@@ -579,27 +583,29 @@ describe("resolveGatewayBindHost", () => {
   });
 
   it("returns 127.0.0.1 for auto mode on non-container host", async () => {
-    const fs = require("node:fs");
-    vi.spyOn(fs, "accessSync").mockImplementation(() => {
-      throw new Error("ENOENT");
-    });
-    vi.spyOn(fs, "readFileSync").mockReturnValue("12:memory:/user.slice\n");
-    expect(await resolveGatewayBindHost("auto")).toBe("127.0.0.1");
+    expect(
+      await resolveGatewayBindHost("auto", undefined, {
+        canBindToHost: async () => true,
+        isContainerEnvironment: () => false,
+      }),
+    ).toBe("127.0.0.1");
   });
 
   it("returns 0.0.0.0 for auto mode inside a container", async () => {
-    const fs = require("node:fs");
-    vi.spyOn(fs, "accessSync").mockImplementation(() => undefined);
-    expect(await resolveGatewayBindHost("auto")).toBe("0.0.0.0");
+    expect(
+      await resolveGatewayBindHost("auto", undefined, {
+        canBindToHost: async () => true,
+        isContainerEnvironment: () => true,
+      }),
+    ).toBe("0.0.0.0");
   });
 
   it("defaults to loopback when bind is undefined (non-container)", async () => {
-    const fs = require("node:fs");
-    vi.spyOn(fs, "accessSync").mockImplementation(() => {
-      throw new Error("ENOENT");
-    });
-    vi.spyOn(fs, "readFileSync").mockReturnValue("12:memory:/user.slice\n");
-    expect(await resolveGatewayBindHost(undefined)).toBe("127.0.0.1");
+    expect(
+      await resolveGatewayBindHost(undefined, undefined, {
+        canBindToHost: async () => true,
+      }),
+    ).toBe("127.0.0.1");
   });
 });
 

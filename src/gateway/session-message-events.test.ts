@@ -6,6 +6,7 @@ import { appendAssistantMessageToSessionTranscript } from "../config/sessions/tr
 import { emitSessionLifecycleEvent } from "../sessions/session-lifecycle-events.js";
 import * as transcriptEvents from "../sessions/transcript-events.js";
 import { emitSessionTranscriptUpdate } from "../sessions/transcript-events.js";
+import { canListenOnLoopbackForTests } from "../test-utils/ports.js";
 import { testState } from "./test-helpers.runtime-state.js";
 import {
   connectOk,
@@ -16,7 +17,11 @@ import {
   writeSessionStore,
 } from "./test-helpers.server.js";
 
-installGatewayTestHooks({ scope: "suite" });
+const CAN_RUN_LOOPBACK_TESTS = canListenOnLoopbackForTests();
+
+if (CAN_RUN_LOOPBACK_TESTS) {
+  installGatewayTestHooks({ scope: "suite" });
+}
 
 const cleanupDirs: string[] = [];
 let harness: Awaited<ReturnType<typeof createGatewaySuiteHarness>>;
@@ -25,30 +30,32 @@ let subscribedOperatorWs:
   | undefined;
 let previousMinimalGateway: string | undefined;
 
-beforeAll(async () => {
-  previousMinimalGateway = process.env.OPENCLAW_TEST_MINIMAL_GATEWAY;
-  delete process.env.OPENCLAW_TEST_MINIMAL_GATEWAY;
-  harness = await createGatewaySuiteHarness();
-  subscribedOperatorWs = await harness.openWs();
-  await connectOk(subscribedOperatorWs, { scopes: ["operator.read"] });
-  await rpcReq(subscribedOperatorWs, "sessions.subscribe");
-});
-
-afterAll(async () => {
-  subscribedOperatorWs?.close();
-  await harness.close();
-  if (previousMinimalGateway === undefined) {
+if (CAN_RUN_LOOPBACK_TESTS) {
+  beforeAll(async () => {
+    previousMinimalGateway = process.env.OPENCLAW_TEST_MINIMAL_GATEWAY;
     delete process.env.OPENCLAW_TEST_MINIMAL_GATEWAY;
-  } else {
-    process.env.OPENCLAW_TEST_MINIMAL_GATEWAY = previousMinimalGateway;
-  }
-});
+    harness = await createGatewaySuiteHarness();
+    subscribedOperatorWs = await harness.openWs();
+    await connectOk(subscribedOperatorWs, { scopes: ["operator.read"] });
+    await rpcReq(subscribedOperatorWs, "sessions.subscribe");
+  });
 
-afterEach(async () => {
-  await Promise.all(
-    cleanupDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })),
-  );
-});
+  afterAll(async () => {
+    subscribedOperatorWs?.close();
+    await harness.close();
+    if (previousMinimalGateway === undefined) {
+      delete process.env.OPENCLAW_TEST_MINIMAL_GATEWAY;
+    } else {
+      process.env.OPENCLAW_TEST_MINIMAL_GATEWAY = previousMinimalGateway;
+    }
+  });
+
+  afterEach(async () => {
+    await Promise.all(
+      cleanupDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })),
+    );
+  });
+}
 
 async function createSessionStoreFile(): Promise<string> {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-session-message-"));
@@ -139,7 +146,7 @@ async function expectNoMessageWithin(params: {
   }
 }
 
-describe("session.message websocket events", () => {
+describe.skipIf(!CAN_RUN_LOOPBACK_TESTS)("session.message websocket events", () => {
   test("includes spawned session ownership metadata on lifecycle sessions.changed events", async () => {
     const storePath = await createSessionStoreFile();
     await writeSessionStore({

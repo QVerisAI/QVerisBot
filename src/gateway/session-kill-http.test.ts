@@ -1,6 +1,7 @@
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { canListenOnLoopbackForTests } from "../test-utils/ports.js";
 import type { GatewayAuthResult } from "./auth.js";
 
 const TEST_GATEWAY_TOKEN = "test-gateway-token-1234567890";
@@ -41,52 +42,55 @@ const { handleSessionKillHttpRequest } = await import("./session-kill-http.js");
 
 let port = 0;
 let server: ReturnType<typeof createServer> | undefined;
+const CAN_RUN_LOOPBACK_TESTS = canListenOnLoopbackForTests();
 
-beforeAll(async () => {
-  server = createServer((req, res) => {
-    void handleSessionKillHttpRequest(req, res, {
-      auth: { mode: "token", token: TEST_GATEWAY_TOKEN, allowTailscale: false },
-    }).then((handled) => {
-      if (!handled) {
-        res.statusCode = 404;
-        res.end("not found");
-      }
+if (CAN_RUN_LOOPBACK_TESTS) {
+  beforeAll(async () => {
+    server = createServer((req, res) => {
+      void handleSessionKillHttpRequest(req, res, {
+        auth: { mode: "token", token: TEST_GATEWAY_TOKEN, allowTailscale: false },
+      }).then((handled) => {
+        if (!handled) {
+          res.statusCode = 404;
+          res.end("not found");
+        }
+      });
+    });
+
+    await new Promise<void>((resolve, reject) => {
+      server?.once("error", reject);
+      server?.listen(0, "127.0.0.1", () => {
+        const address = server?.address() as AddressInfo | null;
+        if (!address) {
+          reject(new Error("server missing address"));
+          return;
+        }
+        port = address.port;
+        resolve();
+      });
     });
   });
 
-  await new Promise<void>((resolve, reject) => {
-    server?.once("error", reject);
-    server?.listen(0, "127.0.0.1", () => {
-      const address = server?.address() as AddressInfo | null;
-      if (!address) {
-        reject(new Error("server missing address"));
-        return;
-      }
-      port = address.port;
-      resolve();
+  afterAll(async () => {
+    await new Promise<void>((resolve, reject) => {
+      server?.close((err) => (err ? reject(err) : resolve()));
     });
   });
-});
 
-afterAll(async () => {
-  await new Promise<void>((resolve, reject) => {
-    server?.close((err) => (err ? reject(err) : resolve()));
+  beforeEach(() => {
+    cfg = {};
+    authMock.mockReset();
+    authMock.mockResolvedValue({ ok: true, method: "token" });
+    isLocalDirectRequestMock.mockReset();
+    isLocalDirectRequestMock.mockReturnValue(true);
+    loadSessionEntryMock.mockReset();
+    getLatestSubagentRunByChildSessionKeyMock.mockReset();
+    resolveSubagentControllerMock.mockReset();
+    resolveSubagentControllerMock.mockReturnValue({ controllerSessionKey: "agent:main:main" });
+    killControlledSubagentRunMock.mockReset();
+    killSubagentRunAdminMock.mockReset();
   });
-});
-
-beforeEach(() => {
-  cfg = {};
-  authMock.mockReset();
-  authMock.mockResolvedValue({ ok: true, method: "token" });
-  isLocalDirectRequestMock.mockReset();
-  isLocalDirectRequestMock.mockReturnValue(true);
-  loadSessionEntryMock.mockReset();
-  getLatestSubagentRunByChildSessionKeyMock.mockReset();
-  resolveSubagentControllerMock.mockReset();
-  resolveSubagentControllerMock.mockReturnValue({ controllerSessionKey: "agent:main:main" });
-  killControlledSubagentRunMock.mockReset();
-  killSubagentRunAdminMock.mockReset();
-});
+}
 
 async function post(
   pathname: string,
@@ -104,7 +108,7 @@ async function post(
   });
 }
 
-describe("POST /sessions/:sessionKey/kill", () => {
+describe.skipIf(!CAN_RUN_LOOPBACK_TESTS)("POST /sessions/:sessionKey/kill", () => {
   it("returns 401 when auth fails", async () => {
     authMock.mockResolvedValueOnce({ ok: false, rateLimited: false });
 

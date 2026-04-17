@@ -1,3 +1,4 @@
+import { canListenOnLoopbackForTests } from "../../src/test-utils/ports.ts";
 import { createScopedVitestConfig } from "./vitest.scoped-config.ts";
 
 const gatewayServerBackedHttpTests = [
@@ -7,10 +8,13 @@ const gatewayServerBackedHttpTests = [
   "src/gateway/openresponses-http.test.ts",
   "src/gateway/probe.auth.integration.test.ts",
 ];
+const LOOPBACK_LISTEN_AVAILABLE = canListenOnLoopbackForTests();
 
 export function createGatewayServerVitestConfig(env?: Record<string, string | undefined>) {
   return createScopedVitestConfig(
-    ["src/gateway/**/*server*.test.ts", ...gatewayServerBackedHttpTests],
+    LOOPBACK_LISTEN_AVAILABLE
+      ? ["src/gateway/**/*server*.test.ts", ...gatewayServerBackedHttpTests]
+      : [],
     {
       dir: "src/gateway",
       env,
@@ -21,6 +25,7 @@ export function createGatewayServerVitestConfig(env?: Record<string, string | un
         "src/gateway/sessions-history-http.test.ts",
       ],
       name: "gateway-server",
+      passWithNoTests: !LOOPBACK_LISTEN_AVAILABLE,
     },
   );
 }
