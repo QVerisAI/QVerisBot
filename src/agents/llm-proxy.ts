@@ -24,7 +24,15 @@ export function setupLlmProxy(cfg: OpenClawConfig | undefined): void {
     return;
   }
 
-  const proxyUrl = cfg?.models?.proxy?.trim();
+  // Keep reading the legacy models.proxy alias internally for older local
+  // configs, but do not reintroduce it into the public config contract.
+  const proxyUrl = (
+    cfg?.models as
+      | (NonNullable<OpenClawConfig["models"]> & {
+          proxy?: string;
+        })
+      | undefined
+  )?.proxy?.trim();
 
   // No proxy configured - restore original dispatcher if we changed it
   if (!proxyUrl) {

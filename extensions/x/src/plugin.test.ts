@@ -14,31 +14,41 @@ describe("X plugin", () => {
     });
 
     it("should recognize x:user: format", () => {
-      if (!looksLikeId) return;
+      if (!looksLikeId) {
+        return;
+      }
       expect(looksLikeId("x:user:1566488849252958208")).toBe(true);
       expect(looksLikeId("x:user:123456789")).toBe(true);
     });
 
     it("should recognize x:tweet: format", () => {
-      if (!looksLikeId) return;
+      if (!looksLikeId) {
+        return;
+      }
       expect(looksLikeId("x:tweet:1566488849252958208")).toBe(true);
       expect(looksLikeId("x:tweet:987654321")).toBe(true);
     });
 
     it("should recognize user: format without x prefix", () => {
-      if (!looksLikeId) return;
+      if (!looksLikeId) {
+        return;
+      }
       expect(looksLikeId("user:1566488849252958208")).toBe(true);
       expect(looksLikeId("user:123456789")).toBe(true);
     });
 
     it("should recognize bare numeric IDs (10+ digits)", () => {
-      if (!looksLikeId) return;
+      if (!looksLikeId) {
+        return;
+      }
       expect(looksLikeId("1566488849252958208")).toBe(true);
       expect(looksLikeId("1234567890")).toBe(true);
     });
 
     it("should recognize @username format", () => {
-      if (!looksLikeId) return;
+      if (!looksLikeId) {
+        return;
+      }
       expect(looksLikeId("@wanglinfang2")).toBe(true);
       expect(looksLikeId("@elonmusk")).toBe(true);
       expect(looksLikeId("@abcd")).toBe(true);
@@ -46,13 +56,17 @@ describe("X plugin", () => {
     });
 
     it("should reject invalid @username formats", () => {
-      if (!looksLikeId) return;
+      if (!looksLikeId) {
+        return;
+      }
       expect(looksLikeId("@")).toBe(false);
       expect(looksLikeId("@user_name_too_long_for_twitter")).toBe(false);
     });
 
     it("should recognize X/Twitter URLs", () => {
-      if (!looksLikeId) return;
+      if (!looksLikeId) {
+        return;
+      }
       expect(looksLikeId("https://x.com/elonmusk")).toBe(true);
       expect(looksLikeId("https://x.com/user/status/1234567890123456789")).toBe(true);
       expect(looksLikeId("https://twitter.com/user/status/1234567890123456789")).toBe(true);
@@ -61,7 +75,9 @@ describe("X plugin", () => {
     });
 
     it("should reject invalid formats", () => {
-      if (!looksLikeId) return;
+      if (!looksLikeId) {
+        return;
+      }
       expect(looksLikeId("")).toBe(false);
       expect(looksLikeId("   ")).toBe(false);
       expect(looksLikeId("not-a-user-id")).toBe(false);
@@ -73,7 +89,9 @@ describe("X plugin", () => {
     });
 
     it("should handle whitespace", () => {
-      if (!looksLikeId) return;
+      if (!looksLikeId) {
+        return;
+      }
       expect(looksLikeId("  x:user:1566488849252958208  ")).toBe(true);
       expect(looksLikeId("  1234567890  ")).toBe(true);
       expect(looksLikeId("  @elonmusk  ")).toBe(true);

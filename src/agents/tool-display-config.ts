@@ -418,6 +418,11 @@ export const TOOL_DISPLAY_CONFIG: ToolDisplayConfig = {
       title: "Session Status",
       detailKeys: ["sessionKey", "model"],
     },
+    switch_model: {
+      emoji: "🔁",
+      title: "Switch Model",
+      detailKeys: ["model"],
+    },
     sessions_list: {
       emoji: "🗂️",
       title: "Sessions",
@@ -475,6 +480,21 @@ export const TOOL_DISPLAY_CONFIG: ToolDisplayConfig = {
       emoji: "🔎",
       title: "Web Search",
       detailKeys: ["query", "count"],
+    },
+    qveris_discover: {
+      emoji: "🧭",
+      title: "QVeris Discover",
+      detailKeys: ["query", "limit"],
+    },
+    qveris_call: {
+      emoji: "🧰",
+      title: "QVeris Call",
+      detailKeys: ["tool_id", "params_to_tool", "max_response_size", "timeout_seconds"],
+    },
+    qveris_inspect: {
+      emoji: "🔍",
+      title: "QVeris Inspect",
+      detailKeys: ["tool_ids"],
     },
     web_fetch: {
       emoji: "📄",

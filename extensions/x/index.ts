@@ -10,7 +10,7 @@ const plugin = {
   configSchema: emptyPluginConfigSchema(),
   register(api: OpenClawPluginApi) {
     setXRuntime(api.runtime);
-    api.registerChannel({ plugin: xPlugin as any });
+    api.registerChannel({ plugin: xPlugin });
   },
 };
 

@@ -332,7 +332,7 @@ export const xPlugin: ChannelPlugin<XAccountConfig> = {
 
   gateway: {
     startAccount: async (ctx): Promise<void> => {
-      const account = ctx.account as XAccountConfig;
+      const account = ctx.account;
       const accountId = ctx.accountId;
 
       ctx.setStatus?.({
@@ -378,7 +378,7 @@ export const xPlugin: ChannelPlugin<XAccountConfig> = {
               },
             });
           },
-        } as any,
+        },
       });
     },
 
