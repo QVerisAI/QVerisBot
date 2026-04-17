@@ -190,10 +190,9 @@ export const xSetupWizard: ChannelSetupWizard = {
         message: "Your X user ID(s) for allowFrom (comma-separated, required for mentions)",
         placeholder: "12345678",
         initialValue: existingAllowFrom.length > 0 ? existingAllowFrom.join(", ") : "12345678",
-        validate: (value) =>
-          String(value ?? "").trim() ? undefined : "Required — enter at least one X user ID",
+        validate: (value) => (value.trim() ? undefined : "Required — enter at least one X user ID"),
       });
-      const allowFrom = String(allowFromInput ?? "")
+      const allowFrom = allowFromInput
         .split(/[\n,;]+/g)
         .map((s) => s.trim())
         .filter(Boolean);
@@ -208,7 +207,7 @@ export const xSetupWizard: ChannelSetupWizard = {
               ? allowFrom.join(", ")
               : "12345678",
       });
-      const actionsAllowFrom = String(actionsAllowFromInput ?? "")
+      const actionsAllowFrom = actionsAllowFromInput
         .split(/[\n,;]+/g)
         .map((s) => s.trim())
         .filter(Boolean);

@@ -2,9 +2,7 @@ import { Type } from "@sinclair/typebox";
 import type { OpenClawConfig } from "openclaw/plugin-sdk/core";
 import {
   buildSearchCacheKey,
-  DEFAULT_CACHE_TTL_MINUTES,
   DEFAULT_SEARCH_COUNT,
-  DEFAULT_TIMEOUT_SECONDS,
   enablePluginInConfig,
   getScopedCredentialValue,
   MAX_SEARCH_COUNT,
@@ -12,7 +10,6 @@ import {
   readNumberParam,
   readStringParam,
   resolveSearchCacheTtlMs,
-  resolveSearchCount,
   resolveSearchTimeoutSeconds,
   resolveWebSearchProviderCredential,
   setScopedCredentialValue,
@@ -44,14 +41,14 @@ type QverisExecutionResponse = {
 
 function resolvePluginRootConfig(config?: OpenClawConfig): Record<string, unknown> | undefined {
   const raw = config?.plugins?.entries?.qveris?.config;
-  return raw && typeof raw === "object" && !Array.isArray(raw)
-    ? (raw as Record<string, unknown>)
-    : undefined;
+  return raw && typeof raw === "object" && !Array.isArray(raw) ? raw : undefined;
 }
 
 function resolveQverisRegion(config?: OpenClawConfig): QverisRegion {
   const qverisConfig = config?.tools?.qveris as Record<string, unknown> | undefined;
-  if (qverisConfig?.region === "cn") return "cn";
+  if (qverisConfig?.region === "cn") {
+    return "cn";
+  }
   const pluginRoot = resolvePluginRootConfig(config);
   return pluginRoot?.region === "cn" ? "cn" : "global";
 }
@@ -74,8 +71,7 @@ function resolveQverisBaseUrl(
   }
 
   const pluginRoot = resolvePluginRootConfig(config);
-  const fromPluginRoot =
-    typeof pluginRoot?.baseUrl === "string" ? (pluginRoot.baseUrl as string).trim() : "";
+  const fromPluginRoot = typeof pluginRoot?.baseUrl === "string" ? pluginRoot.baseUrl.trim() : "";
   if (fromPluginRoot) {
     return fromPluginRoot;
   }
@@ -118,9 +114,7 @@ function resolveQverisApiKey(
   }
 
   // 2b. Check plugin config root: plugins.entries.qveris.config.apiKey
-  const pluginRootConfig = config?.plugins?.entries?.qveris?.config as
-    | Record<string, unknown>
-    | undefined;
+  const pluginRootConfig = resolvePluginRootConfig(config);
   if (pluginRootConfig?.apiKey) {
     const fromPluginRoot = resolveWebSearchProviderCredential({
       credentialValue: pluginRootConfig.apiKey,
@@ -228,9 +222,7 @@ export function createQverisWebSearchProvider(): WebSearchProviderPlugin {
         return pluginVal;
       }
       // Check plugin config root apiKey (plugins.entries.qveris.config.apiKey)
-      const pluginRootCfg = config?.plugins?.entries?.qveris?.config as
-        | Record<string, unknown>
-        | undefined;
+      const pluginRootCfg = resolvePluginRootConfig(config);
       if (pluginRootCfg?.apiKey) {
         return pluginRootCfg.apiKey;
       }
@@ -269,12 +261,8 @@ export function createQverisWebSearchProvider(): WebSearchProviderPlugin {
         const count = readNumberParam(args, "count", { integer: true });
         const baseUrl = resolveQverisBaseUrl(ctx.searchConfig, ctx.config);
         const toolId = resolveQverisToolId(ctx.searchConfig);
-        const timeoutSeconds = resolveSearchTimeoutSeconds(
-          ctx.searchConfig as Record<string, unknown> | undefined,
-        );
-        const cacheTtlMs = resolveSearchCacheTtlMs(
-          ctx.searchConfig as Record<string, unknown> | undefined,
-        );
+        const timeoutSeconds = resolveSearchTimeoutSeconds(ctx.searchConfig);
+        const cacheTtlMs = resolveSearchCacheTtlMs(ctx.searchConfig);
 
         const cacheKey = buildSearchCacheKey([
           "qveris",

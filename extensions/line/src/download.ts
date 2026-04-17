@@ -1,6 +1,4 @@
-import crypto from "node:crypto";
 import fs from "node:fs";
-import path from "node:path";
 import { messagingApi } from "@line/bot-sdk";
 import { logVerbose } from "openclaw/plugin-sdk/runtime-env";
 import { buildRandomTempFilePath } from "openclaw/plugin-sdk/temp-path";

@@ -624,6 +624,13 @@
         "model"
       ]
     },
+    "switch_model": {
+      "emoji": "🔁",
+      "title": "Switch Model",
+      "detailKeys": [
+        "model"
+      ]
+    },
     "sessions_list": {
       "emoji": "🗂️",
       "title": "Sessions",
@@ -717,6 +724,31 @@
       "detailKeys": [
         "query",
         "count"
+      ]
+    },
+    "qveris_discover": {
+      "emoji": "🧭",
+      "title": "QVeris Discover",
+      "detailKeys": [
+        "query",
+        "limit"
+      ]
+    },
+    "qveris_call": {
+      "emoji": "🧰",
+      "title": "QVeris Call",
+      "detailKeys": [
+        "tool_id",
+        "params_to_tool",
+        "max_response_size",
+        "timeout_seconds"
+      ]
+    },
+    "qveris_inspect": {
+      "emoji": "🔍",
+      "title": "QVeris Inspect",
+      "detailKeys": [
+        "tool_ids"
       ]
     },
     "web_fetch": {

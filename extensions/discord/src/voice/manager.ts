@@ -68,6 +68,33 @@ const logVoiceVerbose = (message: string) => {
   logVerbose(`discord voice: ${message}`);
 };
 
+type SpeakingHandler = (userId: string) => void;
+
+type SpeakingEmitter = EventEmitter & {
+  on: (event: "start" | "end", listener: SpeakingHandler) => EventEmitter;
+  off: (event: "start" | "end", listener: SpeakingHandler) => EventEmitter;
+};
+
+function asSpeakingEmitter(value: unknown): SpeakingEmitter {
+  return value as SpeakingEmitter;
+}
+
+function resolveManualEndBehaviorType(voiceSdk: ReturnType<typeof loadDiscordVoiceSdk>): unknown {
+  return (
+    (voiceSdk as unknown as { EndBehaviorType?: { Manual?: unknown } }).EndBehaviorType?.Manual ?? 0
+  );
+}
+
+function resolveNetworkingStatusCode(
+  voiceSdk: ReturnType<typeof loadDiscordVoiceSdk>,
+  code: "Ready" | "Resuming",
+): unknown {
+  return (
+    (voiceSdk as unknown as { NetworkingStatusCode?: Record<string, unknown> })
+      .NetworkingStatusCode?.[code] ?? code
+  );
+}
+
 type VoiceOperationResult = {
   ok: boolean;
   message: string;
@@ -521,11 +548,12 @@ export class DiscordVoiceManager {
       capture: createVoiceCaptureState(),
       receiveRecovery: createVoiceReceiveRecoveryState(),
       stop: () => {
+        const speaking = asSpeakingEmitter(connection.receiver.speaking);
         if (speakingHandler) {
-          (connection.receiver.speaking as unknown as EventEmitter).off("start", speakingHandler);
+          speaking.off("start", speakingHandler);
         }
         if (speakingEndHandler) {
-          connection.receiver.speaking.off("end", speakingEndHandler);
+          speaking.off("end", speakingEndHandler);
         }
         stopVoiceCaptureState(entry.capture);
         if (disconnectedHandler) {
@@ -580,8 +608,9 @@ export class DiscordVoiceManager {
       "post-join warmup",
       DAVE_RECEIVE_PASSTHROUGH_INITIAL_EXPIRY_SECONDS,
     );
-    connection.receiver.speaking.on("start", speakingHandler);
-    connection.receiver.speaking.on("end", speakingEndHandler);
+    const speaking = asSpeakingEmitter(connection.receiver.speaking);
+    speaking.on("start", speakingHandler);
+    speaking.on("end", speakingEndHandler);
     connection.on(voiceSdk.VoiceConnectionStatus.Disconnected, disconnectedHandler);
     connection.on(voiceSdk.VoiceConnectionStatus.Destroyed, destroyedHandler);
     player.on("error", playerErrorHandler);
@@ -685,9 +714,9 @@ export class DiscordVoiceManager {
 
     const stream = entry.connection.receiver.subscribe(userId, {
       end: {
-        behavior: voiceSdk.EndBehaviorType.Manual,
+        behavior: resolveManualEndBehaviorType(voiceSdk),
       },
-    });
+    } as Parameters<typeof entry.connection.receiver.subscribe>[1]);
     const generation = beginVoiceCapture(entry.capture, userId, stream);
     let streamAborted = false;
     stream.on("error", (err) => {
@@ -899,7 +928,7 @@ export class DiscordVoiceManager {
       target: {
         guildId: entry.guildId,
         channelId: entry.channelId,
-        connection: entry.connection as {
+        connection: entry.connection as unknown as {
           state: {
             status: unknown;
             networking?: {
@@ -920,8 +949,8 @@ export class DiscordVoiceManager {
           Ready: voiceSdk.VoiceConnectionStatus.Ready,
         },
         NetworkingStatusCode: {
-          Ready: voiceSdk.NetworkingStatusCode.Ready,
-          Resuming: voiceSdk.NetworkingStatusCode.Resuming,
+          Ready: resolveNetworkingStatusCode(voiceSdk, "Ready"),
+          Resuming: resolveNetworkingStatusCode(voiceSdk, "Resuming"),
         },
       },
       reason,

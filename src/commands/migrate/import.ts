@@ -199,7 +199,7 @@ async function confirmAction(message: string, yes: boolean): Promise<boolean> {
   if (isCancel(result)) {
     return false;
   }
-  return Boolean(result);
+  return result;
 }
 
 export async function migrateImport(
@@ -264,16 +264,13 @@ export async function migrateImport(
       // Update config: workspace paths only (non-secret)
       if (agentManifest.isDefault || agentId === normalizeAgentId(defaultAgentId)) {
         // Update agents.defaults.workspace for the default agent
-        nextCfg = {
-          ...nextCfg,
-          agents: {
-            ...nextCfg.agents,
-            defaults: {
-              ...nextCfg.agents?.defaults,
+        nextCfg = Object.assign({}, nextCfg, {
+          agents: Object.assign({}, nextCfg.agents, {
+            defaults: Object.assign({}, nextCfg.agents?.defaults, {
               workspace: targetDir,
-            },
-          },
-        };
+            }),
+          }),
+        });
       } else {
         // Update agents.list[].workspace for non-default agents
         nextCfg = applyAgentConfig(nextCfg, {
