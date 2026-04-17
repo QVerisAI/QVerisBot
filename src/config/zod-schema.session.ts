@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { parseByteSize } from "../cli/parse-bytes.js";
 import { parseDurationMs } from "../cli/parse-duration.js";
+import { normalizeStringifiedOptionalString } from "../shared/string-coerce.js";
 import { ElevatedAllowFromSchema } from "./zod-schema.agent-runtime.js";
 import { createAllowDenyChannelRulesSchema } from "./zod-schema.allowdeny.js";
 import {
@@ -87,7 +88,9 @@ export const SessionSchema = z
       .superRefine((val, ctx) => {
         if (val.pruneAfter !== undefined) {
           try {
-            parseDurationMs(String(val.pruneAfter).trim(), { defaultUnit: "d" });
+            parseDurationMs(normalizeStringifiedOptionalString(val.pruneAfter) ?? "", {
+              defaultUnit: "d",
+            });
           } catch {
             ctx.addIssue({
               code: z.ZodIssueCode.custom,
@@ -98,7 +101,9 @@ export const SessionSchema = z
         }
         if (val.rotateBytes !== undefined) {
           try {
-            parseByteSize(String(val.rotateBytes).trim(), { defaultUnit: "b" });
+            parseByteSize(normalizeStringifiedOptionalString(val.rotateBytes) ?? "", {
+              defaultUnit: "b",
+            });
           } catch {
             ctx.addIssue({
               code: z.ZodIssueCode.custom,
@@ -109,7 +114,9 @@ export const SessionSchema = z
         }
         if (val.resetArchiveRetention !== undefined && val.resetArchiveRetention !== false) {
           try {
-            parseDurationMs(String(val.resetArchiveRetention).trim(), { defaultUnit: "d" });
+            parseDurationMs(normalizeStringifiedOptionalString(val.resetArchiveRetention) ?? "", {
+              defaultUnit: "d",
+            });
           } catch {
             ctx.addIssue({
               code: z.ZodIssueCode.custom,
@@ -120,7 +127,9 @@ export const SessionSchema = z
         }
         if (val.maxDiskBytes !== undefined) {
           try {
-            parseByteSize(String(val.maxDiskBytes).trim(), { defaultUnit: "b" });
+            parseByteSize(normalizeStringifiedOptionalString(val.maxDiskBytes) ?? "", {
+              defaultUnit: "b",
+            });
           } catch {
             ctx.addIssue({
               code: z.ZodIssueCode.custom,
@@ -131,7 +140,9 @@ export const SessionSchema = z
         }
         if (val.highWaterBytes !== undefined) {
           try {
-            parseByteSize(String(val.highWaterBytes).trim(), { defaultUnit: "b" });
+            parseByteSize(normalizeStringifiedOptionalString(val.highWaterBytes) ?? "", {
+              defaultUnit: "b",
+            });
           } catch {
             ctx.addIssue({
               code: z.ZodIssueCode.custom,

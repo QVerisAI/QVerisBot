@@ -32,11 +32,34 @@ const bluebubblesGroupConfigSchema = z.object({
   tools: ToolPolicySchema,
 });
 
+const bluebubblesNetworkSchema = z
+  .object({
+    /** Dangerous opt-in for same-host or trusted private/internal BlueBubbles deployments. */
+    dangerouslyAllowPrivateNetwork: z.boolean().optional(),
+  })
+  .strict()
+  .optional();
+
+const bluebubblesCatchupSchema = z
+  .object({
+    /** Replay messages delivered while the gateway was unreachable. Defaults to on. */
+    enabled: z.boolean().optional(),
+    /** Hard ceiling on lookback window. Clamped to [1, 720] minutes. */
+    maxAgeMinutes: z.number().int().positive().optional(),
+    /** Upper bound on messages replayed in a single startup pass. Clamped to [1, 500]. */
+    perRunLimit: z.number().int().positive().optional(),
+    /** First-run lookback used when no cursor has been persisted yet. Clamped to [1, 720]. */
+    firstRunLookbackMinutes: z.number().int().positive().optional(),
+  })
+  .strict()
+  .optional();
+
 const bluebubblesAccountSchema = z
   .object({
     name: z.string().optional(),
     enabled: z.boolean().optional(),
     markdown: MarkdownConfigSchema,
+    actions: bluebubblesActionSchema,
     serverUrl: z.string().optional(),
     password: buildSecretInputSchema().optional(),
     webhookPath: z.string().optional(),
@@ -52,7 +75,8 @@ const bluebubblesAccountSchema = z
     mediaMaxMb: z.number().int().positive().optional(),
     mediaLocalRoots: z.array(z.string()).optional(),
     sendReadReceipts: z.boolean().optional(),
-    allowPrivateNetwork: z.boolean().optional(),
+    network: bluebubblesNetworkSchema,
+    catchup: bluebubblesCatchupSchema,
     blockStreaming: z.boolean().optional(),
     groups: z.object({}).catchall(bluebubblesGroupConfigSchema).optional(),
   })
@@ -70,7 +94,7 @@ const bluebubblesAccountSchema = z
 
 export const BlueBubblesConfigSchema = buildCatchallMultiAccountChannelSchema(
   bluebubblesAccountSchema,
-).extend({
+).safeExtend({
   actions: bluebubblesActionSchema,
 });
 

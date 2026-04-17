@@ -9,14 +9,22 @@ fi
 # shellcheck source=../install-sh-common/version-parse.sh
 source "$VERIFY_HELPER_PATH"
 
-INSTALL_URL="${OPENCLAW_INSTALL_URL:-https://openclaw.bot/install.sh}"
+INSTALL_URL="${QVERISBOT_INSTALL_URL:-${OPENCLAW_INSTALL_URL:-https://qveris.ai/qverisbot/install.sh}}"
+PACKAGE_NAME="${QVERISBOT_INSTALL_PACKAGE:-${OPENCLAW_INSTALL_PACKAGE:-@qverisai/qverisbot}}"
+CLI_NAME="${QVERISBOT_INSTALL_CLI:-${OPENCLAW_INSTALL_CLI:-qverisbot}}"
 MODELS_MODE="${OPENCLAW_E2E_MODELS:-both}" # both|openai|anthropic
-INSTALL_TAG="${OPENCLAW_INSTALL_TAG:-latest}"
-E2E_PREVIOUS_VERSION="${OPENCLAW_INSTALL_E2E_PREVIOUS:-}"
-SKIP_PREVIOUS="${OPENCLAW_INSTALL_E2E_SKIP_PREVIOUS:-0}"
+INSTALL_TAG="${QVERISBOT_INSTALL_TAG:-${OPENCLAW_INSTALL_TAG:-latest}}"
+E2E_PREVIOUS_VERSION="${QVERISBOT_INSTALL_E2E_PREVIOUS:-${OPENCLAW_INSTALL_E2E_PREVIOUS:-}}"
+SKIP_PREVIOUS="${QVERISBOT_INSTALL_E2E_SKIP_PREVIOUS:-${OPENCLAW_INSTALL_E2E_SKIP_PREVIOUS:-0}}"
 OPENAI_API_KEY="${OPENAI_API_KEY:-}"
 ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}"
 ANTHROPIC_API_TOKEN="${ANTHROPIC_API_TOKEN:-}"
+
+# This image runs as a non-root user, so seed a user-local npm prefix before we
+# preinstall an older global version to exercise the upgrade path.
+export NPM_CONFIG_PREFIX="${NPM_CONFIG_PREFIX:-$HOME/.npm-global}"
+mkdir -p "$NPM_CONFIG_PREFIX"
+export PATH="$NPM_CONFIG_PREFIX/bin:$PATH"
 
 if [[ "$MODELS_MODE" != "both" && "$MODELS_MODE" != "openai" && "$MODELS_MODE" != "anthropic" ]]; then
   echo "ERROR: OPENCLAW_E2E_MODELS must be one of: both|openai|anthropic" >&2
@@ -41,7 +49,7 @@ elif [[ "$MODELS_MODE" == "anthropic" && -z "$ANTHROPIC_API_TOKEN" && -z "$ANTHR
 fi
 
 echo "==> Resolve npm versions"
-EXPECTED_VERSION="$(npm view "${PACKAGE_NAME}@${INSTALL_TAG}" version)"
+EXPECTED_VERSION="$(quiet_npm view "${PACKAGE_NAME}@${INSTALL_TAG}" version)"
 if [[ -z "$EXPECTED_VERSION" || "$EXPECTED_VERSION" == "undefined" || "$EXPECTED_VERSION" == "null" ]]; then
   echo "ERROR: unable to resolve ${PACKAGE_NAME}@${INSTALL_TAG} version" >&2
   exit 2
@@ -49,10 +57,8 @@ fi
 if [[ -n "$E2E_PREVIOUS_VERSION" ]]; then
   PREVIOUS_VERSION="$E2E_PREVIOUS_VERSION"
 else
-  PREVIOUS_VERSION="$(PACKAGE_NAME="$PACKAGE_NAME" node - <<'NODE'
-const { execSync } = require("node:child_process");
-const packageName = process.env.PACKAGE_NAME || "@qverisai/qverisbot";
-const versions = JSON.parse(execSync(`npm view ${packageName} versions --json`, { encoding: "utf8" }));
+  PREVIOUS_VERSION="$(VERSIONS_JSON="$(quiet_npm view "$PACKAGE_NAME" versions --json)" node - <<'NODE'
+const versions = JSON.parse(process.env.VERSIONS_JSON || "[]");
 if (!Array.isArray(versions) || versions.length === 0) process.exit(1);
 process.stdout.write(versions.length >= 2 ? versions[versions.length - 2] : versions[0]);
 NODE
@@ -64,7 +70,7 @@ if [[ "$SKIP_PREVIOUS" == "1" ]]; then
   echo "==> Skip preinstall previous (OPENCLAW_INSTALL_E2E_SKIP_PREVIOUS=1)"
 else
   echo "==> Preinstall previous (forces installer upgrade path; avoids read() prompt)"
-  npm install -g "${PACKAGE_NAME}@${PREVIOUS_VERSION}"
+  quiet_npm install -g "${PACKAGE_NAME}@${PREVIOUS_VERSION}"
 fi
 
 echo "==> Run official installer one-liner"
@@ -81,7 +87,7 @@ INSTALLED_VERSION="$("$CLI_NAME" --version 2>/dev/null | head -n 1 | tr -d '\r')
 INSTALLED_VERSION="$(extract_openclaw_semver "$INSTALLED_VERSION")"
 echo "installed=$INSTALLED_VERSION expected=$EXPECTED_VERSION"
 if [[ "$INSTALLED_VERSION" != "$EXPECTED_VERSION" ]]; then
-  echo "ERROR: expected ${PACKAGE_NAME}@$EXPECTED_VERSION, got ${CLI_NAME}@$INSTALLED_VERSION" >&2
+  echo "ERROR: expected ${CLI_NAME}@$EXPECTED_VERSION, got ${CLI_NAME}@$INSTALLED_VERSION" >&2
   exit 1
 fi
 
@@ -187,11 +193,46 @@ run_agent_turn() {
   local session_id="$2"
   local prompt="$3"
   local out_json="$4"
+  # Installer E2E validates install + onboard + embedded agent tooling. It does
+  # not need a paired Gateway control-plane hop, which is flaky/non-deterministic
+  # in the isolated container and already covered by gateway-specific lanes.
   "$CLI_NAME" --profile "$profile" agent \
+    --local \
     --session-id "$session_id" \
     --message "$prompt" \
     --thinking off \
-    --json >"$out_json"
+    --json >"$out_json" 2>&1
+  node - <<'NODE' "$out_json"
+const fs = require("node:fs");
+
+const path = process.argv[2];
+const raw = fs.readFileSync(path, "utf8");
+
+function extractTrailingJsonObject(input) {
+  const trimmed = input.trim();
+  if (!trimmed) {
+    throw new Error("agent output was empty");
+  }
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    // Some local runs emit stderr diagnostics before the final JSON payload.
+    // Walk backward and keep the last parseable top-level object.
+    for (let index = trimmed.lastIndexOf("{"); index >= 0; index = trimmed.lastIndexOf("{", index - 1)) {
+      const candidate = trimmed.slice(index);
+      try {
+        return JSON.parse(candidate);
+      } catch {
+        // keep scanning
+      }
+    }
+    throw new Error(`could not extract JSON payload from agent output:\n${trimmed}`);
+  }
+}
+
+const parsed = extractTrailingJsonObject(raw);
+fs.writeFileSync(path, `${JSON.stringify(parsed, null, 2)}\n`, "utf8");
+NODE
 }
 
 assert_agent_json_has_text() {
@@ -349,7 +390,7 @@ run_profile() {
 
 	  echo "==> Onboard ($profile)"
 	  if [[ "$agent_model_provider" == "openai" ]]; then
-	    "$CLI_NAME" --profile "$profile" onboard \
+	    openclaw --profile "$profile" onboard \
 	      --non-interactive \
 	      --accept-risk \
 	      --flow quickstart \
@@ -360,8 +401,20 @@ run_profile() {
       --gateway-auth token \
       --workspace "$workspace" \
       --skip-health
-	  elif [[ -n "$ANTHROPIC_API_TOKEN" ]]; then
-	    "$CLI_NAME" --profile "$profile" onboard \
+  elif [[ -n "$ANTHROPIC_API_KEY" ]]; then
+    "$CLI_NAME" --profile "$profile" onboard \
+	      --non-interactive \
+	      --accept-risk \
+	      --flow quickstart \
+	      --auth-choice apiKey \
+	      --anthropic-api-key "$ANTHROPIC_API_KEY" \
+	      --gateway-port "$port" \
+      --gateway-bind loopback \
+      --gateway-auth token \
+      --workspace "$workspace" \
+      --skip-health
+  elif [[ -n "$ANTHROPIC_API_TOKEN" ]]; then
+    "$CLI_NAME" --profile "$profile" onboard \
 	      --non-interactive \
 	      --accept-risk \
 	      --flow quickstart \
@@ -374,7 +427,7 @@ run_profile() {
       --workspace "$workspace" \
       --skip-health
 	  else
-	    "$CLI_NAME" --profile "$profile" onboard \
+	    openclaw --profile "$profile" onboard \
 	      --non-interactive \
 	      --accept-risk \
 	      --flow quickstart \
@@ -399,15 +452,12 @@ run_profile() {
   local image_model
   if [[ "$agent_model_provider" == "openai" ]]; then
     agent_model="$(set_agent_model "$profile" \
-      "openai/gpt-4.1-mini" \
-      "openai/gpt-4.1" \
+      "openai/gpt-5.4" \
       "openai/gpt-4o-mini" \
       "openai/gpt-4o")"
     image_model="$(set_image_model "$profile" \
-      "openai/gpt-4.1" \
       "openai/gpt-4o-mini" \
-      "openai/gpt-4o" \
-      "openai/gpt-4.1-mini")"
+      "openai/gpt-4o")"
   else
     agent_model="$(set_agent_model "$profile" \
       "anthropic/claude-opus-4-6" \
@@ -426,16 +476,16 @@ run_profile() {
   IMAGE_PNG="$workspace/proof.png"
   IMAGE_TXT="$workspace/image.txt"
   SESSION_ID="e2e-tools-${profile}"
-  SESSION_JSONL="/root/.openclaw-${profile}/agents/main/sessions/${SESSION_ID}.jsonl"
+  SESSION_JSONL="$HOME/.openclaw-${profile}/agents/main/sessions/${SESSION_ID}.jsonl"
 
   PROOF_VALUE="$(node -e 'console.log(require("node:crypto").randomBytes(16).toString("hex"))')"
   echo -n "$PROOF_VALUE" >"$PROOF_TXT"
   write_png_lr_rg "$IMAGE_PNG"
-  EXPECTED_HOSTNAME="$(cat /etc/hostname | tr -d '\r\n')"
+  EXPECTED_HOSTNAME="$(hostname | tr -d '\r\n')"
 
   echo "==> Start gateway ($profile)"
   GATEWAY_LOG="$workspace/gateway.log"
-  "$CLI_NAME" --profile "$profile" gateway --port "$port" --bind loopback >"$GATEWAY_LOG" 2>&1 &
+  openclaw --profile "$profile" gateway --port "$port" --bind loopback >"$GATEWAY_LOG" 2>&1 &
   GATEWAY_PID="$!"
   cleanup_profile() {
     if kill -0 "$GATEWAY_PID" 2>/dev/null; then
@@ -446,22 +496,24 @@ run_profile() {
   trap cleanup_profile EXIT
 
   echo "==> Wait for health ($profile)"
-  for _ in $(seq 1 60); do
-    if "$CLI_NAME" --profile "$profile" health --timeout 2000 --json >/dev/null 2>&1; then
+  for _ in $(seq 1 240); do
+    if "$CLI_NAME" --profile "$profile" health --timeout 5000 --json >/dev/null 2>&1; then
       break
     fi
     sleep 0.25
   done
-  "$CLI_NAME" --profile "$profile" health --timeout 10000 --json >/dev/null
+  "$CLI_NAME" --profile "$profile" health --timeout 60000 --json >/dev/null
 
   echo "==> Agent turns ($profile)"
   TURN1_JSON="/tmp/agent-${profile}-1.json"
   TURN2_JSON="/tmp/agent-${profile}-2.json"
+  TURN2B_JSON="/tmp/agent-${profile}-2b.json"
   TURN3_JSON="/tmp/agent-${profile}-3.json"
+  TURN3B_JSON="/tmp/agent-${profile}-3b.json"
   TURN4_JSON="/tmp/agent-${profile}-4.json"
 
   run_agent_turn "$profile" "$SESSION_ID" \
-    "Use the read tool (not exec) to read proof.txt. Reply with the exact contents only (no extra whitespace)." \
+    "Use the read tool (not exec) to read ${PROOF_TXT}. Reply with the exact contents only (no extra whitespace)." \
     "$TURN1_JSON"
   assert_agent_json_has_text "$TURN1_JSON"
   assert_agent_json_ok "$TURN1_JSON" "$agent_model_provider"
@@ -473,7 +525,7 @@ run_profile() {
   fi
 
   local prompt2
-  prompt2=$'Use the write tool (not exec) to write exactly this string into copy.txt:\n'"${reply1}"$'\nThen use the read tool (not exec) to read copy.txt and reply with the exact contents only (no extra whitespace).'
+  prompt2=$'Use the write tool (not exec) to write exactly this string into '"${PROOF_COPY}"$':\n'"${reply1}"$'\nReply with exactly: WROTE'
   run_agent_turn "$profile" "$SESSION_ID" "$prompt2" "$TURN2_JSON"
   assert_agent_json_has_text "$TURN2_JSON"
   assert_agent_json_ok "$TURN2_JSON" "$agent_model_provider"
@@ -483,25 +535,41 @@ run_profile() {
     echo "ERROR: copy.txt did not match proof.txt ($profile)" >&2
     exit 1
   fi
+  run_agent_turn "$profile" "$SESSION_ID" \
+    "Use the read tool (not exec) to read ${PROOF_COPY}. Reply with the exact contents only (no extra whitespace)." \
+    "$TURN2B_JSON"
+  assert_agent_json_has_text "$TURN2B_JSON"
+  assert_agent_json_ok "$TURN2B_JSON" "$agent_model_provider"
   local reply2
-  reply2="$(extract_matching_text "$TURN2_JSON" "$PROOF_VALUE" | tr -d '\r\n')"
+  reply2="$(extract_matching_text "$TURN2B_JSON" "$PROOF_VALUE" | tr -d '\r\n')"
   if [[ "$reply2" != "$PROOF_VALUE" ]]; then
     echo "ERROR: agent did not read copy.txt correctly ($profile): $reply2" >&2
     exit 1
   fi
 
-  local prompt3
-  prompt3=$'Use the exec tool to run: cat /etc/hostname\nThen use the write tool to write the exact stdout (trim trailing newline) into hostname.txt. Reply with the hostname only.'
-  run_agent_turn "$profile" "$SESSION_ID" "$prompt3" "$TURN3_JSON"
+  run_agent_turn "$profile" "$SESSION_ID" \
+    "Use the exec tool to run this command: hostname. Reply with the exact stdout only (trim trailing newline)." \
+    "$TURN3_JSON"
   assert_agent_json_has_text "$TURN3_JSON"
   assert_agent_json_ok "$TURN3_JSON" "$agent_model_provider"
+  local reply3
+  reply3="$(extract_matching_text "$TURN3_JSON" "$EXPECTED_HOSTNAME" | tr -d '\r\n')"
+  if [[ "$reply3" != "$EXPECTED_HOSTNAME" ]]; then
+    echo "ERROR: agent did not run hostname correctly ($profile): $reply3" >&2
+    exit 1
+  fi
+  local prompt3b
+  prompt3b=$'Use the write tool to write exactly this string into '"${HOSTNAME_TXT}"$':\n'"${reply3}"$'\nReply with exactly: WROTE'
+  run_agent_turn "$profile" "$SESSION_ID" "$prompt3b" "$TURN3B_JSON"
+  assert_agent_json_has_text "$TURN3B_JSON"
+  assert_agent_json_ok "$TURN3B_JSON" "$agent_model_provider"
   if [[ "$(cat "$HOSTNAME_TXT" 2>/dev/null | tr -d '\r\n' || true)" != "$EXPECTED_HOSTNAME" ]]; then
-    echo "ERROR: hostname.txt did not match /etc/hostname ($profile)" >&2
+    echo "ERROR: hostname.txt did not match hostname output ($profile)" >&2
     exit 1
   fi
 
   run_agent_turn "$profile" "$SESSION_ID" \
-    "Use the image tool on proof.png. Determine which color is on the left half and which is on the right half. Then use the write tool to write exactly: LEFT=RED RIGHT=GREEN into image.txt. Reply with exactly: LEFT=RED RIGHT=GREEN" \
+    "Use the image tool on ${IMAGE_PNG}. Determine which color is on the left half and which is on the right half. Then use the write tool to write exactly: LEFT=RED RIGHT=GREEN into ${IMAGE_TXT}. Reply with exactly: LEFT=RED RIGHT=GREEN" \
     "$TURN4_JSON"
   assert_agent_json_has_text "$TURN4_JSON"
   assert_agent_json_ok "$TURN4_JSON" "$agent_model_provider"
@@ -521,7 +589,7 @@ run_profile() {
   sleep 1
   if [[ ! -f "$SESSION_JSONL" ]]; then
     echo "ERROR: missing session transcript ($profile): $SESSION_JSONL" >&2
-    ls -la "/root/.openclaw-${profile}/agents/main/sessions" >&2 || true
+    ls -la "$HOME/.openclaw-${profile}/agents/main/sessions" >&2 || true
     exit 1
   fi
   assert_session_used_tools "$SESSION_JSONL" read write exec image

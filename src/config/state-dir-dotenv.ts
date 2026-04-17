@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import dotenv from "dotenv";
+import { parseDotEnv } from "../infra/dotenv-runtime.js";
 import {
   isDangerousHostEnvOverrideVarName,
   isDangerousHostEnvVarName,
@@ -14,25 +14,8 @@ function isBlockedServiceEnvVar(key: string): boolean {
   return isDangerousHostEnvVarName(key) || isDangerousHostEnvOverrideVarName(key);
 }
 
-/**
- * Read and parse `~/.openclaw/.env` (or `$OPENCLAW_STATE_DIR/.env`), returning
- * a filtered record of key-value pairs suitable for embedding in a service
- * environment (LaunchAgent plist, systemd unit, Scheduled Task).
- */
-export function readStateDirDotEnvVars(
-  env: Record<string, string | undefined>,
-): Record<string, string> {
-  const stateDir = resolveStateDir(env as NodeJS.ProcessEnv);
-  const dotEnvPath = path.join(stateDir, ".env");
-
-  let content: string;
-  try {
-    content = fs.readFileSync(dotEnvPath, "utf8");
-  } catch {
-    return {};
-  }
-
-  const parsed = dotenv.parse(content);
+function parseStateDirDotEnvContent(content: string): Record<string, string> {
+  const parsed = parseDotEnv(content);
   const entries: Record<string, string> = {};
   for (const [rawKey, value] of Object.entries(parsed)) {
     if (!value?.trim()) {
@@ -48,6 +31,27 @@ export function readStateDirDotEnvVars(
     entries[key] = value;
   }
   return entries;
+}
+
+export function readStateDirDotEnvVarsFromStateDir(stateDir: string): Record<string, string> {
+  const dotEnvPath = path.join(stateDir, ".env");
+  try {
+    return parseStateDirDotEnvContent(fs.readFileSync(dotEnvPath, "utf8"));
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Read and parse `~/.openclaw/.env` (or `$OPENCLAW_STATE_DIR/.env`), returning
+ * a filtered record of key-value pairs suitable for embedding in a service
+ * environment (LaunchAgent plist, systemd unit, Scheduled Task).
+ */
+export function readStateDirDotEnvVars(
+  env: Record<string, string | undefined>,
+): Record<string, string> {
+  const stateDir = resolveStateDir(env as NodeJS.ProcessEnv);
+  return readStateDirDotEnvVarsFromStateDir(stateDir);
 }
 
 /**

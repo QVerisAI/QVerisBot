@@ -1,6 +1,6 @@
 import path from "node:path";
-import { fileTypeFromBuffer } from "file-type";
 import { type MediaKind, mediaKindFromMime } from "./constants.js";
+import { fileTypeFromBufferRuntime } from "./file-type-runtime.js";
 
 // Map common mimes to preferred file extensions.
 const EXT_BY_MIME: Record<string, string> = {
@@ -48,7 +48,7 @@ const MIME_BY_EXT: Record<string, string> = {
   ".jpeg": "image/jpeg",
   ".js": "text/javascript",
   ".htm": "text/html",
-  ".xml": "text/xml", // pin text/xml as canonical (application/xml also maps to .xml in EXT_BY_MIME)
+  ".xml": "text/xml",
 };
 
 const AUDIO_FILE_EXTENSIONS = new Set([
@@ -76,7 +76,7 @@ async function sniffMime(buffer?: Buffer): Promise<string | undefined> {
     return undefined;
   }
   try {
-    const type = await fileTypeFromBuffer(buffer);
+    const type = await fileTypeFromBufferRuntime(buffer);
     return type?.mime ?? undefined;
   } catch {
     return undefined;
@@ -97,6 +97,14 @@ export function getFileExtension(filePath?: string | null): string | undefined {
   }
   const ext = path.extname(filePath).toLowerCase();
   return ext || undefined;
+}
+
+export function mimeTypeFromFilePath(filePath?: string | null): string | undefined {
+  const ext = getFileExtension(filePath);
+  if (!ext) {
+    return undefined;
+  }
+  return MIME_BY_EXT[ext];
 }
 
 export function isAudioFileName(fileName?: string | null): boolean {

@@ -67,16 +67,18 @@ jobs:
         id: manifest
         env:
           OPENCLAW_CI_DOCS_ONLY: ${{ steps.docs_scope.outputs.docs_only }}
-          OPENCLAW_CI_DOCS_CHANGED: "false"
-          OPENCLAW_CI_RUN_NODE: "false"
-          OPENCLAW_CI_RUN_MACOS: "false"
-          OPENCLAW_CI_RUN_ANDROID: "false"
-          OPENCLAW_CI_RUN_WINDOWS: "false"
-          OPENCLAW_CI_RUN_SKILLS_PYTHON: "false"
-          OPENCLAW_CI_HAS_CHANGED_EXTENSIONS: "false"
-          OPENCLAW_CI_CHANGED_EXTENSIONS_MATRIX: '{"include":[]}'
           OPENCLAW_CI_RUN_CHANGED_SMOKE: ${{ steps.changed_scope.outputs.run_changed_smoke || 'false' }}
-        run: node scripts/ci-write-manifest-outputs.mjs --workflow install-smoke
+        run: |
+          docs_only="${OPENCLAW_CI_DOCS_ONLY:-false}"
+          run_changed_smoke="${OPENCLAW_CI_RUN_CHANGED_SMOKE:-false}"
+          run_install_smoke=false
+          if [ "$docs_only" != "true" ] && [ "$run_changed_smoke" = "true" ]; then
+            run_install_smoke=true
+          fi
+          {
+            echo "docs_only=$docs_only"
+            echo "run_install_smoke=$run_install_smoke"
+          } >> "$GITHUB_OUTPUT"
 
   install-smoke:
     needs: [preflight]
@@ -192,14 +194,25 @@ jobs:
           push: false
           provenance: false
 
+      - name: Setup Node environment for local pack smoke
+        uses: ./.github/actions/setup-node-env
+        with:
+          install-bun: "false"
+          install-deps: "true"
+          use-sticky-disk: "false"
+
       - name: Run installer docker tests
         env:
           QVERISBOT_INSTALL_URL: https://qveris.ai/qverisbot/install.sh
           QVERISBOT_INSTALL_CLI_URL: https://qveris.ai/qverisbot/install-cli.sh
-          CLAWDBOT_NO_ONBOARD: "1"
-          QVERISBOT_INSTALL_SMOKE_SKIP_CLI: "1"
-          QVERISBOT_INSTALL_SMOKE_SKIP_IMAGE_BUILD: "1"
-          QVERISBOT_INSTALL_NONROOT_SKIP_IMAGE_BUILD: ${{ github.event_name == 'pull_request' && '0' || '1' }}
-          QVERISBOT_INSTALL_SMOKE_SKIP_NONROOT: ${{ github.event_name == 'pull_request' && '1' || '0' }}
-          QVERISBOT_INSTALL_SMOKE_SKIP_PREVIOUS: "1"
+          OPENCLAW_INSTALL_URL: https://qveris.ai/qverisbot/install.sh
+          OPENCLAW_INSTALL_CLI_URL: https://qveris.ai/qverisbot/install-cli.sh
+          OPENCLAW_NO_ONBOARD: "1"
+          OPENCLAW_INSTALL_SMOKE_SKIP_CLI: "1"
+          OPENCLAW_INSTALL_SMOKE_SKIP_IMAGE_BUILD: "1"
+          OPENCLAW_INSTALL_NONROOT_SKIP_IMAGE_BUILD: ${{ github.event_name == 'pull_request' && '0' || '1' }}
+          OPENCLAW_INSTALL_SMOKE_SKIP_NONROOT: ${{ github.event_name == 'pull_request' && '1' || '0' }}
+          OPENCLAW_INSTALL_SMOKE_SKIP_PREVIOUS: "1"
+          OPENCLAW_INSTALL_SMOKE_UPDATE_DIST_IMAGE: openclaw-dockerfile-smoke:local
+          OPENCLAW_INSTALL_SMOKE_UPDATE_SKIP_LOCAL_BUILD: "1"
         run: bash scripts/test-install-sh-docker.sh

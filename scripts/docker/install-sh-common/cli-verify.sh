@@ -7,7 +7,7 @@ source "$SCRIPT_DIR/version-parse.sh"
 verify_installed_cli() {
   local package_name="$1"
   local expected_version="$2"
-  local cli_name="$package_name"
+  local cli_name="${CLI_NAME:-$package_name}"
   local cmd_path=""
   local entry_path=""
   local npm_root=""
@@ -19,7 +19,7 @@ verify_installed_cli() {
   fi
 
   if [[ -z "$cmd_path" ]]; then
-    npm_root="$(npm root -g 2>/dev/null || true)"
+    npm_root="$(quiet_npm root -g 2>/dev/null || true)"
     if [[ -n "$npm_root" && -f "$npm_root/$package_name/dist/entry.js" ]]; then
       entry_path="$npm_root/$package_name/dist/entry.js"
     fi

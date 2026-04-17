@@ -26,6 +26,19 @@ export type SessionTranscriptSummary = {
   messages: ParsedMessage[];
 };
 
+type TranscriptTextBlock = {
+  type: "text";
+  text: string;
+};
+
+function isTranscriptTextBlock(value: unknown): value is TranscriptTextBlock {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  return record.type === "text" && typeof record.text === "string";
+}
+
 /**
  * Parse a JSONL session transcript into user/assistant messages.
  *
@@ -83,9 +96,10 @@ export async function parseTranscriptMessages(
         }
 
         const text = Array.isArray(msg.content)
-          ? // oxlint-disable-next-line typescript/no-explicit-any
-            msg.content.find((c: any) => c.type === "text")?.text
-          : msg.content;
+          ? msg.content.find(isTranscriptTextBlock)?.text
+          : typeof msg.content === "string"
+            ? msg.content
+            : undefined;
         if (!text || text.startsWith("/")) {
           continue;
         }

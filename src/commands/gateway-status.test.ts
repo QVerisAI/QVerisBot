@@ -1,20 +1,104 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { GatewayProbeResult } from "../gateway/probe.js";
 import type { GatewayBonjourBeacon } from "../infra/bonjour-discovery.js";
+import type { GatewayTlsRuntime } from "../infra/tls/gateway.js";
 import type { RuntimeEnv } from "../runtime.js";
 import { withEnvAsync } from "../test-utils/env.js";
 import { gatewayStatusCommand } from "./gateway-status.js";
+import { createSecretRefGatewayConfig } from "./gateway-status/test-support.js";
+
+function createDefaultGatewayStatusConfig() {
+  return {
+    gateway: {
+      mode: "remote",
+      remote: { url: "wss://remote.example:18789", token: "rtok" },
+      auth: { token: "ltok" },
+    },
+  };
+}
+
+function createDefaultProbeGatewayResult(opts: { url: string }): GatewayProbeResult {
+  const { url } = opts;
+  if (url.includes("127.0.0.1")) {
+    return {
+      ok: true,
+      url,
+      connectLatencyMs: 12,
+      error: null,
+      close: null,
+      health: { ok: true },
+      status: {
+        linkChannel: {
+          id: "whatsapp",
+          label: "WhatsApp",
+          linked: false,
+          authAgeMs: null,
+        },
+        sessions: { count: 0 },
+      },
+      presence: [
+        {
+          mode: "gateway",
+          reason: "self",
+          host: "local",
+          ip: "127.0.0.1",
+          text: "Gateway: local (127.0.0.1) · app test · mode gateway · reason self",
+          ts: Date.now(),
+        },
+      ],
+      configSnapshot: {
+        path: "/tmp/cfg.json",
+        exists: true,
+        valid: true,
+        config: {
+          gateway: { mode: "local" },
+        },
+        issues: [],
+        legacyIssues: [],
+      },
+    };
+  }
+  return {
+    ok: true,
+    url,
+    connectLatencyMs: 34,
+    error: null,
+    close: null,
+    health: { ok: true },
+    status: {
+      linkChannel: {
+        id: "whatsapp",
+        label: "WhatsApp",
+        linked: true,
+        authAgeMs: 5_000,
+      },
+      sessions: { count: 2 },
+    },
+    presence: [
+      {
+        mode: "gateway",
+        reason: "self",
+        host: "remote",
+        ip: "100.64.0.2",
+        text: "Gateway: remote (100.64.0.2) · app test · mode gateway · reason self",
+        ts: Date.now(),
+      },
+    ],
+    configSnapshot: {
+      path: "/tmp/remote.json",
+      exists: true,
+      valid: true,
+      config: { gateway: { mode: "remote" } },
+      issues: [],
+      legacyIssues: [],
+    },
+  };
+}
 
 const mocks = vi.hoisted(() => {
   const sshStop = vi.fn(async () => {});
   return {
-    readBestEffortConfig: vi.fn(async () => ({
-      gateway: {
-        mode: "remote",
-        remote: { url: "wss://remote.example:18789", token: "rtok" },
-        auth: { token: "ltok" },
-      },
-    })),
+    readBestEffortConfig: vi.fn(async () => createDefaultGatewayStatusConfig()),
     resolveGatewayPort: vi.fn((_cfg?: unknown) => 18789),
     discoverGatewayBeacons: vi.fn(async (_opts?: unknown): Promise<GatewayBonjourBeacon[]> => []),
     pickPrimaryTailnetIPv4: vi.fn(() => "100.64.0.10"),
@@ -37,83 +121,17 @@ const mocks = vi.hoisted(() => {
       stderr: [],
       stop: sshStop,
     })),
-    probeGateway: vi.fn(async (opts: { url: string }): Promise<GatewayProbeResult> => {
-      const { url } = opts;
-      if (url.includes("127.0.0.1")) {
-        return {
-          ok: true,
-          url,
-          connectLatencyMs: 12,
-          error: null,
-          close: null,
-          health: { ok: true },
-          status: {
-            linkChannel: {
-              id: "whatsapp",
-              label: "WhatsApp",
-              linked: false,
-              authAgeMs: null,
-            },
-            sessions: { count: 0 },
-          },
-          presence: [
-            {
-              mode: "gateway",
-              reason: "self",
-              host: "local",
-              ip: "127.0.0.1",
-              text: "Gateway: local (127.0.0.1) · app test · mode gateway · reason self",
-              ts: Date.now(),
-            },
-          ],
-          configSnapshot: {
-            path: "/tmp/cfg.json",
-            exists: true,
-            valid: true,
-            config: {
-              gateway: { mode: "local" },
-            },
-            issues: [],
-            legacyIssues: [],
-          },
-        };
-      }
-      return {
-        ok: true,
-        url,
-        connectLatencyMs: 34,
-        error: null,
-        close: null,
-        health: { ok: true },
-        status: {
-          linkChannel: {
-            id: "whatsapp",
-            label: "WhatsApp",
-            linked: true,
-            authAgeMs: 5_000,
-          },
-          sessions: { count: 2 },
-        },
-        presence: [
-          {
-            mode: "gateway",
-            reason: "self",
-            host: "remote",
-            ip: "100.64.0.2",
-            text: "Gateway: remote (100.64.0.2) · app test · mode gateway · reason self",
-            ts: Date.now(),
-          },
-        ],
-        configSnapshot: {
-          path: "/tmp/remote.json",
-          exists: true,
-          valid: true,
-          config: { gateway: { mode: "remote" } },
-          issues: [],
-          legacyIssues: [],
-        },
-      };
-    }),
+    loadGatewayTlsRuntime: vi.fn(
+      async (): Promise<GatewayTlsRuntime> => ({
+        enabled: true,
+        required: true,
+        fingerprintSha256: "sha256:local-fingerprint",
+      }),
+    ),
+    probeGateway: vi.fn(
+      async (opts: { url: string }): Promise<GatewayProbeResult> =>
+        createDefaultProbeGatewayResult(opts),
+    ),
   };
 });
 
@@ -124,6 +142,7 @@ const {
   sshStop,
   resolveSshConfig,
   startSshPortForward,
+  loadGatewayTlsRuntime,
   probeGateway,
 } = mocks;
 
@@ -132,8 +151,10 @@ vi.mock("../config/config.js", () => ({
   resolveGatewayPort: mocks.resolveGatewayPort,
 }));
 
-vi.mock("../infra/bonjour-discovery.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../infra/bonjour-discovery.js")>();
+vi.mock("../infra/bonjour-discovery.js", async () => {
+  const actual = await vi.importActual<typeof import("../infra/bonjour-discovery.js")>(
+    "../infra/bonjour-discovery.js",
+  );
   return {
     ...actual,
     discoverGatewayBeacons: mocks.discoverGatewayBeacons,
@@ -144,8 +165,9 @@ vi.mock("../infra/tailnet.js", () => ({
   pickPrimaryTailnetIPv4: mocks.pickPrimaryTailnetIPv4,
 }));
 
-vi.mock("../infra/ssh-tunnel.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../infra/ssh-tunnel.js")>();
+vi.mock("../infra/ssh-tunnel.js", async () => {
+  const actual =
+    await vi.importActual<typeof import("../infra/ssh-tunnel.js")>("../infra/ssh-tunnel.js");
   return {
     ...actual,
     startSshPortForward: mocks.startSshPortForward,
@@ -154,6 +176,10 @@ vi.mock("../infra/ssh-tunnel.js", async (importOriginal) => {
 
 vi.mock("../infra/ssh-config.js", () => ({
   resolveSshConfig: mocks.resolveSshConfig,
+}));
+
+vi.mock("../infra/tls/gateway.js", () => ({
+  loadGatewayTlsRuntime: mocks.loadGatewayTlsRuntime,
 }));
 
 vi.mock("../gateway/probe.js", () => ({
@@ -223,6 +249,45 @@ function findUnresolvedSecretRefWarning(runtimeLogs: string[]) {
 }
 
 describe("gateway-status command", () => {
+  beforeEach(() => {
+    delete process.env.OPENCLAW_GATEWAY_TOKEN;
+    delete process.env.OPENCLAW_GATEWAY_PASSWORD;
+    delete process.env.MISSING_GATEWAY_TOKEN;
+    delete process.env.REMOTE_GATEWAY_TOKEN;
+    delete process.env.REMOTE_GATEWAY_PASSWORD;
+    readBestEffortConfig.mockReset();
+    readBestEffortConfig.mockImplementation(async () => createDefaultGatewayStatusConfig());
+    mocks.resolveGatewayPort.mockReset();
+    mocks.resolveGatewayPort.mockImplementation((_cfg?: unknown) => 18789);
+    discoverGatewayBeacons.mockReset();
+    discoverGatewayBeacons.mockImplementation(async () => []);
+    pickPrimaryTailnetIPv4.mockReset();
+    pickPrimaryTailnetIPv4.mockImplementation(() => "100.64.0.10");
+    sshStop.mockReset();
+    sshStop.mockImplementation(async () => {});
+    resolveSshConfig.mockReset();
+    resolveSshConfig.mockImplementation(async () => null);
+    startSshPortForward.mockReset();
+    startSshPortForward.mockImplementation(async () => ({
+      parsedTarget: { user: "me", host: "studio", port: 22 },
+      localPort: 18789,
+      remotePort: 18789,
+      pid: 123,
+      stderr: [],
+      stop: sshStop,
+    }));
+    loadGatewayTlsRuntime.mockReset();
+    loadGatewayTlsRuntime.mockImplementation(async () => ({
+      enabled: true,
+      required: true,
+      fingerprintSha256: "sha256:local-fingerprint",
+    }));
+    probeGateway.mockReset();
+    probeGateway.mockImplementation(async (opts: { url: string }) =>
+      createDefaultProbeGatewayResult(opts),
+    );
+  });
+
   it("prints human output by default", async () => {
     const { runtime, runtimeLogs, runtimeErrors } = createRuntimeCapture();
 
@@ -528,24 +593,7 @@ describe("gateway-status command", () => {
         exists: true,
         valid: true,
         config: {
-          secrets: {
-            defaults: {
-              env: "default",
-            },
-          },
-          gateway: {
-            mode: "remote",
-            auth: {
-              mode: "token",
-              token: { source: "env", provider: "default", id: "OPENCLAW_GATEWAY_TOKEN" },
-              password: { source: "env", provider: "default", id: "OPENCLAW_GATEWAY_PASSWORD" },
-            },
-            remote: {
-              url: "wss://remote.example:18789",
-              token: { source: "env", provider: "default", id: "REMOTE_GATEWAY_TOKEN" },
-              password: { source: "env", provider: "default", id: "REMOTE_GATEWAY_PASSWORD" },
-            },
-          },
+          ...createSecretRefGatewayConfig({ gatewayMode: "remote" }),
           discovery: {
             wideArea: { enabled: true },
           },
@@ -618,6 +666,69 @@ describe("gateway-status command", () => {
     const parsed = JSON.parse(runtimeLogs.join("\n")) as Record<string, unknown>;
     const targets = parsed.targets as Array<Record<string, unknown>>;
     expect(targets.some((t) => t.kind === "sshTunnel")).toBe(true);
+  });
+
+  it("uses local TLS target strategy and fingerprint for local loopback probes", async () => {
+    const { runtime } = createRuntimeCapture();
+    probeGateway.mockClear();
+    loadGatewayTlsRuntime.mockClear();
+    readBestEffortConfig.mockResolvedValueOnce({
+      gateway: {
+        mode: "local",
+        tls: { enabled: true },
+        auth: { mode: "token", token: "ltok" },
+      },
+    } as never);
+
+    await runGatewayStatus(runtime, { timeout: "15000", json: true });
+
+    expect(loadGatewayTlsRuntime).toHaveBeenCalledTimes(1);
+    expect(probeGateway).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: "wss://127.0.0.1:18789",
+        tlsFingerprint: "sha256:local-fingerprint",
+        timeoutMs: 15_000,
+      }),
+    );
+  });
+
+  it("warns when local TLS is enabled but the certificate fingerprint cannot be loaded", async () => {
+    const { runtime, runtimeLogs } = createRuntimeCapture();
+    probeGateway.mockClear();
+    loadGatewayTlsRuntime.mockResolvedValueOnce({
+      enabled: false,
+      required: true,
+      error: "gateway tls: cert/key missing",
+    });
+    readBestEffortConfig.mockResolvedValueOnce({
+      gateway: {
+        mode: "local",
+        tls: { enabled: true },
+        auth: { mode: "token", token: "ltok" },
+      },
+    } as never);
+
+    await runGatewayStatus(runtime, { timeout: "15000", json: true });
+
+    expect(probeGateway).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: "wss://127.0.0.1:18789",
+        tlsFingerprint: undefined,
+      }),
+    );
+
+    const parsed = JSON.parse(runtimeLogs.join("\n")) as {
+      warnings?: Array<{ code?: string; message?: string; targetIds?: string[] }>;
+    };
+    expect(parsed.warnings).toContainEqual(
+      expect.objectContaining({
+        code: "local_tls_runtime_unavailable",
+        targetIds: ["localLoopback"],
+      }),
+    );
+    expect(
+      parsed.warnings?.find((warning) => warning.code === "local_tls_runtime_unavailable")?.message,
+    ).toContain("gateway tls: cert/key missing");
   });
 
   it("passes the full caller timeout through to local loopback probes", async () => {

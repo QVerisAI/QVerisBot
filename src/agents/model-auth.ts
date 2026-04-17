@@ -1,16 +1,23 @@
 import path from "node:path";
 import { type Api, type Model } from "@mariozechner/pi-ai";
 import { formatCliCommand } from "../cli/command-format.js";
-import { getRuntimeConfigSnapshot, type OpenClawConfig } from "../config/config.js";
+import { getRuntimeConfigSnapshot } from "../config/config.js";
 import type { ModelProviderAuthMode, ModelProviderConfig } from "../config/types.js";
+import type { OpenClawConfig } from "../config/types.openclaw.js";
 import { coerceSecretRef } from "../config/types.secrets.js";
 import { getShellEnvAppliedKeys } from "../infra/shell-env.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
 import {
   buildProviderMissingAuthMessageWithPlugin,
   resolveProviderSyntheticAuthWithPlugin,
+  shouldDeferProviderSyntheticProfileAuthWithPlugin,
 } from "../plugins/provider-runtime.js";
 import { resolveOwningPluginIdsForProvider } from "../plugins/providers.js";
+import { resolveDefaultSecretProviderAlias } from "../secrets/ref-contract.js";
+import {
+  normalizeLowercaseStringOrEmpty,
+  normalizeOptionalLowercaseString,
+} from "../shared/string-coerce.js";
 import { normalizeOptionalSecretInput } from "../utils/normalize-secret-input.js";
 import {
   type AuthProfileStore,
@@ -26,7 +33,6 @@ import {
   isKnownEnvApiKeyMarker,
   isNonSecretApiKeyMarker,
   NON_ENV_SECRETREF_MARKER,
-  OLLAMA_LOCAL_AUTH_MARKER,
 } from "./model-auth-markers.js";
 import {
   requireApiKey,
@@ -38,6 +44,7 @@ import { normalizeProviderId } from "./model-selection.js";
 export { ensureAuthProfileStore, resolveAuthProfileOrder } from "./auth-profiles.js";
 export { requireApiKey, resolveAwsSdkEnvVarName } from "./model-auth-runtime-shared.js";
 export type { ResolvedProviderAuth } from "./model-auth-runtime-shared.js";
+export type ProviderCredentialPrecedence = "profile-first" | "env-first";
 
 const log = createSubsystemLogger("model-auth");
 function resolveProviderConfig(
@@ -67,7 +74,19 @@ export function getCustomProviderApiKey(
   provider: string,
 ): string | undefined {
   const entry = resolveProviderConfig(cfg, provider);
-  return normalizeOptionalSecretInput(entry?.apiKey);
+  const literal = normalizeOptionalSecretInput(entry?.apiKey);
+  if (literal) {
+    return literal;
+  }
+  const ref = coerceSecretRef(entry?.apiKey);
+  if (!ref) {
+    return undefined;
+  }
+  if (ref.source === "env") {
+    const envId = ref.id.trim();
+    return envId || NON_ENV_SECRETREF_MARKER;
+  }
+  return NON_ENV_SECRETREF_MARKER;
 }
 
 type ResolvedCustomProviderApiKey = {
@@ -75,11 +94,61 @@ type ResolvedCustomProviderApiKey = {
   source: string;
 };
 
+function canResolveEnvSecretRefInReadOnlyPath(params: {
+  cfg: OpenClawConfig | undefined;
+  provider: string;
+  id: string;
+}): boolean {
+  const providerConfig = params.cfg?.secrets?.providers?.[params.provider];
+  if (!providerConfig) {
+    return params.provider === resolveDefaultSecretProviderAlias(params.cfg ?? {}, "env");
+  }
+  if (providerConfig.source !== "env") {
+    return false;
+  }
+  const allowlist = providerConfig.allowlist;
+  return !allowlist || allowlist.includes(params.id);
+}
+
 export function resolveUsableCustomProviderApiKey(params: {
   cfg: OpenClawConfig | undefined;
   provider: string;
   env?: NodeJS.ProcessEnv;
 }): ResolvedCustomProviderApiKey | null {
+  const customProviderConfig = resolveProviderConfig(params.cfg, params.provider);
+  const apiKeyRef = coerceSecretRef(customProviderConfig?.apiKey);
+  if (apiKeyRef) {
+    if (apiKeyRef.source !== "env") {
+      return null;
+    }
+    const envVarName = apiKeyRef.id.trim();
+    if (!envVarName) {
+      return null;
+    }
+    if (
+      !canResolveEnvSecretRefInReadOnlyPath({
+        cfg: params.cfg,
+        provider: apiKeyRef.provider,
+        id: envVarName,
+      })
+    ) {
+      return null;
+    }
+    const envValue = normalizeOptionalSecretInput((params.env ?? process.env)[envVarName]);
+    if (!envValue) {
+      return null;
+    }
+    const applied = new Set(getShellEnvAppliedKeys());
+    return {
+      apiKey: envValue,
+      source: resolveEnvSourceLabel({
+        applied,
+        envVars: [envVarName],
+        label: `${envVarName} (models.json secretref)`,
+      }),
+    };
+  }
+
   const customKey = getCustomProviderApiKey(params.cfg, params.provider);
   if (!customKey) {
     return null;
@@ -113,6 +182,18 @@ export function hasUsableCustomProviderApiKey(
   return Boolean(resolveUsableCustomProviderApiKey({ cfg, provider, env }));
 }
 
+export function shouldPreferExplicitConfigApiKeyAuth(
+  cfg: OpenClawConfig | undefined,
+  provider: string,
+): boolean {
+  const providerConfig = resolveProviderConfig(cfg, provider);
+  return (
+    resolveProviderAuthOverride(cfg, provider) === "api-key" &&
+    providerConfig !== undefined &&
+    hasExplicitProviderApiKeyConfig(providerConfig)
+  );
+}
+
 function resolveProviderAuthOverride(
   cfg: OpenClawConfig | undefined,
   provider: string,
@@ -127,7 +208,7 @@ function resolveProviderAuthOverride(
 
 function isLocalBaseUrl(baseUrl: string): boolean {
   try {
-    const host = new URL(baseUrl).hostname.toLowerCase();
+    const host = normalizeLowercaseStringOrEmpty(new URL(baseUrl).hostname);
     return (
       host === "localhost" ||
       host === "127.0.0.1" ||
@@ -305,13 +386,23 @@ function resolveAwsSdkAuthInfo(): { mode: "aws-sdk"; source: string } {
   return { mode: "aws-sdk", source: "aws-sdk default chain" };
 }
 
-function shouldDeferSyntheticOllamaProfileAuth(params: {
+function shouldDeferSyntheticProfileAuth(params: {
+  cfg: OpenClawConfig | undefined;
   provider: string;
   resolvedApiKey: string | undefined;
 }): boolean {
+  const providerConfig = resolveProviderConfig(params.cfg, params.provider);
   return (
-    normalizeProviderId(params.provider) === "ollama" &&
-    params.resolvedApiKey?.trim() === OLLAMA_LOCAL_AUTH_MARKER
+    shouldDeferProviderSyntheticProfileAuthWithPlugin({
+      provider: params.provider,
+      config: params.cfg,
+      context: {
+        config: params.cfg,
+        provider: params.provider,
+        providerConfig,
+        resolvedApiKey: params.resolvedApiKey,
+      },
+    }) === true
   );
 }
 
@@ -325,11 +416,12 @@ export async function resolveApiKeyForProvider(params: {
   /** When true, treat profileId as a user-locked selection that must not be
    *  silently overridden by env/config credentials (e.g. ollama-local). */
   lockedProfile?: boolean;
+  credentialPrecedence?: ProviderCredentialPrecedence;
 }): Promise<ResolvedProviderAuth> {
   const { provider, cfg, profileId, preferredProfile } = params;
-  const store = params.store ?? ensureAuthProfileStore(params.agentDir);
 
   if (profileId) {
+    const store = params.store ?? ensureAuthProfileStore(params.agentDir);
     const resolved = await resolveApiKeyForProfile({
       cfg,
       store,
@@ -346,14 +438,15 @@ export async function resolveApiKeyForProvider(params: {
       source: `profile:${profileId}`,
       mode: mode === "oauth" ? "oauth" : mode === "token" ? "token" : "api-key",
     };
-    // When the resolved key is the synthetic ollama-local marker and the
-    // caller has not locked this profile, fall through to env/config
-    // resolution so real cloud credentials take precedence. The auth
+    // When the resolved key is a provider-owned synthetic profile marker and
+    // the caller has not locked this profile, fall through to env/config
+    // resolution so provider-owned real credentials take precedence. The auth
     // controller iterates profile candidates and passes each as an explicit
     // profileId, so we cannot assume explicit === user-locked.
     if (
       !params.lockedProfile &&
-      shouldDeferSyntheticOllamaProfileAuth({
+      shouldDeferSyntheticProfileAuth({
+        cfg,
         provider,
         resolvedApiKey: resolved.apiKey,
       })
@@ -368,7 +461,37 @@ export async function resolveApiKeyForProvider(params: {
   if (authOverride === "aws-sdk") {
     return resolveAwsSdkAuthInfo();
   }
+  if (shouldPreferExplicitConfigApiKeyAuth(cfg, provider)) {
+    const customKey = resolveUsableCustomProviderApiKey({ cfg, provider });
+    if (customKey) {
+      return {
+        apiKey: customKey.apiKey,
+        source: customKey.source,
+        mode: "api-key",
+      };
+    }
+  }
+  const normalized = normalizeProviderId(provider);
+  if (authOverride === undefined && normalized === "amazon-bedrock") {
+    return resolveAwsSdkAuthInfo();
+  }
 
+  if (params.credentialPrecedence === "env-first") {
+    const envResolved = resolveEnvApiKey(provider);
+    if (envResolved) {
+      const resolvedMode: ResolvedProviderAuth["mode"] = envResolved.source.includes("OAUTH_TOKEN")
+        ? "oauth"
+        : "api-key";
+      return {
+        apiKey: envResolved.apiKey,
+        source: envResolved.source,
+        mode: resolvedMode,
+      };
+    }
+  }
+
+  const providerConfig = resolveProviderConfig(cfg, provider);
+  const store = params.store ?? ensureAuthProfileStore(params.agentDir);
   const order = resolveAuthProfileOrder({
     cfg,
     store,
@@ -395,7 +518,8 @@ export async function resolveApiKeyForProvider(params: {
           mode: resolvedMode,
         };
         if (
-          shouldDeferSyntheticOllamaProfileAuth({
+          shouldDeferSyntheticProfileAuth({
+            cfg,
             provider,
             resolvedApiKey: resolved.apiKey,
           })
@@ -438,12 +562,6 @@ export async function resolveApiKeyForProvider(params: {
     return syntheticLocalAuth;
   }
 
-  const normalized = normalizeProviderId(provider);
-  if (authOverride === undefined && normalized === "amazon-bedrock") {
-    return resolveAwsSdkAuthInfo();
-  }
-
-  const providerConfig = resolveProviderConfig(cfg, provider);
   const hasInlineConfiguredModels =
     Array.isArray(providerConfig?.models) && providerConfig.models.length > 0;
   const owningPluginIds = !hasInlineConfiguredModels
@@ -549,13 +667,25 @@ export async function hasAvailableAuthForProvider(params: {
   agentDir?: string;
 }): Promise<boolean> {
   const { provider, cfg, preferredProfile } = params;
-  const store = params.store ?? ensureAuthProfileStore(params.agentDir);
 
   const authOverride = resolveProviderAuthOverride(cfg, provider);
   if (authOverride === "aws-sdk") {
     return true;
   }
+  if (resolveEnvApiKey(provider)) {
+    return true;
+  }
+  if (resolveUsableCustomProviderApiKey({ cfg, provider })) {
+    return true;
+  }
+  if (resolveSyntheticLocalProviderAuth({ cfg, provider })) {
+    return true;
+  }
+  if (authOverride === undefined && normalizeProviderId(provider) === "amazon-bedrock") {
+    return true;
+  }
 
+  const store = params.store ?? ensureAuthProfileStore(params.agentDir);
   const order = resolveAuthProfileOrder({
     cfg,
     store,
@@ -577,18 +707,7 @@ export async function hasAvailableAuthForProvider(params: {
       log.debug?.(`auth profile "${candidate}" failed for provider "${provider}": ${String(err)}`);
     }
   }
-
-  if (resolveEnvApiKey(provider)) {
-    return true;
-  }
-  if (resolveUsableCustomProviderApiKey({ cfg, provider })) {
-    return true;
-  }
-  if (resolveSyntheticLocalProviderAuth({ cfg, provider })) {
-    return true;
-  }
-
-  return authOverride === undefined && normalizeProviderId(provider) === "amazon-bedrock";
+  return false;
 }
 
 export async function getApiKeyForModel(params: {
@@ -599,6 +718,7 @@ export async function getApiKeyForModel(params: {
   store?: AuthProfileStore;
   agentDir?: string;
   lockedProfile?: boolean;
+  credentialPrecedence?: ProviderCredentialPrecedence;
 }): Promise<ResolvedProviderAuth> {
   return resolveApiKeyForProvider({
     provider: params.model.provider,
@@ -608,6 +728,7 @@ export async function getApiKeyForModel(params: {
     store: params.store,
     agentDir: params.agentDir,
     lockedProfile: params.lockedProfile,
+    credentialPrecedence: params.credentialPrecedence,
   });
 }
 
@@ -665,7 +786,7 @@ export function applyAuthHeaderOverride<T extends Model<Api>>(
   const headers: Record<string, string> = {};
   if (model.headers) {
     for (const [key, value] of Object.entries(model.headers)) {
-      if (key.toLowerCase() !== "authorization") {
+      if (normalizeOptionalLowercaseString(key) !== "authorization") {
         headers[key] = value;
       }
     }

@@ -25,11 +25,14 @@ import {
   resetTaskFlowRegistryForTests,
 } from "./task-flow-registry.js";
 import {
+  setTaskRegistryDeliveryRuntimeForTests,
   getTaskById,
   findLatestTaskForFlowId,
   findTaskByRunId,
+  resetTaskRegistryControlRuntimeForTests,
   resetTaskRegistryDeliveryRuntimeForTests,
   resetTaskRegistryForTests,
+  setTaskRegistryControlRuntimeForTests,
 } from "./task-registry.js";
 
 const ORIGINAL_STATE_DIR = process.env.OPENCLAW_STATE_DIR;
@@ -43,10 +46,6 @@ const hoisted = vi.hoisted(() => {
     killSubagentRunAdminMock,
   };
 });
-
-vi.mock("./task-registry-delivery-runtime.js", () => ({
-  sendMessage: hoisted.sendMessageMock,
-}));
 
 vi.mock("../acp/control-plane/manager.js", () => ({
   getAcpSessionManager: () => ({
@@ -64,9 +63,19 @@ async function withTaskExecutorStateDir(run: (stateDir: string) => Promise<void>
     resetHeartbeatWakeStateForTests();
     resetAgentEventsForTest();
     resetTaskRegistryDeliveryRuntimeForTests();
+    resetTaskRegistryControlRuntimeForTests();
     resetAgentRunContextForTest();
     resetTaskRegistryForTests({ persist: false });
     resetTaskFlowRegistryForTests({ persist: false });
+    setTaskRegistryDeliveryRuntimeForTests({
+      sendMessage: hoisted.sendMessageMock,
+    });
+    setTaskRegistryControlRuntimeForTests({
+      getAcpSessionManager: () => ({
+        cancelSession: hoisted.cancelSessionMock,
+      }),
+      killSubagentRunAdmin: async (params) => hoisted.killSubagentRunAdminMock(params),
+    });
     try {
       await run(stateDir);
     } finally {
@@ -74,6 +83,7 @@ async function withTaskExecutorStateDir(run: (stateDir: string) => Promise<void>
       resetHeartbeatWakeStateForTests();
       resetAgentEventsForTest();
       resetTaskRegistryDeliveryRuntimeForTests();
+      resetTaskRegistryControlRuntimeForTests();
       resetAgentRunContextForTest();
       resetTaskRegistryForTests({ persist: false });
       resetTaskFlowRegistryForTests({ persist: false });
@@ -92,6 +102,7 @@ describe("task-executor", () => {
     resetHeartbeatWakeStateForTests();
     resetAgentEventsForTest();
     resetTaskRegistryDeliveryRuntimeForTests();
+    resetTaskRegistryControlRuntimeForTests();
     resetAgentRunContextForTest();
     resetTaskRegistryForTests({ persist: false });
     resetTaskFlowRegistryForTests({ persist: false });
@@ -174,6 +185,33 @@ describe("task-executor", () => {
         progressSummary: "Collecting results",
         error: "tool failed",
         deliveryStatus: "failed",
+      });
+    });
+  });
+
+  it("persists explicit task kind metadata on created runs", async () => {
+    await withTaskExecutorStateDir(async () => {
+      const created = createRunningTaskRun({
+        runtime: "cli",
+        taskKind: "video_generation",
+        sourceId: "video_generate:openai",
+        ownerKey: "agent:main:main",
+        scopeKind: "session",
+        childSessionKey: "agent:main:main",
+        runId: "run-executor-kind",
+        task: "Generate lobster video",
+        startedAt: 10,
+        deliveryStatus: "not_applicable",
+      });
+
+      expect(getTaskById(created.taskId)).toMatchObject({
+        taskId: created.taskId,
+        taskKind: "video_generation",
+        sourceId: "video_generate:openai",
+      });
+      expect(findTaskByRunId("run-executor-kind")).toMatchObject({
+        taskId: created.taskId,
+        taskKind: "video_generation",
       });
     });
   });
@@ -317,6 +355,10 @@ describe("task-executor", () => {
         ownerKey: "agent:main:main",
         controllerId: "tests/managed-flow",
         goal: "Inspect PR batch",
+        requesterOrigin: {
+          channel: "telegram",
+          to: "telegram:123",
+        },
       });
       const child = createRunningTaskRun({
         runtime: "acp",

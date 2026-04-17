@@ -1,14 +1,12 @@
 import os from "node:os";
 import path from "node:path";
 import type { Command } from "commander";
-import type { OpenClawConfig } from "../config/config.js";
 import { loadConfig, readConfigFileSnapshot, replaceConfigFile } from "../config/config.js";
 import { resolveStateDir } from "../config/paths.js";
+import type { OpenClawConfig } from "../config/types.openclaw.js";
 import type { PluginInstallRecord } from "../config/types.plugins.js";
-import { parseClawHubPluginSpec } from "../infra/clawhub.js";
 import { enablePluginInConfig } from "../plugins/enable.js";
 import { listMarketplacePlugins } from "../plugins/marketplace.js";
-import type { PluginRecord } from "../plugins/registry.js";
 import { formatPluginSourceForTable, resolvePluginSourceRoots } from "../plugins/source-display.js";
 import {
   buildAllPluginInspectReports,
@@ -25,7 +23,6 @@ import {
 } from "../plugins/uninstall.js";
 import { defaultRuntime } from "../runtime.js";
 import { formatDocsLink } from "../terminal/links.js";
-import { sanitizeTerminalText } from "../terminal/safe-text.js";
 import { getTerminalTableWidth, renderTable } from "../terminal/table.js";
 import { theme } from "../terminal/theme.js";
 import { shortenHomeInString, shortenHomePath } from "../utils.js";
@@ -36,6 +33,8 @@ import {
 } from "./plugins-command-helpers.js";
 import { setPluginEnabledInConfig } from "./plugins-config.js";
 import { runPluginInstallCommand } from "./plugins-install-command.js";
+import { formatPluginLine } from "./plugins-list-format.js";
+import { resolvePluginUninstallId } from "./plugins-uninstall-selection.js";
 import { runPluginUpdateCommand } from "./plugins-update-command.js";
 import { promptYesNo } from "./prompt.js";
 
@@ -53,6 +52,7 @@ export type PluginInspectOptions = {
 export type PluginUpdateOptions = {
   all?: boolean;
   dryRun?: boolean;
+  dangerouslyForceUnsafeInstall?: boolean;
 };
 
 export type PluginMarketplaceListOptions = {
@@ -65,109 +65,6 @@ export type PluginUninstallOptions = {
   force?: boolean;
   dryRun?: boolean;
 };
-
-function resolvePluginUninstallId(params: {
-  rawId: string;
-  config: OpenClawConfig;
-  plugins: PluginRecord[];
-}): { pluginId: string; plugin?: PluginRecord } {
-  const rawId = params.rawId.trim();
-  const plugin = params.plugins.find((entry) => entry.id === rawId || entry.name === rawId);
-  if (plugin) {
-    return { pluginId: plugin.id, plugin };
-  }
-
-  for (const [pluginId, install] of Object.entries(params.config.plugins?.installs ?? {})) {
-    if (
-      install.spec === rawId ||
-      install.resolvedSpec === rawId ||
-      install.resolvedName === rawId ||
-      install.marketplacePlugin === rawId
-    ) {
-      return { pluginId };
-    }
-  }
-
-  const requestedClawHub = parseClawHubPluginSpec(rawId);
-  if (requestedClawHub) {
-    for (const [pluginId, install] of Object.entries(params.config.plugins?.installs ?? {})) {
-      const installedClawHubName =
-        install.clawhubPackage ??
-        parseClawHubPluginSpec(install.spec ?? "")?.name ??
-        parseClawHubPluginSpec(install.resolvedSpec ?? "")?.name;
-      if (installedClawHubName === requestedClawHub.name) {
-        return { pluginId };
-      }
-    }
-  }
-
-  return { pluginId: rawId };
-}
-
-function formatPluginLine(plugin: PluginRecord, verbose = false): string {
-  const status =
-    plugin.status === "loaded"
-      ? theme.success("loaded")
-      : plugin.status === "disabled"
-        ? theme.warn("disabled")
-        : theme.error("error");
-  const name = theme.command(plugin.name || plugin.id);
-  const idSuffix = plugin.name && plugin.name !== plugin.id ? theme.muted(` (${plugin.id})`) : "";
-  const desc = plugin.description
-    ? theme.muted(
-        plugin.description.length > 60
-          ? `${plugin.description.slice(0, 57)}...`
-          : plugin.description,
-      )
-    : theme.muted("(no description)");
-  const format = plugin.format ?? "openclaw";
-
-  if (!verbose) {
-    return `${name}${idSuffix} ${status} ${theme.muted(`[${format}]`)} - ${desc}`;
-  }
-
-  const parts = [
-    `${name}${idSuffix} ${status}`,
-    `  format: ${format}`,
-    `  source: ${theme.muted(shortenHomeInString(plugin.source))}`,
-    `  origin: ${plugin.origin}`,
-  ];
-  if (plugin.bundleFormat) {
-    parts.push(`  bundle format: ${plugin.bundleFormat}`);
-  }
-  if (plugin.version) {
-    parts.push(`  version: ${plugin.version}`);
-  }
-  if (plugin.activated !== undefined) {
-    parts.push(`  activated: ${plugin.activated ? "yes" : "no"}`);
-  }
-  if (plugin.imported !== undefined) {
-    parts.push(`  imported: ${plugin.imported ? "yes" : "no"}`);
-  }
-  if (plugin.explicitlyEnabled !== undefined) {
-    parts.push(`  explicitly enabled: ${plugin.explicitlyEnabled ? "yes" : "no"}`);
-  }
-  if (plugin.activationSource) {
-    parts.push(`  activation source: ${plugin.activationSource}`);
-  }
-  if (plugin.activationReason) {
-    parts.push(`  activation reason: ${sanitizeTerminalText(plugin.activationReason)}`);
-  }
-  if (plugin.providerIds.length > 0) {
-    parts.push(`  providers: ${plugin.providerIds.join(", ")}`);
-  }
-  if (plugin.activated !== undefined || plugin.activationSource || plugin.activationReason) {
-    const activationSummary =
-      plugin.activated === false
-        ? "inactive"
-        : (plugin.activationSource ?? (plugin.activated ? "active" : "inactive"));
-    parts.push(`  activation: ${activationSummary}`);
-  }
-  if (plugin.error) {
-    parts.push(theme.error(`  error: ${plugin.error}`));
-  }
-  return parts.join("\n");
-}
 
 function formatInspectSection(title: string, lines: string[]): string[] {
   if (lines.length === 0) {
@@ -451,6 +348,12 @@ export function registerPluginsCli(program: Command) {
       }
       lines.push("");
       lines.push(`${theme.muted("Status:")} ${inspect.plugin.status}`);
+      if (inspect.plugin.failurePhase) {
+        lines.push(`${theme.muted("Failure phase:")} ${inspect.plugin.failurePhase}`);
+      }
+      if (inspect.plugin.failedAt) {
+        lines.push(`${theme.muted("Failed at:")} ${inspect.plugin.failedAt.toISOString()}`);
+      }
       lines.push(`${theme.muted("Format:")} ${inspect.plugin.format ?? "openclaw"}`);
       if (inspect.plugin.bundleFormat) {
         lines.push(`${theme.muted("Bundle format:")} ${inspect.plugin.bundleFormat}`);
@@ -763,6 +666,7 @@ export function registerPluginsCli(program: Command) {
       "Path (.ts/.js/.zip/.tgz/.tar.gz), npm package spec, or marketplace plugin name",
     )
     .option("-l, --link", "Link a local path instead of copying", false)
+    .option("--force", "Overwrite an existing installed plugin or hook pack", false)
     .option("--pin", "Record npm installs as exact resolved <name>@<version>", false)
     .option(
       "--dangerously-force-unsafe-install",
@@ -778,6 +682,7 @@ export function registerPluginsCli(program: Command) {
         raw: string,
         opts: {
           dangerouslyForceUnsafeInstall?: boolean;
+          force?: boolean;
           link?: boolean;
           pin?: boolean;
           marketplace?: string;
@@ -793,6 +698,11 @@ export function registerPluginsCli(program: Command) {
     .argument("[id]", "Plugin or hook-pack id (omit with --all)")
     .option("--all", "Update all tracked plugins and hook packs", false)
     .option("--dry-run", "Show what would change without writing", false)
+    .option(
+      "--dangerously-force-unsafe-install",
+      "Bypass built-in dangerous-code update blocking for plugins (plugin hooks may still block)",
+      false,
+    )
     .action(async (id: string | undefined, opts: PluginUpdateOptions) => {
       await runPluginUpdateCommand({ id, opts });
     });
@@ -815,7 +725,8 @@ export function registerPluginsCli(program: Command) {
       if (errors.length > 0) {
         lines.push(theme.error("Plugin errors:"));
         for (const entry of errors) {
-          lines.push(`- ${entry.id}: ${entry.error ?? "failed to load"} (${entry.source})`);
+          const phase = entry.failurePhase ? ` [${entry.failurePhase}]` : "";
+          lines.push(`- ${entry.id}${phase}: ${entry.error ?? "failed to load"} (${entry.source})`);
         }
       }
       if (diags.length > 0) {
