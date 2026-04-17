@@ -658,8 +658,11 @@ describe("scoped vitest configs", () => {
   });
 
   it("normalizes acp include patterns relative to the scoped dir", () => {
-    expect(defaultAcpConfig.test?.dir).toBe(path.join(process.cwd(), "src", "acp"));
-    expect(defaultAcpConfig.test?.include).toEqual(["**/*.test.ts"]);
+    expect(defaultAcpConfig.test?.dir).toBe(path.join(process.cwd(), "src"));
+    expect(defaultAcpConfig.test?.include).toEqual([
+      "acp/**/*.test.ts",
+      "commands/agent.acp.test.ts",
+    ]);
   });
 
   it("normalizes cli include patterns relative to the scoped dir", () => {
@@ -670,6 +673,7 @@ describe("scoped vitest configs", () => {
   it("normalizes commands include patterns relative to the scoped dir", () => {
     expect(defaultCommandsConfig.test?.dir).toBe(path.join(process.cwd(), "src", "commands"));
     expect(defaultCommandsConfig.test?.include).toEqual(["**/*.test.ts"]);
+    expect(defaultCommandsConfig.test?.exclude).toContain("agent.acp.test.ts");
   });
 
   it("normalizes auto-reply include patterns relative to the scoped dir", () => {

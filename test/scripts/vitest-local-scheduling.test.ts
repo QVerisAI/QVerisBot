@@ -6,12 +6,32 @@ import {
 } from "../../scripts/lib/vitest-local-scheduling.mjs";
 
 describe("vitest local full-suite profile", () => {
-  it("selects the large local profile on roomy hosts that are not throttled", () => {
+  it("keeps 48 GB hosts on the smaller local profile even when worker inference is roomy", () => {
     const env = {};
     const hostInfo = {
       cpuCount: 14,
       loadAverage1m: 0,
       totalMemoryBytes: 48 * 1024 ** 3,
+    };
+
+    expect(resolveLocalVitestScheduling(env, hostInfo, "threads")).toEqual({
+      maxWorkers: 6,
+      fileParallelism: true,
+      throttledBySystem: false,
+    });
+    expect(shouldUseLargeLocalFullSuiteProfile(env, hostInfo)).toBe(false);
+    expect(resolveLocalFullSuiteProfile(env, hostInfo)).toEqual({
+      shardParallelism: 1,
+      vitestMaxWorkers: 1,
+    });
+  });
+
+  it("selects the large local profile on 64 GB hosts that are not throttled", () => {
+    const env = {};
+    const hostInfo = {
+      cpuCount: 14,
+      loadAverage1m: 0,
+      totalMemoryBytes: 64 * 1024 ** 3,
     };
 
     expect(resolveLocalVitestScheduling(env, hostInfo, "threads")).toEqual({
@@ -35,7 +55,7 @@ describe("vitest local full-suite profile", () => {
 
     expect(shouldUseLargeLocalFullSuiteProfile({}, hostInfo)).toBe(false);
     expect(resolveLocalFullSuiteProfile({}, hostInfo)).toEqual({
-      shardParallelism: 4,
+      shardParallelism: 1,
       vitestMaxWorkers: 1,
     });
   });
@@ -49,7 +69,7 @@ describe("vitest local full-suite profile", () => {
 
     expect(shouldUseLargeLocalFullSuiteProfile({ CI: "true" }, hostInfo)).toBe(false);
     expect(resolveLocalFullSuiteProfile({ CI: "true" }, hostInfo)).toEqual({
-      shardParallelism: 4,
+      shardParallelism: 1,
       vitestMaxWorkers: 1,
     });
   });

@@ -3,10 +3,11 @@
 
 import os from "node:os";
 
-export const DEFAULT_LOCAL_FULL_SUITE_PARALLELISM = 4;
+export const DEFAULT_LOCAL_FULL_SUITE_PARALLELISM = 1;
 export const LARGE_LOCAL_FULL_SUITE_PARALLELISM = 10;
 export const DEFAULT_LOCAL_FULL_SUITE_VITEST_WORKERS = 1;
 export const LARGE_LOCAL_FULL_SUITE_VITEST_WORKERS = 2;
+const MIN_LARGE_LOCAL_FULL_SUITE_MEMORY_GB = 64;
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
@@ -145,7 +146,12 @@ export function shouldUseLargeLocalFullSuiteProfile(
     return false;
   }
   const scheduling = resolveLocalVitestScheduling(env, system, "threads");
-  return scheduling.maxWorkers >= 5 && !scheduling.throttledBySystem;
+  const totalMemoryGb = (system.totalMemoryBytes ?? 0) / 1024 ** 3;
+  return (
+    scheduling.maxWorkers >= 5 &&
+    !scheduling.throttledBySystem &&
+    totalMemoryGb >= MIN_LARGE_LOCAL_FULL_SUITE_MEMORY_GB
+  );
 }
 
 export function resolveLocalFullSuiteProfile(env = process.env, system = detectVitestHostInfo()) {
