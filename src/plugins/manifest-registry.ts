@@ -469,6 +469,31 @@ function resolveDuplicatePrecedenceRank(params: {
   return 4;
 }
 
+function isLegacyQverisGlobalShadow(params: {
+  pluginId: string;
+  candidate: PluginCandidate;
+  env: NodeJS.ProcessEnv;
+}): boolean {
+  if (params.pluginId !== "qveris" || params.candidate.origin !== "global") {
+    return false;
+  }
+  const stateDir = normalizeOptionalString(params.env.OPENCLAW_STATE_DIR);
+  if (!stateDir) {
+    return false;
+  }
+  const legacyRoot = path.resolve(
+    resolveUserPath(path.join(stateDir, "extensions", "qveris"), params.env),
+  );
+  const candidateRoot = path.resolve(params.candidate.rootDir);
+  const candidateSource = path.resolve(resolveUserPath(params.candidate.source, params.env));
+  return (
+    candidateRoot === legacyRoot ||
+    candidateSource === legacyRoot ||
+    isPathInside(legacyRoot, candidateRoot) ||
+    isPathInside(legacyRoot, candidateSource)
+  );
+}
+
 export function loadPluginManifestRegistry(
   params: {
     config?: OpenClawConfig;
@@ -574,6 +599,45 @@ export function loadPluginManifestRegistry(
 
     const existing = seenIds.get(manifest.id);
     if (existing) {
+      const bundledCandidate =
+        existing.candidate.origin === "bundled"
+          ? existing.candidate
+          : candidate.origin === "bundled"
+            ? candidate
+            : null;
+      const globalCandidate =
+        existing.candidate.origin === "global"
+          ? existing.candidate
+          : candidate.origin === "global"
+            ? candidate
+            : null;
+      if (
+        bundledCandidate &&
+        globalCandidate &&
+        isLegacyQverisGlobalShadow({
+          pluginId: manifest.id,
+          candidate: globalCandidate,
+          env,
+        })
+      ) {
+        if (candidate.origin === "bundled" && existing.candidate.origin === "global") {
+          records[existing.recordIndex] = isBundleRecord
+            ? buildBundleRecord({
+                manifest: manifest as Parameters<typeof buildBundleRecord>[0]["manifest"],
+                candidate,
+                manifestPath: manifestRes.manifestPath,
+              })
+            : buildRecord({
+                manifest: manifest as PluginManifest,
+                candidate,
+                manifestPath: manifestRes.manifestPath,
+                schemaCacheKey,
+                configSchema,
+              });
+          seenIds.set(manifest.id, { candidate, recordIndex: existing.recordIndex });
+        }
+        continue;
+      }
       // Check whether both candidates point to the same physical directory
       // (e.g. via symlinks or different path representations). If so, this
       // is a false-positive duplicate and can be silently skipped.

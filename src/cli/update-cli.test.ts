@@ -798,12 +798,12 @@ describe("update-cli", () => {
   it("fails package updates when the installed correction version does not match the requested target", async () => {
     const tempDir = createCaseDir("openclaw-update");
     const nodeModules = path.join(tempDir, "node_modules");
-    const pkgRoot = path.join(nodeModules, "openclaw");
+    const pkgRoot = path.join(nodeModules, "@qverisai", "qverisbot");
     mockPackageInstallStatus(tempDir);
     await fs.mkdir(pkgRoot, { recursive: true });
     await fs.writeFile(
       path.join(pkgRoot, "package.json"),
-      JSON.stringify({ name: "openclaw", version: "2026.3.23" }),
+      JSON.stringify({ name: "@qverisai/qverisbot", version: "2026.3.23" }),
       "utf-8",
     );
     for (const relativePath of TEST_BUNDLED_RUNTIME_SIDECAR_PATHS) {

@@ -21,7 +21,7 @@ describe("runEmbeddedAttempt undici timeout wiring", () => {
 
   it("forwards the configured run timeout into global undici stream tuning", async () => {
     await createContextEngineAttemptRunner({
-      sessionKey: "agent:main:ollama-timeout-test",
+      sessionKey: "agent:main:timeout-test",
       tempPaths,
       contextEngine: {
         assemble: async ({ messages }) => ({
@@ -29,14 +29,25 @@ describe("runEmbeddedAttempt undici timeout wiring", () => {
           estimatedTokens: 1,
         }),
       },
+      sessionPrompt: async (session) => {
+        session.messages = [
+          ...session.messages,
+          {
+            role: "assistant",
+            content: "done",
+            timestamp: 2,
+          },
+        ];
+      },
       attemptOverrides: {
-        timeoutMs: 123_456,
+        abortSignal: AbortSignal.abort(new Error("stop after timeout wiring")),
+        timeoutMs: 1_234,
       },
     });
 
     expect(hoisted.ensureGlobalUndiciEnvProxyDispatcherMock).toHaveBeenCalledOnce();
     expect(hoisted.ensureGlobalUndiciStreamTimeoutsMock).toHaveBeenCalledWith({
-      timeoutMs: 123_456,
+      timeoutMs: 1_234,
     });
   });
 });

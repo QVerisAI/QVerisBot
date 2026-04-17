@@ -77,6 +77,9 @@ export const GENERATED_BASE_CONFIG_SCHEMA: BaseConfigSchemaResponse = {
         description:
           "Environment import and override settings used to supply runtime variables to the gateway process. Use this section to control shell-env loading and explicit variable injection behavior.",
       },
+      proxy: {
+        type: "string",
+      },
       wizard: {
         type: "object",
         properties: {
@@ -4984,6 +4987,9 @@ export const GENERATED_BASE_CONFIG_SCHEMA: BaseConfigSchemaResponse = {
                 },
                 additionalProperties: false,
               },
+              additionalSystemPrompt: {
+                type: "string",
+              },
               sandbox: {
                 type: "object",
                 properties: {
@@ -7475,6 +7481,477 @@ export const GENERATED_BASE_CONFIG_SCHEMA: BaseConfigSchemaResponse = {
                           'Native Codex search context size hint: "low", "medium", or "high".',
                       },
                       userLocation: {},
+                    },
+                    additionalProperties: false,
+                  },
+                  firecrawl: {
+                    type: "object",
+                    properties: {
+                      apiKey: {
+                        anyOf: [
+                          {
+                            type: "string",
+                          },
+                          {
+                            oneOf: [
+                              {
+                                type: "object",
+                                properties: {
+                                  source: {
+                                    type: "string",
+                                    const: "env",
+                                  },
+                                  provider: {
+                                    type: "string",
+                                    pattern: "^[a-z][a-z0-9_-]{0,63}$",
+                                  },
+                                  id: {
+                                    type: "string",
+                                    pattern: "^[A-Z][A-Z0-9_]{0,127}$",
+                                  },
+                                },
+                                required: ["source", "provider", "id"],
+                                additionalProperties: false,
+                              },
+                              {
+                                type: "object",
+                                properties: {
+                                  source: {
+                                    type: "string",
+                                    const: "file",
+                                  },
+                                  provider: {
+                                    type: "string",
+                                    pattern: "^[a-z][a-z0-9_-]{0,63}$",
+                                  },
+                                  id: {
+                                    type: "string",
+                                  },
+                                },
+                                required: ["source", "provider", "id"],
+                                additionalProperties: false,
+                              },
+                              {
+                                type: "object",
+                                properties: {
+                                  source: {
+                                    type: "string",
+                                    const: "exec",
+                                  },
+                                  provider: {
+                                    type: "string",
+                                    pattern: "^[a-z][a-z0-9_-]{0,63}$",
+                                  },
+                                  id: {
+                                    type: "string",
+                                  },
+                                },
+                                required: ["source", "provider", "id"],
+                                additionalProperties: false,
+                              },
+                            ],
+                          },
+                        ],
+                      },
+                      baseUrl: {
+                        type: "string",
+                      },
+                      model: {
+                        type: "string",
+                      },
+                    },
+                    additionalProperties: false,
+                  },
+                  gemini: {
+                    type: "object",
+                    properties: {
+                      apiKey: {
+                        anyOf: [
+                          {
+                            type: "string",
+                          },
+                          {
+                            oneOf: [
+                              {
+                                type: "object",
+                                properties: {
+                                  source: {
+                                    type: "string",
+                                    const: "env",
+                                  },
+                                  provider: {
+                                    type: "string",
+                                    pattern: "^[a-z][a-z0-9_-]{0,63}$",
+                                  },
+                                  id: {
+                                    type: "string",
+                                    pattern: "^[A-Z][A-Z0-9_]{0,127}$",
+                                  },
+                                },
+                                required: ["source", "provider", "id"],
+                                additionalProperties: false,
+                              },
+                              {
+                                type: "object",
+                                properties: {
+                                  source: {
+                                    type: "string",
+                                    const: "file",
+                                  },
+                                  provider: {
+                                    type: "string",
+                                    pattern: "^[a-z][a-z0-9_-]{0,63}$",
+                                  },
+                                  id: {
+                                    type: "string",
+                                  },
+                                },
+                                required: ["source", "provider", "id"],
+                                additionalProperties: false,
+                              },
+                              {
+                                type: "object",
+                                properties: {
+                                  source: {
+                                    type: "string",
+                                    const: "exec",
+                                  },
+                                  provider: {
+                                    type: "string",
+                                    pattern: "^[a-z][a-z0-9_-]{0,63}$",
+                                  },
+                                  id: {
+                                    type: "string",
+                                  },
+                                },
+                                required: ["source", "provider", "id"],
+                                additionalProperties: false,
+                              },
+                            ],
+                          },
+                        ],
+                      },
+                      baseUrl: {
+                        type: "string",
+                      },
+                      model: {
+                        type: "string",
+                      },
+                    },
+                    additionalProperties: false,
+                  },
+                  qveris: {
+                    type: "object",
+                    properties: {
+                      toolId: {
+                        type: "string",
+                      },
+                      apiKey: {
+                        anyOf: [
+                          {
+                            type: "string",
+                          },
+                          {
+                            oneOf: [
+                              {
+                                type: "object",
+                                properties: {
+                                  source: {
+                                    type: "string",
+                                    const: "env",
+                                  },
+                                  provider: {
+                                    type: "string",
+                                    pattern: "^[a-z][a-z0-9_-]{0,63}$",
+                                  },
+                                  id: {
+                                    type: "string",
+                                    pattern: "^[A-Z][A-Z0-9_]{0,127}$",
+                                  },
+                                },
+                                required: ["source", "provider", "id"],
+                                additionalProperties: false,
+                              },
+                              {
+                                type: "object",
+                                properties: {
+                                  source: {
+                                    type: "string",
+                                    const: "file",
+                                  },
+                                  provider: {
+                                    type: "string",
+                                    pattern: "^[a-z][a-z0-9_-]{0,63}$",
+                                  },
+                                  id: {
+                                    type: "string",
+                                  },
+                                },
+                                required: ["source", "provider", "id"],
+                                additionalProperties: false,
+                              },
+                              {
+                                type: "object",
+                                properties: {
+                                  source: {
+                                    type: "string",
+                                    const: "exec",
+                                  },
+                                  provider: {
+                                    type: "string",
+                                    pattern: "^[a-z][a-z0-9_-]{0,63}$",
+                                  },
+                                  id: {
+                                    type: "string",
+                                  },
+                                },
+                                required: ["source", "provider", "id"],
+                                additionalProperties: false,
+                              },
+                            ],
+                          },
+                        ],
+                      },
+                      baseUrl: {
+                        type: "string",
+                      },
+                    },
+                    additionalProperties: false,
+                  },
+                  grok: {
+                    type: "object",
+                    properties: {
+                      apiKey: {
+                        anyOf: [
+                          {
+                            type: "string",
+                          },
+                          {
+                            oneOf: [
+                              {
+                                type: "object",
+                                properties: {
+                                  source: {
+                                    type: "string",
+                                    const: "env",
+                                  },
+                                  provider: {
+                                    type: "string",
+                                    pattern: "^[a-z][a-z0-9_-]{0,63}$",
+                                  },
+                                  id: {
+                                    type: "string",
+                                    pattern: "^[A-Z][A-Z0-9_]{0,127}$",
+                                  },
+                                },
+                                required: ["source", "provider", "id"],
+                                additionalProperties: false,
+                              },
+                              {
+                                type: "object",
+                                properties: {
+                                  source: {
+                                    type: "string",
+                                    const: "file",
+                                  },
+                                  provider: {
+                                    type: "string",
+                                    pattern: "^[a-z][a-z0-9_-]{0,63}$",
+                                  },
+                                  id: {
+                                    type: "string",
+                                  },
+                                },
+                                required: ["source", "provider", "id"],
+                                additionalProperties: false,
+                              },
+                              {
+                                type: "object",
+                                properties: {
+                                  source: {
+                                    type: "string",
+                                    const: "exec",
+                                  },
+                                  provider: {
+                                    type: "string",
+                                    pattern: "^[a-z][a-z0-9_-]{0,63}$",
+                                  },
+                                  id: {
+                                    type: "string",
+                                  },
+                                },
+                                required: ["source", "provider", "id"],
+                                additionalProperties: false,
+                              },
+                            ],
+                          },
+                        ],
+                      },
+                      baseUrl: {
+                        type: "string",
+                      },
+                      model: {
+                        type: "string",
+                      },
+                      inlineCitations: {
+                        type: "boolean",
+                      },
+                    },
+                    additionalProperties: false,
+                  },
+                  kimi: {
+                    type: "object",
+                    properties: {
+                      apiKey: {
+                        anyOf: [
+                          {
+                            type: "string",
+                          },
+                          {
+                            oneOf: [
+                              {
+                                type: "object",
+                                properties: {
+                                  source: {
+                                    type: "string",
+                                    const: "env",
+                                  },
+                                  provider: {
+                                    type: "string",
+                                    pattern: "^[a-z][a-z0-9_-]{0,63}$",
+                                  },
+                                  id: {
+                                    type: "string",
+                                    pattern: "^[A-Z][A-Z0-9_]{0,127}$",
+                                  },
+                                },
+                                required: ["source", "provider", "id"],
+                                additionalProperties: false,
+                              },
+                              {
+                                type: "object",
+                                properties: {
+                                  source: {
+                                    type: "string",
+                                    const: "file",
+                                  },
+                                  provider: {
+                                    type: "string",
+                                    pattern: "^[a-z][a-z0-9_-]{0,63}$",
+                                  },
+                                  id: {
+                                    type: "string",
+                                  },
+                                },
+                                required: ["source", "provider", "id"],
+                                additionalProperties: false,
+                              },
+                              {
+                                type: "object",
+                                properties: {
+                                  source: {
+                                    type: "string",
+                                    const: "exec",
+                                  },
+                                  provider: {
+                                    type: "string",
+                                    pattern: "^[a-z][a-z0-9_-]{0,63}$",
+                                  },
+                                  id: {
+                                    type: "string",
+                                  },
+                                },
+                                required: ["source", "provider", "id"],
+                                additionalProperties: false,
+                              },
+                            ],
+                          },
+                        ],
+                      },
+                      baseUrl: {
+                        type: "string",
+                      },
+                      model: {
+                        type: "string",
+                      },
+                    },
+                    additionalProperties: false,
+                  },
+                  perplexity: {
+                    type: "object",
+                    properties: {
+                      apiKey: {
+                        anyOf: [
+                          {
+                            type: "string",
+                          },
+                          {
+                            oneOf: [
+                              {
+                                type: "object",
+                                properties: {
+                                  source: {
+                                    type: "string",
+                                    const: "env",
+                                  },
+                                  provider: {
+                                    type: "string",
+                                    pattern: "^[a-z][a-z0-9_-]{0,63}$",
+                                  },
+                                  id: {
+                                    type: "string",
+                                    pattern: "^[A-Z][A-Z0-9_]{0,127}$",
+                                  },
+                                },
+                                required: ["source", "provider", "id"],
+                                additionalProperties: false,
+                              },
+                              {
+                                type: "object",
+                                properties: {
+                                  source: {
+                                    type: "string",
+                                    const: "file",
+                                  },
+                                  provider: {
+                                    type: "string",
+                                    pattern: "^[a-z][a-z0-9_-]{0,63}$",
+                                  },
+                                  id: {
+                                    type: "string",
+                                  },
+                                },
+                                required: ["source", "provider", "id"],
+                                additionalProperties: false,
+                              },
+                              {
+                                type: "object",
+                                properties: {
+                                  source: {
+                                    type: "string",
+                                    const: "exec",
+                                  },
+                                  provider: {
+                                    type: "string",
+                                    pattern: "^[a-z][a-z0-9_-]{0,63}$",
+                                  },
+                                  id: {
+                                    type: "string",
+                                  },
+                                },
+                                required: ["source", "provider", "id"],
+                                additionalProperties: false,
+                              },
+                            ],
+                          },
+                        ],
+                      },
+                      baseUrl: {
+                        type: "string",
+                      },
+                      model: {
+                        type: "string",
+                      },
                     },
                     additionalProperties: false,
                   },
@@ -17381,6 +17858,63 @@ export const GENERATED_BASE_CONFIG_SCHEMA: BaseConfigSchemaResponse = {
             description:
               "Tool policy wrapper for sandboxed agent executions so sandbox runs can have distinct capability boundaries. Use this to enforce stronger safety in sandbox contexts.",
           },
+          qveris: {
+            type: "object",
+            properties: {
+              enabled: {
+                type: "boolean",
+              },
+              apiKey: {
+                type: "string",
+              },
+              region: {
+                type: "string",
+                enum: ["global", "cn"],
+              },
+              baseUrl: {
+                type: "string",
+              },
+              timeoutSeconds: {
+                type: "integer",
+                exclusiveMinimum: 0,
+                maximum: 9007199254740991,
+              },
+              searchTimeoutSeconds: {
+                type: "integer",
+                exclusiveMinimum: 0,
+                maximum: 9007199254740991,
+              },
+              executeTimeoutSeconds: {
+                type: "integer",
+                exclusiveMinimum: 0,
+                maximum: 9007199254740991,
+              },
+              maxResponseSize: {
+                type: "integer",
+                exclusiveMinimum: 0,
+                maximum: 9007199254740991,
+              },
+              searchLimit: {
+                type: "integer",
+                exclusiveMinimum: 0,
+                maximum: 9007199254740991,
+              },
+              autoMaterializeFullContent: {
+                type: "boolean",
+              },
+              fullContentMaxBytes: {
+                type: "integer",
+                exclusiveMinimum: 0,
+                maximum: 9007199254740991,
+              },
+              fullContentTimeoutSeconds: {
+                type: "integer",
+                exclusiveMinimum: 0,
+                maximum: 9007199254740991,
+              },
+            },
+            additionalProperties: false,
+          },
           sessions_spawn: {
             type: "object",
             properties: {
@@ -18970,6 +19504,16 @@ export const GENERATED_BASE_CONFIG_SCHEMA: BaseConfigSchemaResponse = {
             title: "Session Identity Links",
             description:
               "Maps canonical identities to provider-prefixed peer IDs so equivalent users resolve to one DM thread (example: telegram:123456). Use this when the same human appears across multiple channels or accounts.",
+          },
+          transcriptRetentionDays: {
+            type: "integer",
+            exclusiveMinimum: 0,
+            maximum: 9007199254740991,
+          },
+          maxRecentTurns: {
+            type: "integer",
+            exclusiveMinimum: 0,
+            maximum: 9007199254740991,
           },
           resetTriggers: {
             type: "array",
@@ -26941,6 +27485,30 @@ export const GENERATED_BASE_CONFIG_SCHEMA: BaseConfigSchemaResponse = {
       sensitive: true,
       tags: ["security", "auth", "tools"],
     },
+    "tools.web.search.firecrawl.apiKey": {
+      sensitive: true,
+      tags: ["security", "auth", "tools"],
+    },
+    "tools.web.search.gemini.apiKey": {
+      sensitive: true,
+      tags: ["security", "auth", "tools"],
+    },
+    "tools.web.search.qveris.apiKey": {
+      sensitive: true,
+      tags: ["security", "auth", "tools"],
+    },
+    "tools.web.search.grok.apiKey": {
+      sensitive: true,
+      tags: ["security", "auth", "tools"],
+    },
+    "tools.web.search.kimi.apiKey": {
+      sensitive: true,
+      tags: ["security", "auth", "tools"],
+    },
+    "tools.web.search.perplexity.apiKey": {
+      sensitive: true,
+      tags: ["security", "auth", "tools"],
+    },
     "tools.web.fetch.firecrawl.apiKey": {
       sensitive: true,
       tags: ["security", "auth", "tools"],
@@ -27256,6 +27824,24 @@ export const GENERATED_BASE_CONFIG_SCHEMA: BaseConfigSchemaResponse = {
     "agents.list[].memorySearch.remote.baseUrl": {
       tags: ["advanced", "url-secret"],
     },
+    "tools.web.search.firecrawl.baseUrl": {
+      tags: ["tools", "url-secret"],
+    },
+    "tools.web.search.gemini.baseUrl": {
+      tags: ["tools", "url-secret"],
+    },
+    "tools.web.search.qveris.baseUrl": {
+      tags: ["tools", "url-secret"],
+    },
+    "tools.web.search.grok.baseUrl": {
+      tags: ["tools", "url-secret"],
+    },
+    "tools.web.search.kimi.baseUrl": {
+      tags: ["tools", "url-secret"],
+    },
+    "tools.web.search.perplexity.baseUrl": {
+      tags: ["tools", "url-secret"],
+    },
     "tools.web.fetch.firecrawl.baseUrl": {
       tags: ["tools", "url-secret"],
     },
@@ -27297,6 +27883,9 @@ export const GENERATED_BASE_CONFIG_SCHEMA: BaseConfigSchemaResponse = {
     },
     "tools.media.video.models[].request.proxy.url": {
       tags: ["media", "tools", "url-secret"],
+    },
+    "tools.qveris.baseUrl": {
+      tags: ["tools", "url-secret"],
     },
     "mcp.servers.*.url": {
       tags: ["advanced", "url-secret"],

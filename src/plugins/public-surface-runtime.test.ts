@@ -69,6 +69,31 @@ describe("bundled plugin public surface runtime", () => {
     ).toBe(sourceModulePath);
   });
 
+  it("prefers built public artifacts when the bundled dir points at a source checkout", () => {
+    const packageRoot = createTempDir();
+    const sourceModulePath = path.join(packageRoot, "extensions", "demo", "provider-policy-api.ts");
+    const builtModulePath = path.join(
+      packageRoot,
+      "dist",
+      "extensions",
+      "demo",
+      "provider-policy-api.js",
+    );
+    fs.mkdirSync(path.dirname(sourceModulePath), { recursive: true });
+    fs.mkdirSync(path.dirname(builtModulePath), { recursive: true });
+    fs.writeFileSync(sourceModulePath, "export const marker = 'source';\n", "utf8");
+    fs.writeFileSync(builtModulePath, "export const marker = 'dist';\n", "utf8");
+
+    expect(
+      resolveBundledPluginPublicSurfacePath({
+        rootDir: packageRoot,
+        bundledPluginsDir: path.join(packageRoot, "extensions"),
+        dirName: "demo",
+        artifactBasename: "provider-policy-api.js",
+      }),
+    ).toBe(builtModulePath);
+  });
+
   it("allows plugin-local nested artifact paths", () => {
     expect(normalizeBundledPluginArtifactSubpath("src/outbound-adapter.js")).toBe(
       "src/outbound-adapter.js",

@@ -80,6 +80,34 @@ function resolvePackageSourceFallbackForBundledDir(params: {
   });
 }
 
+function resolvePackageBuiltFallbackForBundledDir(params: {
+  rootDir: string;
+  bundledPluginsDir: string;
+  dirName: string;
+  artifactBasename: string;
+}): string | null {
+  const normalizedBundledDir = path.resolve(params.bundledPluginsDir);
+  const normalizedRootDir = path.resolve(params.rootDir);
+  if (normalizedBundledDir !== path.join(normalizedRootDir, "extensions")) {
+    return null;
+  }
+  for (const candidate of [
+    path.join(
+      normalizedRootDir,
+      "dist-runtime",
+      "extensions",
+      params.dirName,
+      params.artifactBasename,
+    ),
+    path.join(normalizedRootDir, "dist", "extensions", params.dirName, params.artifactBasename),
+  ]) {
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
 export function resolveBundledPluginPublicSurfacePath(params: {
   rootDir: string;
   dirName: string;
@@ -98,6 +126,12 @@ export function resolveBundledPluginPublicSurfacePath(params: {
       return explicitBuiltCandidate;
     }
     return (
+      resolvePackageBuiltFallbackForBundledDir({
+        rootDir: params.rootDir,
+        bundledPluginsDir: explicitBundledPluginsDir,
+        dirName: params.dirName,
+        artifactBasename,
+      }) ??
       resolveBundledPluginSourcePublicSurfacePath({
         sourceRoot: explicitBundledPluginsDir,
         dirName: params.dirName,

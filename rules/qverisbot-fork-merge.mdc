@@ -1,0 +1,54 @@
+---
+description: QVerisBot fork context for merge operations — preserve these enhancements when merging upstream openclaw changes
+alwaysApply: true
+---
+
+# QVerisBot Fork — Enhanced Features to Preserve
+
+This repo is an enhanced fork of openclaw. When merging upstream openclaw changes, **never break** the following QVerisBot-specific features:
+
+1. **Qveris tool discover & invoke layer** — native integration of `qveris` tool discovery and invocation. Config key: `tools.qveris`. Schema lives in `src/config/zod-schema.agent-runtime.ts`.
+
+2. **QVeris `web_search` native integration** — built-in web search tool wired through the Qveris API.
+
+3. **Cross-channel X account operations** — all IM channels support cross-channel X (Twitter) account actions. See `src/agents/tools/message-tool.ts` (`listCrossChannelActions`) and `src/infra/outbound/outbound-session.ts`.
+
+4. **Onboarding one-click config** — `qverisbot onboard` supports one-click setup for: Qveris, web_search, Feishu/Lark, and X accounts. See `src/commands/onboard-channels.e2e.test.ts`.
+
+5. **`qverisbot` CLI command** — the CLI binary is `qverisbot` (also accepts `openclaw`). Package name: `@qverisai/qverisbot`. See `package.json`, `scripts/install.sh`, `scripts/install.ps1`.
+
+6. **Cross-OS bot state migration** (`qverisbot migrate`) — full bot state migration across operating systems. See `src/infra/update-runner.ts` (`normalizeTag` must include `LEGACY_PACKAGE_NAME`, `LEGACY_PACKAGE_NAME_UNSCOPED`, `DEFAULT_PACKAGE_NAME`).
+
+7. **Memory management** — Enhanced memory hooks: `context-digest` (rolling cross-session digest), `session-importance` (two-stage importance classifier), shared utilities, and system prompt anchor. Key paths:
+   - `src/hooks/transcript-reader.ts` (shared transcript parsing)
+   - `src/hooks/llm-memory-helpers.ts` (shared LLM orchestration, mutex, dedup)
+   - `src/hooks/bundled/context-digest/` (HOOK.md + handler.ts)
+   - `src/hooks/bundled/session-importance/` (HOOK.md + handler.ts)
+   - `src/auto-reply/reply/context-digest-anchor.ts` (system prompt anchor)
+   - `src/auto-reply/reply/agent-runner-memory.ts` (native memory flush)
+
+8. **QVeris tool routing & `qveris_inspect`** — structured decision tree in the system prompt guides the agent on when to use QVeris vs local tools vs `web_search`; plus a `qveris_inspect` tool for re-verifying known tool IDs without a full discovery. Key paths:
+   - `src/agents/tools/qveris-tools.ts` — `qverisGetByIds()`, `makeToolRolodex()`, `makeDiscoverResultTracker()`, `qveris_inspect` tool definition
+   - `src/agents/system-prompt.ts` — `buildQverisSection()` (structured decision tree), `coreToolSummaries` entries for all three QVeris tools
+   - `src/agents/tool-policy-shared.ts` — `QVERIS_TOOLS` constant must include `"qveris_inspect"`
+   - `src/agents/tool-catalog.ts` — `qveris_inspect` entry in `CORE_TOOL_DEFINITIONS`
+   - `docs/reference/templates/AGENTS.md` — routing-aware `QVeris Tool Routing` guidance rule
+
+9. **`switch_model` tool** — natural-language model switching with fuzzy matching, ambiguity detection, and system-event notification on reset. Key paths:
+   - `src/agents/tools/switch-model-tool.ts` — tool implementation, `detectAmbiguity`, `AmbiguousCandidate`
+   - `src/auto-reply/reply/model-selection.ts` — `detectAmbiguity` option; system event on silent override reset
+
+## Merge Checklist
+
+- Keep `qveris` Zod schema block properly closed in `src/config/zod-schema.agent-runtime.ts`.
+- Retain `listCrossChannelActions` usage in `src/agents/tools/message-tool.ts`.
+- Keep the `qverisbot`/`@qverisai/qverisbot` package identity in install scripts.
+- Preserve `resolveAgentModelFallbacksOverride` import in `agent-runner-memory.ts`.
+- Keep `extraSystemPromptParts` array in `src/auto-reply/reply/get-reply-run.ts` including `agentCfg?.additionalSystemPrompt` and `buildContextDigestAnchorPrompt`.
+- Preserve `context-digest` and `session-importance` bundled hooks under `src/hooks/bundled/`.
+- Preserve shared memory utilities: `src/hooks/transcript-reader.ts` and `src/hooks/llm-memory-helpers.ts`.
+- Keep `QVERIS_TOOLS` in `src/agents/tool-policy-shared.ts` as `["qveris_discover", "qveris_call", "qveris_inspect"]`.
+- Keep `buildQverisSection()` decision tree in `src/agents/system-prompt.ts`; it must reference `qveris_inspect` step when the tool is available.
+- Keep `makeToolRolodex()` and `makeDiscoverResultTracker()` in `src/agents/tools/qveris-tools.ts`; `qveris_call` must record to the rolodex on success.
+- Keep `switch_model` tool registered in `src/agents/openclaw-tools.ts` and its implementation in `src/agents/tools/switch-model-tool.ts`.
+- After resolving conflicts, run `pnpm build` to catch parse/type errors before committing.

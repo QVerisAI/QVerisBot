@@ -332,6 +332,7 @@ describe("/model chat UX", () => {
     expect(reply?.text).toContain("anthropic/claude-opus-4-6");
     expect(reply?.text).toContain("openai/gpt-4.1-mini");
     expect(reply?.text).not.toContain("claude-sonnet-4-1");
+    expect(reply?.text).toContain("[anthropic] endpoint: default auth:");
     expect(reply?.text).toContain("auth:");
     expect(reply?.text).not.toContain("missing (missing)");
   });

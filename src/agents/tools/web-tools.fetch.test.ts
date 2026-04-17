@@ -1,5 +1,6 @@
 import { EnvHttpProxyAgent } from "undici";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import * as ssrf from "../../infra/net/ssrf.js";
 import type { LookupFn } from "../../infra/net/ssrf.js";
 import { resolveRequestUrl } from "../../plugin-sdk/request-url.js";
 import { withFetchPreconnect } from "../../test-utils/fetch-mock.js";

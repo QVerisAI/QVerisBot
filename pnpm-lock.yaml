@@ -238,6 +238,9 @@ importers:
       tslog:
         specifier: ^4.10.2
         version: 4.10.2
+      twitter-api-v2:
+        specifier: ^1.18.2
+        version: 1.29.0
       undici:
         specifier: 8.0.2
         version: 8.0.2
@@ -398,7 +401,7 @@ importers:
         version: link:../../packages/plugin-sdk
       openclaw:
         specifier: workspace:*
-        version: link:../..
+        version: link:../../packages/openclaw
 
   extensions/brave:
     devDependencies:
@@ -555,7 +558,7 @@ importers:
         version: link:../../packages/plugin-sdk
       openclaw:
         specifier: workspace:*
-        version: link:../..
+        version: link:../../packages/openclaw
     optionalDependencies:
       '@discordjs/opus':
         specifier: ^0.10.0
@@ -602,7 +605,7 @@ importers:
         version: link:../../packages/plugin-sdk
       openclaw:
         specifier: workspace:*
-        version: link:../..
+        version: link:../../packages/openclaw
 
   extensions/firecrawl:
     devDependencies:
@@ -643,7 +646,7 @@ importers:
         version: link:../../packages/plugin-sdk
       openclaw:
         specifier: workspace:*
-        version: link:../..
+        version: link:../../packages/openclaw
 
   extensions/groq:
     devDependencies:
@@ -698,7 +701,7 @@ importers:
         version: link:../../packages/plugin-sdk
       openclaw:
         specifier: workspace:*
-        version: link:../..
+        version: link:../../packages/openclaw
 
   extensions/litellm:
     devDependencies:
@@ -760,7 +763,7 @@ importers:
         version: link:../../packages/plugin-sdk
       openclaw:
         specifier: workspace:*
-        version: link:../..
+        version: link:../../packages/openclaw
 
   extensions/mattermost:
     dependencies:
@@ -776,7 +779,7 @@ importers:
         version: link:../../packages/plugin-sdk
       openclaw:
         specifier: workspace:*
-        version: link:../..
+        version: link:../../packages/openclaw
 
   extensions/media-understanding-core:
     devDependencies:
@@ -791,7 +794,7 @@ importers:
         version: link:../../packages/plugin-sdk
       openclaw:
         specifier: workspace:*
-        version: link:../..
+        version: link:../../packages/openclaw
 
   extensions/memory-lancedb:
     dependencies:
@@ -820,7 +823,7 @@ importers:
         version: link:../../packages/plugin-sdk
       openclaw:
         specifier: workspace:*
-        version: link:../..
+        version: link:../../packages/openclaw
 
   extensions/microsoft:
     dependencies:
@@ -888,7 +891,7 @@ importers:
         version: 9.0.10
       openclaw:
         specifier: workspace:*
-        version: link:../..
+        version: link:../../packages/openclaw
 
   extensions/nextcloud-talk:
     devDependencies:
@@ -897,7 +900,7 @@ importers:
         version: link:../../packages/plugin-sdk
       openclaw:
         specifier: workspace:*
-        version: link:../..
+        version: link:../../packages/openclaw
 
   extensions/nostr:
     dependencies:
@@ -910,7 +913,7 @@ importers:
         version: link:../../packages/plugin-sdk
       openclaw:
         specifier: workspace:*
-        version: link:../..
+        version: link:../../packages/openclaw
 
   extensions/nvidia:
     devDependencies:
@@ -981,7 +984,7 @@ importers:
         version: link:../../packages/plugin-sdk
       openclaw:
         specifier: workspace:*
-        version: link:../..
+        version: link:../../packages/openclaw
 
   extensions/qa-lab:
     dependencies:
@@ -994,7 +997,7 @@ importers:
         version: link:../../packages/plugin-sdk
       openclaw:
         specifier: workspace:*
-        version: link:../..
+        version: link:../../packages/openclaw
 
   extensions/qa-matrix:
     devDependencies:
@@ -1003,7 +1006,7 @@ importers:
         version: link:../../packages/plugin-sdk
       openclaw:
         specifier: workspace:*
-        version: link:../..
+        version: link:../../packages/openclaw
 
   extensions/qianfan:
     devDependencies:
@@ -1031,7 +1034,9 @@ importers:
         version: 8.18.1
       openclaw:
         specifier: workspace:*
-        version: link:../..
+        version: link:../../packages/openclaw
+
+  extensions/qveris: {}
 
   extensions/qwen:
     devDependencies:
@@ -1145,7 +1150,7 @@ importers:
         version: link:../../packages/plugin-sdk
       openclaw:
         specifier: workspace:*
-        version: link:../..
+        version: link:../../packages/openclaw
 
   extensions/together:
     devDependencies:
@@ -1210,7 +1215,7 @@ importers:
         version: link:../../packages/plugin-sdk
       openclaw:
         specifier: workspace:*
-        version: link:../..
+        version: link:../../packages/openclaw
 
   extensions/volcengine:
     devDependencies:
@@ -1251,7 +1256,9 @@ importers:
         version: link:../../packages/plugin-sdk
       openclaw:
         specifier: workspace:*
-        version: link:../..
+        version: link:../../packages/openclaw
+
+  extensions/x: {}
 
   extensions/xai:
     devDependencies:
@@ -1282,7 +1289,7 @@ importers:
         version: link:../../packages/plugin-sdk
       openclaw:
         specifier: workspace:*
-        version: link:../..
+        version: link:../../packages/openclaw
 
   extensions/zalouser:
     dependencies:
@@ -1298,9 +1305,15 @@ importers:
         version: link:../../packages/plugin-sdk
       openclaw:
         specifier: workspace:*
-        version: link:../..
+        version: link:../../packages/openclaw
 
   packages/memory-host-sdk: {}
+
+  packages/openclaw:
+    dependencies:
+      '@qverisai/qverisbot':
+        specifier: workspace:*
+        version: link:../..
 
   packages/plugin-package-contract: {}
 
@@ -7443,6 +7456,9 @@ packages:
     resolution: {integrity: sha512-5C1sg4USs1lfG0GFb2RLXsdpXqBSEhAaA/0kPL01wxzpMqLILNxIxIOKiILz+cdg/pLnOUxFYOR5yhHU666wbw==}
     engines: {node: '>=18.0.0'}
     hasBin: true
+
+  twitter-api-v2@1.29.0:
+    resolution: {integrity: sha512-v473q5bwme4N+DWSg6qY+JCvfg1nSJRWwui3HUALafxfqCvVkKiYmS/5x/pVeJwTmyeBxexMbzHwnzrH4h6oYQ==}
 
   type-is@2.0.1:
     resolution: {integrity: sha512-OZs6gsjF4vMp32qrCbiVSkrFmXtG/AZhY3t0iAMrMBiAZyV9oALtXO8hsrHbMXF9x6L3grlFuwW2oAz7cav+Gw==}
@@ -14900,6 +14916,8 @@ snapshots:
       get-tsconfig: 4.13.7
     optionalDependencies:
       fsevents: 2.3.3
+
+  twitter-api-v2@1.29.0: {}
 
   type-is@2.0.1:
     dependencies:

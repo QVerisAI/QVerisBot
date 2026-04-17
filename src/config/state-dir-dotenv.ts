@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import dotenv from "dotenv";
+import { parseDotEnv } from "../infra/dotenv-runtime.js";
 import {
   isDangerousHostEnvOverrideVarName,
   isDangerousHostEnvVarName,
@@ -15,7 +15,7 @@ function isBlockedServiceEnvVar(key: string): boolean {
 }
 
 function parseStateDirDotEnvContent(content: string): Record<string, string> {
-  const parsed = dotenv.parse(content);
+  const parsed = parseDotEnv(content);
   const entries: Record<string, string> = {};
   for (const [rawKey, value] of Object.entries(parsed)) {
     if (!value?.trim()) {

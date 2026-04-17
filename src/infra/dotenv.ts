@@ -1,8 +1,8 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import dotenv from "dotenv";
 import { resolveConfigDir } from "../utils.js";
+import { parseDotEnv } from "./dotenv-runtime.js";
 import { resolveRequiredHomeDir } from "./home-dir.js";
 import {
   isDangerousHostEnvOverrideVarName,
@@ -134,7 +134,7 @@ function readDotEnvFile(params: {
 
   let parsed: Record<string, string>;
   try {
-    parsed = dotenv.parse(content);
+    parsed = parseDotEnv(content);
   } catch (error) {
     if (!params.quiet) {
       console.warn(`[dotenv] Failed to parse ${params.filePath}: ${String(error)}`);
