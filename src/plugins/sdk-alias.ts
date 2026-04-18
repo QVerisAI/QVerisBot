@@ -18,6 +18,7 @@ export type LoaderModuleResolveParams = {
 type PluginSdkPackageJson = {
   exports?: Record<string, unknown>;
   bin?: string | Record<string, unknown>;
+  name?: string;
 };
 
 const STARTUP_ARGV1 = process.argv[1];
@@ -251,7 +252,7 @@ export function resolvePluginSdkAliasFile(params: {
 
 const cachedPluginSdkExportedSubpaths = new Map<string, string[]>();
 const cachedPluginSdkScopedAliasMaps = new Map<string, Record<string, string>>();
-const PLUGIN_SDK_PACKAGE_NAMES = ["openclaw/plugin-sdk", "@openclaw/plugin-sdk"] as const;
+const cachedPluginSdkPackageNames = new Map<string, string[]>();
 const PLUGIN_SDK_SOURCE_CANDIDATE_EXTENSIONS = [
   ".ts",
   ".mts",
@@ -260,6 +261,24 @@ const PLUGIN_SDK_SOURCE_CANDIDATE_EXTENSIONS = [
   ".cts",
   ".cjs",
 ] as const;
+
+function listPluginSdkPackageNames(packageRoot: string): string[] {
+  const cached = cachedPluginSdkPackageNames.get(packageRoot);
+  if (cached) {
+    return cached;
+  }
+
+  const packageJson = readPluginSdkPackageJson(packageRoot);
+  const packageNames = new Set(["openclaw/plugin-sdk", "@openclaw/plugin-sdk"]);
+  const rootPackageName = typeof packageJson?.name === "string" ? packageJson.name.trim() : "";
+  if (rootPackageName) {
+    packageNames.add(`${rootPackageName}/plugin-sdk`);
+  }
+
+  const resolved = [...packageNames];
+  cachedPluginSdkPackageNames.set(packageRoot, resolved);
+  return resolved;
+}
 
 export function listPluginSdkExportedSubpaths(
   params: {
@@ -325,7 +344,7 @@ export function resolvePluginSdkScopedAliasMap(
       if (kind === "dist") {
         const candidate = path.join(packageRoot, "dist", "plugin-sdk", `${subpath}.js`);
         if (fs.existsSync(candidate)) {
-          for (const packageName of PLUGIN_SDK_PACKAGE_NAMES) {
+          for (const packageName of listPluginSdkPackageNames(packageRoot)) {
             aliasMap[`${packageName}/${subpath}`] = candidate;
           }
           break;
@@ -337,7 +356,7 @@ export function resolvePluginSdkScopedAliasMap(
         if (!fs.existsSync(candidate)) {
           continue;
         }
-        for (const packageName of PLUGIN_SDK_PACKAGE_NAMES) {
+        for (const packageName of listPluginSdkPackageNames(packageRoot)) {
           aliasMap[`${packageName}/${subpath}`] = candidate;
         }
         break;
@@ -391,6 +410,9 @@ export function buildPluginLoaderAliasMap(
   moduleUrl?: string,
   pluginSdkResolution: PluginSdkResolutionPreference = "auto",
 ): Record<string, string> {
+  const packageRoot =
+    resolveLoaderPluginSdkPackageRoot({ modulePath, argv1, moduleUrl, pluginSdkResolution }) ??
+    path.dirname(modulePath);
   const pluginSdkAlias = resolvePluginSdkAliasFile({
     srcFile: "root-alias.cjs",
     distFile: "root-alias.cjs",
@@ -406,7 +428,7 @@ export function buildPluginLoaderAliasMap(
       : {}),
     ...(pluginSdkAlias
       ? Object.fromEntries(
-          PLUGIN_SDK_PACKAGE_NAMES.map((packageName) => [
+          listPluginSdkPackageNames(packageRoot).map((packageName) => [
             packageName,
             normalizeJitiAliasTargetPath(pluginSdkAlias),
           ]),

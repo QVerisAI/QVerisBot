@@ -36,6 +36,7 @@ export {
 
 type PackFile = { path: string };
 type PackResult = { files?: PackFile[]; filename?: string; unpackedSize?: number };
+type RootPackageName = { name?: string };
 
 const requiredPathGroups = [
   ["dist/index.js", "dist/index.mjs"],
@@ -72,6 +73,25 @@ export function listRequiredQaScenarioPackPaths(): string[] {
     .toSorted((left, right) => left.localeCompare(right));
 }
 
+export function createReleaseCheckNpmEnv(params?: {
+  env?: NodeJS.ProcessEnv;
+  scratchDir?: string;
+}): NodeJS.ProcessEnv {
+  const env = { ...(params?.env ?? process.env) };
+  const scratchDir = resolve(
+    params?.scratchDir ?? join(tmpdir(), "openclaw-release-check-npm-runtime"),
+  );
+  const cacheDir = env.npm_config_cache?.trim() || join(scratchDir, "cache");
+  const logsDir = env.npm_config_logs_dir?.trim() || join(scratchDir, "logs");
+
+  mkdirSync(cacheDir, { recursive: true });
+  mkdirSync(logsDir, { recursive: true });
+
+  env.npm_config_cache = cacheDir;
+  env.npm_config_logs_dir = logsDir;
+  return env;
+}
+
 function collectBundledExtensions(): BundledExtension[] {
   const extensionsDir = resolve("extensions");
   const entries = readdirSync(extensionsDir, { withFileTypes: true }).filter((entry) =>
@@ -91,6 +111,22 @@ function collectBundledExtensions(): BundledExtension[] {
       return [];
     }
   });
+}
+
+export function packageNameToNodeModulesSegments(packageName: string): string[] {
+  return packageName
+    .split("/")
+    .map((segment) => segment.trim())
+    .filter((segment) => segment.length > 0);
+}
+
+function readRootPackageName(): string {
+  const rootPackage = JSON.parse(readFileSync(resolve("package.json"), "utf8")) as RootPackageName;
+  const packageName = rootPackage.name?.trim();
+  if (!packageName) {
+    throw new Error("release-check: root package.json is missing a valid name.");
+  }
+  return packageName;
 }
 
 function checkBundledExtensionMetadata() {
@@ -128,6 +164,7 @@ function checkBundledExtensionMetadata() {
 function runPackDry(): PackResult[] {
   const raw = execSync("npm pack --dry-run --json --ignore-scripts", {
     encoding: "utf8",
+    env: createReleaseCheckNpmEnv(),
     stdio: ["ignore", "pipe", "pipe"],
     maxBuffer: 1024 * 1024 * 100,
   });
@@ -140,6 +177,7 @@ function runPack(packDestination: string): PackResult[] {
     ["pack", "--json", "--ignore-scripts", "--pack-destination", packDestination],
     {
       encoding: "utf8",
+      env: createReleaseCheckNpmEnv(),
       stdio: ["ignore", "pipe", "pipe"],
       maxBuffer: 1024 * 1024 * 100,
     },
@@ -175,6 +213,7 @@ function installPackedTarball(prefixDir: string, tarballPath: string, cwd: strin
     {
       cwd,
       encoding: "utf8",
+      env: createReleaseCheckNpmEnv(),
       stdio: "inherit",
     },
   );
@@ -184,6 +223,7 @@ function resolveGlobalRoot(prefixDir: string, cwd: string): string {
   return execFileSync("npm", ["root", "-g", "--prefix", prefixDir], {
     cwd,
     encoding: "utf8",
+    env: createReleaseCheckNpmEnv(),
     stdio: ["ignore", "pipe", "pipe"],
   }).trim();
 }
@@ -199,7 +239,10 @@ function runPackedBundledChannelEntrySmoke(): void {
     const prefixDir = join(tmpRoot, "prefix");
     installPackedTarball(prefixDir, tarballPath, tmpRoot);
 
-    const packageRoot = join(resolveGlobalRoot(prefixDir, tmpRoot), "openclaw");
+    const packageRoot = join(
+      resolveGlobalRoot(prefixDir, tmpRoot),
+      ...packageNameToNodeModulesSegments(readRootPackageName()),
+    );
     execFileSync(
       process.execPath,
       [

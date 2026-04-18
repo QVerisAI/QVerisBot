@@ -4,6 +4,8 @@ import { describe, expect, it, vi } from "vitest";
 import {
   copyStaticExtensionAssets,
   listStaticExtensionAssetOutputs,
+  rewriteBundledExtensionPackageSelfImports,
+  rewritePackageSelfImportsInSource,
   writeStableRootRuntimeAliases,
 } from "../../scripts/runtime-postbuild.mjs";
 import { createScriptTestHarness } from "./test-helpers.js";
@@ -78,5 +80,48 @@ describe("runtime postbuild static assets", () => {
       'export * from "./runtime-tts.runtime-AbCd1234.js";\n',
     );
     await expect(fs.stat(path.join(distDir, "library.js"))).rejects.toThrow();
+  });
+});
+
+describe("runtime postbuild package self imports", () => {
+  it("rewrites bundled extension self imports to the published package name", () => {
+    const source = [
+      'import { defineBundledChannelEntry } from "openclaw/plugin-sdk/channel-entry-contract";',
+      'import "openclaw/plugin-sdk/runtime";',
+      'const loadSetup = () => import("openclaw/plugin-sdk/setup-runtime");',
+      'const compat = require("openclaw/plugin-sdk/compat");',
+      'const docs = "https://github.com/openclaw/openclaw";',
+    ].join("\n");
+
+    expect(rewritePackageSelfImportsInSource(source, "@qverisai/qverisbot")).toBe(
+      [
+        'import { defineBundledChannelEntry } from "@qverisai/qverisbot/plugin-sdk/channel-entry-contract";',
+        'import "@qverisai/qverisbot/plugin-sdk/runtime";',
+        'const loadSetup = () => import("@qverisai/qverisbot/plugin-sdk/setup-runtime");',
+        'const compat = require("@qverisai/qverisbot/plugin-sdk/compat");',
+        'const docs = "https://github.com/openclaw/openclaw";',
+      ].join("\n"),
+    );
+  });
+
+  it("rewrites dist extension entry files in place", async () => {
+    const rootDir = createTempDir("openclaw-runtime-postbuild-");
+    const entryPath = path.join(rootDir, "dist", "extensions", "discord", "index.js");
+    await fs.mkdir(path.dirname(entryPath), { recursive: true });
+    await fs.writeFile(
+      path.join(rootDir, "package.json"),
+      JSON.stringify({ name: "@qverisai/qverisbot" }),
+      "utf8",
+    );
+    await fs.writeFile(
+      entryPath,
+      'import { defineBundledChannelEntry } from "openclaw/plugin-sdk/channel-entry-contract";\n',
+      "utf8",
+    );
+
+    expect(rewriteBundledExtensionPackageSelfImports({ rootDir })).toBe(1);
+    expect(await fs.readFile(entryPath, "utf8")).toBe(
+      'import { defineBundledChannelEntry } from "@qverisai/qverisbot/plugin-sdk/channel-entry-contract";\n',
+    );
   });
 });
