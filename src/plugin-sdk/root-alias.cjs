@@ -7,7 +7,6 @@ let monolithicSdk = null;
 let diagnosticEventsModule = null;
 const jitiLoaders = new Map();
 const pluginSdkSubpathsCache = new Map();
-const pluginSdkPackageNames = ["openclaw/plugin-sdk", "@openclaw/plugin-sdk"];
 const pluginSdkSourceExtensions = [".ts", ".mts", ".js", ".mjs", ".cts", ".cjs"];
 const isDistRootAlias = __filename.includes(
   `${path.sep}dist${path.sep}plugin-sdk${path.sep}root-alias.cjs`,
@@ -88,6 +87,22 @@ function getPackageRoot() {
   return path.resolve(__dirname, "..", "..");
 }
 
+function listPluginSdkPackageNames() {
+  const packageNames = new Set(["openclaw/plugin-sdk", "@openclaw/plugin-sdk"]);
+  try {
+    const packageJson = JSON.parse(
+      fs.readFileSync(path.join(getPackageRoot(), "package.json"), "utf8"),
+    );
+    const rootPackageName = typeof packageJson?.name === "string" ? packageJson.name.trim() : "";
+    if (rootPackageName) {
+      packageNames.add(`${rootPackageName}/plugin-sdk`);
+    }
+  } catch {
+    // Keep the canonical aliases even if package.json is unavailable.
+  }
+  return [...packageNames];
+}
+
 function findDistChunkByPrefix(prefix) {
   const distRoot = path.join(getPackageRoot(), "dist");
   try {
@@ -133,14 +148,14 @@ function buildPluginSdkAliasMap(useDist) {
   const normalizeTarget = (target) =>
     process.platform === "win32" ? target.replace(/\\/g, "/") : target;
   const aliasMap = Object.fromEntries(
-    pluginSdkPackageNames.map((packageName) => [packageName, normalizeTarget(__filename)]),
+    listPluginSdkPackageNames().map((packageName) => [packageName, normalizeTarget(__filename)]),
   );
 
   for (const subpath of listPluginSdkExportedSubpaths()) {
     if (useDist) {
       const candidate = path.join(pluginSdkDir, `${subpath}.js`);
       if (fs.existsSync(candidate)) {
-        for (const packageName of pluginSdkPackageNames) {
+        for (const packageName of listPluginSdkPackageNames()) {
           aliasMap[`${packageName}/${subpath}`] = normalizeTarget(candidate);
         }
       }
@@ -151,7 +166,7 @@ function buildPluginSdkAliasMap(useDist) {
       if (!fs.existsSync(candidate)) {
         continue;
       }
-      for (const packageName of pluginSdkPackageNames) {
+      for (const packageName of listPluginSdkPackageNames()) {
         aliasMap[`${packageName}/${subpath}`] = normalizeTarget(candidate);
       }
       break;

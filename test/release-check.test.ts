@@ -13,8 +13,10 @@ import {
   collectForbiddenPackPaths,
   collectMissingPackPaths,
   collectPackUnpackedSizeErrors,
+  createReleaseCheckNpmEnv,
   listRequiredQaScenarioPackPaths,
   packageNameFromSpecifier,
+  packageNameToNodeModulesSegments,
 } from "../scripts/release-check.ts";
 import { bundledDistPluginFile, bundledPluginFile } from "./helpers/bundled-plugin-paths.js";
 
@@ -275,6 +277,19 @@ describe("bundled plugin root runtime mirrors", () => {
   });
 });
 
+describe("packageNameToNodeModulesSegments", () => {
+  it("keeps unscoped package names as one path segment", () => {
+    expect(packageNameToNodeModulesSegments("openclaw")).toEqual(["openclaw"]);
+  });
+
+  it("splits scoped package names into node_modules path segments", () => {
+    expect(packageNameToNodeModulesSegments("@qverisai/qverisbot")).toEqual([
+      "@qverisai",
+      "qverisbot",
+    ]);
+  });
+});
+
 describe("collectForbiddenPackPaths", () => {
   it("blocks all packaged node_modules payloads", () => {
     expect(
@@ -416,5 +431,46 @@ describe("collectPackUnpackedSizeErrors", () => {
     ).toEqual([
       "npm pack --dry-run produced no unpackedSize data; pack size budget was not verified.",
     ]);
+  });
+});
+
+describe("createReleaseCheckNpmEnv", () => {
+  it("routes npm cache and logs to a writable scratch directory by default", () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), "openclaw-release-check-env-"));
+
+    try {
+      const env = createReleaseCheckNpmEnv({
+        env: { PATH: process.env.PATH },
+        scratchDir: tempRoot,
+      });
+
+      expect(env.PATH).toBe(process.env.PATH);
+      expect(env.npm_config_cache).toBe(join(tempRoot, "cache"));
+      expect(env.npm_config_logs_dir).toBe(join(tempRoot, "logs"));
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("preserves explicit npm cache and log directories", () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), "openclaw-release-check-explicit-"));
+    const explicitCache = join(tempRoot, "custom-cache");
+    const explicitLogs = join(tempRoot, "custom-logs");
+
+    try {
+      const env = createReleaseCheckNpmEnv({
+        env: {
+          PATH: process.env.PATH,
+          npm_config_cache: explicitCache,
+          npm_config_logs_dir: explicitLogs,
+        },
+        scratchDir: join(tempRoot, "scratch"),
+      });
+
+      expect(env.npm_config_cache).toBe(explicitCache);
+      expect(env.npm_config_logs_dir).toBe(explicitLogs);
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
   });
 });

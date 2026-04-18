@@ -10,6 +10,12 @@ import { writeOfficialChannelCatalog } from "./write-official-channel-catalog.mj
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const ROOT_RUNTIME_ALIAS_PATTERN = /^(?<base>.+\.(?:runtime|contract))-[A-Za-z0-9_-]+\.js$/u;
+const PACKAGE_SELF_IMPORT_PATTERNS = [
+  /(from\s*["'])openclaw(?=(?:\/|["']))/gu,
+  /(import\s*["'])openclaw(?=(?:\/|["']))/gu,
+  /(import\s*\(\s*["'])openclaw(?=(?:\/|["']))/gu,
+  /(require\s*\(\s*["'])openclaw(?=(?:\/|["']))/gu,
+];
 
 /**
  * Copy static (non-transpiled) runtime assets that are referenced by their
@@ -57,6 +63,58 @@ export function copyStaticExtensionAssets(params = {}) {
   }
 }
 
+function listFilesRecursive(dirPath, fsImpl) {
+  let entries = [];
+  try {
+    entries = fsImpl.readdirSync(dirPath, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+
+  return entries.flatMap((entry) => {
+    const absolutePath = path.join(dirPath, entry.name);
+    if (entry.isDirectory()) {
+      return listFilesRecursive(absolutePath, fsImpl);
+    }
+    return [absolutePath];
+  });
+}
+
+export function rewritePackageSelfImportsInSource(sourceText, packageName) {
+  if (!packageName || packageName === "openclaw") {
+    return sourceText;
+  }
+  return PACKAGE_SELF_IMPORT_PATTERNS.reduce(
+    (current, pattern) => current.replace(pattern, `$1${packageName}`),
+    sourceText,
+  );
+}
+
+export function rewriteBundledExtensionPackageSelfImports(params = {}) {
+  const rootDir = params.rootDir ?? ROOT;
+  const fsImpl = params.fs ?? fs;
+  const packageName =
+    params.packageName ??
+    JSON.parse(fsImpl.readFileSync(path.join(rootDir, "package.json"), "utf8")).name;
+  const extensionsDir = path.join(rootDir, "dist", "extensions");
+  let rewrittenFiles = 0;
+
+  for (const filePath of listFilesRecursive(extensionsDir, fsImpl)) {
+    if (!filePath.endsWith(".js")) {
+      continue;
+    }
+    const current = fsImpl.readFileSync(filePath, "utf8");
+    const next = rewritePackageSelfImportsInSource(current, packageName);
+    if (next === current) {
+      continue;
+    }
+    fsImpl.writeFileSync(filePath, next, "utf8");
+    rewrittenFiles += 1;
+  }
+
+  return rewrittenFiles;
+}
+
 export function writeStableRootRuntimeAliases(params = {}) {
   const rootDir = params.rootDir ?? ROOT;
   const distDir = path.join(rootDir, "dist");
@@ -89,6 +147,7 @@ export function runRuntimePostBuild(params = {}) {
   stageBundledPluginRuntime(params);
   writeStableRootRuntimeAliases(params);
   copyStaticExtensionAssets(params);
+  rewriteBundledExtensionPackageSelfImports(params);
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {

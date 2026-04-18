@@ -26,6 +26,7 @@ function loadRootAliasWithStubs(options?: {
   env?: Record<string, string | undefined>;
   monolithicExports?: Record<string | symbol, unknown>;
   aliasPath?: string;
+  packageName?: string;
   packageExports?: Record<string, unknown>;
   platform?: string;
   existingPaths?: string[];
@@ -63,6 +64,7 @@ function loadRootAliasWithStubs(options?: {
       return {
         readFileSync: () =>
           JSON.stringify({
+            name: options?.packageName,
             exports: {
               "./plugin-sdk/group-access": { default: "./dist/plugin-sdk/group-access.js" },
               ...options?.packageExports,
@@ -275,6 +277,24 @@ describe("plugin-sdk root alias", () => {
         path.join("src", "plugin-sdk", "group-access.ts"),
       ),
       "@openclaw/plugin-sdk/group-access": expect.stringContaining(
+        path.join("src", "plugin-sdk", "group-access.ts"),
+      ),
+    });
+  });
+
+  it("adds the current package name as a plugin-sdk alias when it differs from openclaw", () => {
+    const lazyModule = loadRootAliasWithStubs({
+      distExists: true,
+      packageName: "@qverisai/qverisbot",
+      monolithicExports: {
+        slowHelper: (): string => "loaded",
+      },
+    });
+
+    expect((lazyModule.moduleExports.slowHelper as () => string)()).toBe("loaded");
+    expect(lazyModule.createJitiOptions.at(-1)?.alias).toMatchObject({
+      "@qverisai/qverisbot/plugin-sdk": rootAliasPath,
+      "@qverisai/qverisbot/plugin-sdk/group-access": expect.stringContaining(
         path.join("src", "plugin-sdk", "group-access.ts"),
       ),
     });

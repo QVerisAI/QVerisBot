@@ -58,6 +58,7 @@ function withCwd<T>(cwd: string, run: () => T): T {
 }
 
 function createPluginSdkAliasFixture(params?: {
+  packageName?: string;
   srcFile?: string;
   distFile?: string;
   srcBody?: string;
@@ -75,7 +76,7 @@ function createPluginSdkAliasFixture(params?: {
     params?.trustedRootIndicatorMode ??
     (params?.trustedRootIndicators === false ? "none" : "bin+marker");
   const packageJson: Record<string, unknown> = {
-    name: "openclaw",
+    name: params?.packageName ?? "openclaw",
     type: "module",
   };
   if (trustedRootIndicatorMode === "bin+marker") {
@@ -867,6 +868,45 @@ describe("plugin sdk alias helpers", () => {
         openClawPackageRoot: "/repo",
       }),
     ).toBe(false);
+  });
+
+  it("adds the current package name to plugin-sdk loader aliases", () => {
+    const { fixture, sourceRootAlias, sourceChannelRuntimePath } =
+      createPluginSdkAliasTargetFixture();
+    fs.writeFileSync(
+      path.join(fixture.root, "package.json"),
+      JSON.stringify(
+        {
+          name: "@qverisai/qverisbot",
+          type: "module",
+          bin: {
+            openclaw: "openclaw.mjs",
+          },
+          exports: {
+            "./plugin-sdk": { default: "./dist/plugin-sdk/index.js" },
+            "./plugin-sdk/channel-runtime": { default: "./dist/plugin-sdk/channel-runtime.js" },
+          },
+        },
+        null,
+        2,
+      ),
+      "utf-8",
+    );
+    const sourcePluginEntry = writePluginEntry(
+      fixture.root,
+      bundledPluginFile("discord", "index.ts"),
+    );
+
+    const aliases = withEnv({ NODE_ENV: undefined }, () =>
+      buildPluginLoaderAliasMap(sourcePluginEntry),
+    );
+
+    expect(fs.realpathSync(aliases["@qverisai/qverisbot/plugin-sdk"] ?? "")).toBe(
+      fs.realpathSync(sourceRootAlias),
+    );
+    expect(fs.realpathSync(aliases["@qverisai/qverisbot/plugin-sdk/channel-runtime"] ?? "")).toBe(
+      fs.realpathSync(sourceChannelRuntimePath),
+    );
   });
 
   it("normalizes Windows alias targets before handing them to Jiti", () => {

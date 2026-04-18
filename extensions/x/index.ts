@@ -1,17 +1,19 @@
-import type { OpenClawPluginApi } from "openclaw/plugin-sdk/core";
-import { emptyPluginConfigSchema } from "openclaw/plugin-sdk/core";
-import { xPlugin } from "./src/plugin.js";
-import { setXRuntime } from "./src/runtime.js";
+import { buildChannelConfigSchema } from "openclaw/plugin-sdk/channel-config-schema";
+import { defineBundledChannelEntry } from "openclaw/plugin-sdk/channel-entry-contract";
+import { XConfigSchema } from "./src/config-schema.js";
 
-const plugin = {
+export default defineBundledChannelEntry({
   id: "x",
   name: "X (Twitter)",
-  description: "X (Twitter) channel plugin - monitor mentions and reply to tweets",
-  configSchema: emptyPluginConfigSchema(),
-  register(api: OpenClawPluginApi) {
-    setXRuntime(api.runtime);
-    api.registerChannel({ plugin: xPlugin });
+  description: "X (Twitter) channel plugin",
+  importMetaUrl: import.meta.url,
+  configSchema: buildChannelConfigSchema(XConfigSchema),
+  plugin: {
+    specifier: "./channel-plugin-api.js",
+    exportName: "xPlugin",
   },
-};
-
-export default plugin;
+  runtime: {
+    specifier: "./runtime-api.js",
+    exportName: "setXRuntime",
+  },
+});
