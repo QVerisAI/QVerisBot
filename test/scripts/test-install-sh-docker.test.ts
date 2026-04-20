@@ -53,6 +53,30 @@ describe("test-install-sh-docker", () => {
     expect(script).toContain('from "./scripts/lib/npm-pack-budget.mjs"');
     expect(script).toContain("install smoke cannot verify pack budget");
   });
+
+  it("falls back to another published baseline version when the requested one is unavailable", () => {
+    const script = readFileSync(SCRIPT_PATH, "utf8");
+
+    expect(script).toContain("resolve_update_baseline_version");
+    expect(script).toContain(
+      'REQUESTED_UPDATE_BASELINE_VERSION="${OPENCLAW_INSTALL_SMOKE_UPDATE_BASELINE:-2026.4.10}"',
+    );
+    expect(script).toContain(
+      'if [[ "$UPDATE_BASELINE_VERSION" != "$REQUESTED_UPDATE_BASELINE_VERSION" ]]; then',
+    );
+    expect(script).toContain("Fallback baseline version: requested");
+  });
+
+  it("skips only the update lanes when no published baseline version exists", () => {
+    const script = readFileSync(SCRIPT_PATH, "utf8");
+
+    expect(script).toContain(
+      'UPDATE_SKIP_REASON="no published baseline version is available for ${PACKAGE_NAME}"',
+    );
+    expect(script).toContain('if [[ -z "$BASELINE_TGZ_FILE" ]]; then');
+    expect(script).toContain('echo "==> Skip update smoke (${UPDATE_SKIP_REASON})"');
+    expect(script).toContain('if [[ -n "$BASELINE_TAG_URL" ]]; then');
+  });
 });
 
 describe("install-sh smoke runner", () => {
