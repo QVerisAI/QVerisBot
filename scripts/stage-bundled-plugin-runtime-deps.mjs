@@ -489,6 +489,29 @@ function pruneDependencyFilesBySuffixes(depRoot, suffixes) {
   });
 }
 
+function pruneNodeModulesBinDirectories(nodeModulesDir) {
+  if (!fs.existsSync(nodeModulesDir)) {
+    return;
+  }
+  const pending = [nodeModulesDir];
+  while (pending.length > 0) {
+    const currentDir = pending.pop();
+    if (!fs.existsSync(currentDir)) {
+      continue;
+    }
+    for (const entry of fs.readdirSync(currentDir, { withFileTypes: true })) {
+      const entryPath = path.join(currentDir, entry.name);
+      if (entry.name === ".bin") {
+        removePathIfExists(entryPath);
+        continue;
+      }
+      if (entry.isDirectory()) {
+        pending.push(entryPath);
+      }
+    }
+  }
+}
+
 function pruneStagedInstalledDependencyCargo(nodeModulesDir, depName, pruneConfig) {
   const depRoot = dependencyNodeModulesPath(nodeModulesDir, depName);
   if (depRoot === null) {
@@ -526,6 +549,7 @@ function listInstalledDependencyNames(nodeModulesDir) {
 }
 
 function pruneStagedRuntimeDependencyCargo(nodeModulesDir, pruneConfig) {
+  pruneNodeModulesBinDirectories(nodeModulesDir);
   for (const depName of listInstalledDependencyNames(nodeModulesDir)) {
     pruneStagedInstalledDependencyCargo(nodeModulesDir, depName, pruneConfig);
   }

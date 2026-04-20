@@ -771,8 +771,14 @@ describe("stageBundledPluginRuntimeDeps", () => {
     fs.writeFileSync(path.join(gifwrapDir, "test", "fixtures", "large.gif"), "fixture\n", "utf8");
     const playwrightDir = writePackage("playwright-core");
     fs.mkdirSync(path.join(playwrightDir, "types"), { recursive: true });
+    fs.mkdirSync(path.join(rootNodeModules, ".bin"), { recursive: true });
     fs.writeFileSync(path.join(playwrightDir, "types", "types.d.ts"), "export {};\n", "utf8");
     fs.writeFileSync(path.join(playwrightDir, "index.js"), "export {};\n", "utf8");
+    fs.writeFileSync(path.join(playwrightDir, "cli.js"), "export {};\n", "utf8");
+    fs.symlinkSync(
+      path.join("..", "playwright-core", "cli.js"),
+      path.join(rootNodeModules, ".bin", "playwright-core"),
+    );
     const jimpDir = writePackage("@jimp/plugin-blit");
     fs.mkdirSync(path.join(jimpDir, "src", "__image_snapshots__"), { recursive: true });
     fs.writeFileSync(
@@ -794,6 +800,7 @@ describe("stageBundledPluginRuntimeDeps", () => {
     expect(fs.existsSync(path.join(pluginDir, "node_modules", "playwright-core", "index.js"))).toBe(
       true,
     );
+    expect(fs.existsSync(path.join(pluginDir, "node_modules", ".bin"))).toBe(false);
     expect(
       fs.existsSync(
         path.join(pluginDir, "node_modules", "@jimp", "plugin-blit", "src", "__image_snapshots__"),
