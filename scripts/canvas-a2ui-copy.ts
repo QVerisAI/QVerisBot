@@ -36,9 +36,9 @@ async function copyDirectoryContentsSafe(params: {
   for (const entry of entries.toSorted((left, right) => left.name.localeCompare(right.name))) {
     const sourcePath = path.join(params.srcDir, entry.name);
     const destinationPath = path.join(params.outDir, entry.name);
-    const relativePath = normalizeRelativePath(path.relative(params.rootDir, sourcePath));
 
     if (entry.isSymbolicLink()) {
+      const relativePath = normalizeRelativePath(path.relative(params.rootDir, sourcePath));
       params.warn(`[canvas-a2ui-copy] skipping symlinked asset: ${relativePath}`);
       continue;
     }
@@ -53,7 +53,6 @@ async function copyDirectoryContentsSafe(params: {
       continue;
     }
     if (entry.isFile()) {
-      await fs.mkdir(path.dirname(destinationPath), { recursive: true });
       await fs.copyFile(sourcePath, destinationPath);
     }
   }
@@ -84,7 +83,6 @@ export async function copyA2uiAssets(
     }
     throw new Error(message, { cause: err });
   }
-  await fs.mkdir(path.dirname(outDir), { recursive: true });
   await fs.rm(outDir, { recursive: true, force: true });
   await fs.mkdir(outDir, { recursive: true });
   await copyDirectoryContentsSafe({ srcDir, outDir, rootDir: srcDir, warn });
