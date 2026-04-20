@@ -77,6 +77,17 @@ describe("test-install-sh-docker", () => {
     expect(script).toContain('echo "==> Skip update smoke (${UPDATE_SKIP_REASON})"');
     expect(script).toContain('if [[ -n "$BASELINE_TAG_URL" ]]; then');
   });
+
+  it("always injects a Docker host mapping for non-local update host aliases", () => {
+    const script = readFileSync(SCRIPT_PATH, "utf8");
+
+    expect(script).toContain(
+      'if [[ -n "$UPDATE_HOST_ALIAS" && "$UPDATE_HOST_ALIAS" != "127.0.0.1" && "$UPDATE_HOST_ALIAS" != "localhost" ]]; then',
+    );
+    expect(script).toContain(
+      'UPDATE_DOCKER_HOST_ARGS=(--add-host "${UPDATE_HOST_ALIAS}:host-gateway")',
+    );
+  });
 });
 
 describe("install-sh smoke runner", () => {

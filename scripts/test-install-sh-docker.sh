@@ -325,10 +325,8 @@ process.stdout.write(last.filename);
 }
 
 prepare_update_host_access() {
-  local host_os
-  host_os="$(uname -s)"
   UPDATE_DOCKER_HOST_ARGS=()
-  if [[ "$host_os" == "Linux" ]]; then
+  if [[ -n "$UPDATE_HOST_ALIAS" && "$UPDATE_HOST_ALIAS" != "127.0.0.1" && "$UPDATE_HOST_ALIAS" != "localhost" ]]; then
     UPDATE_DOCKER_HOST_ARGS=(--add-host "${UPDATE_HOST_ALIAS}:host-gateway")
   fi
 }

@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { copyA2uiAssets } from "../../scripts/canvas-a2ui-copy.js";
 import { withTempDir } from "../test-utils/temp-dir.js";
 
@@ -64,6 +64,35 @@ describe("canvas a2ui copy", () => {
 
       await expect(fs.stat(path.join(outDir, "index.html"))).resolves.toBeTruthy();
       await expect(fs.stat(path.join(outDir, "a2ui.bundle.js"))).resolves.toBeTruthy();
+    });
+  });
+
+  it("cleans stale output and skips symlinked source entries", async () => {
+    await withA2uiFixture(async (dir) => {
+      const srcDir = path.join(dir, "src");
+      const outDir = path.join(dir, "dist");
+      const warn = vi.fn();
+      await fs.mkdir(srcDir, { recursive: true });
+      await fs.mkdir(outDir, { recursive: true });
+      await fs.writeFile(path.join(srcDir, "index.html"), "<html></html>", "utf8");
+      await fs.writeFile(path.join(srcDir, "a2ui.bundle.js"), "console.log(1);", "utf8");
+      await fs.writeFile(path.join(dir, "package.json"), "{}", "utf8");
+      await fs.writeFile(path.join(outDir, "stale.txt"), "stale", "utf8");
+      await fs.symlink(path.join(dir, "package.json"), path.join(srcDir, "test-link.txt"));
+
+      await copyA2uiAssets({ srcDir, outDir }, { warn });
+
+      await expect(fs.stat(path.join(outDir, "index.html"))).resolves.toBeTruthy();
+      await expect(fs.stat(path.join(outDir, "a2ui.bundle.js"))).resolves.toBeTruthy();
+      await expect(fs.stat(path.join(outDir, "stale.txt"))).rejects.toMatchObject({
+        code: "ENOENT",
+      });
+      await expect(fs.stat(path.join(outDir, "test-link.txt"))).rejects.toMatchObject({
+        code: "ENOENT",
+      });
+      expect(warn).toHaveBeenCalledWith(
+        "[canvas-a2ui-copy] skipping symlinked asset: test-link.txt",
+      );
     });
   });
 });
