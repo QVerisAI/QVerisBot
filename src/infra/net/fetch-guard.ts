@@ -287,7 +287,7 @@ export async function fetchWithSsrFGuard(params: GuardedFetchOptions): Promise<G
   const usesMockedFetchWithoutPinnedDns =
     params.lookupFn === undefined &&
     params.dispatcherPolicy === undefined &&
-    (isMockedFetch(defaultFetch) || isMockedFetch(globalThis.fetch));
+    isMockedFetch(defaultFetch);
 
   const maxRedirects =
     typeof params.maxRedirects === "number" && Number.isFinite(params.maxRedirects)

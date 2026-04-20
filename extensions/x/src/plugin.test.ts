@@ -27,6 +27,8 @@ describe("X plugin", () => {
 
     it("should normalize twitter profile urls onto x.com", () => {
       expect(normalizeTarget?.("https://twitter.com/elonmusk")).toBe("https://x.com/elonmusk");
+      expect(normalizeTarget?.("http://x.com/elonmusk")).toBe("https://x.com/elonmusk");
+      expect(normalizeTarget?.("https://www.x.com/elonmusk")).toBe("https://x.com/elonmusk");
     });
   });
 

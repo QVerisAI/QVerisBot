@@ -38,10 +38,7 @@ function normalizeXMessagingTarget(target: string): string | undefined {
   if (!trimmed) {
     return undefined;
   }
-  if (/^twitter:(user|tweet):/i.test(trimmed)) {
-    return trimmed.replace(/^twitter:/i, "x:");
-  }
-  if (/^(x|twitter):user:/i.test(trimmed) || /^(x|twitter):tweet:/i.test(trimmed)) {
+  if (/^(?:x|twitter):(user|tweet):/i.test(trimmed)) {
     return trimmed.replace(/^twitter:/i, "x:");
   }
   if (/^user:\d+$/i.test(trimmed)) {
@@ -51,7 +48,7 @@ function normalizeXMessagingTarget(target: string): string | undefined {
     return trimmed;
   }
   if (/^https?:\/\/(www\.)?(twitter\.com|x\.com)\//i.test(trimmed)) {
-    return trimmed.replace(/^https?:\/\/(?:www\.)?twitter\.com\//i, "https://x.com/");
+    return trimmed.replace(/^https?:\/\/(?:www\.)?(?:twitter\.com|x\.com)\//i, "https://x.com/");
   }
   return undefined;
 }

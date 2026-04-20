@@ -457,7 +457,7 @@ async function updateActivityViaRest(params: {
   const currentFetch = globalThis.fetch;
   const { response, release } = await fetchWithSsrFGuard({
     url,
-    fetchImpl: async (input, guardedInit) => await currentFetch(input, guardedInit),
+    fetchImpl: currentFetch,
     init: {
       method: "PUT",
       headers,
@@ -508,7 +508,7 @@ async function deleteActivityViaRest(params: {
   const currentFetch = globalThis.fetch;
   const { response, release } = await fetchWithSsrFGuard({
     url,
-    fetchImpl: async (input, guardedInit) => await currentFetch(input, guardedInit),
+    fetchImpl: currentFetch,
     init: {
       method: "DELETE",
       headers,

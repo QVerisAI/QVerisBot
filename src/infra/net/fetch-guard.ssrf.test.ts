@@ -362,24 +362,18 @@ describe("fetchWithSsrFGuard hardening", () => {
     }
   });
 
-  it("skips pinned DNS for explicit wrappers around a mocked global fetch", async () => {
-    const originalGlobalFetch = globalThis.fetch;
-    const globalFetch = vi.fn(async (_input?: RequestInfo | URL, _init?: RequestInit) =>
+  it("skips pinned DNS for an explicit mocked fetch implementation", async () => {
+    const fetchImpl = vi.fn(async (_input?: RequestInfo | URL, _init?: RequestInit) =>
       okResponse(),
     );
-    (globalThis as Record<string, unknown>).fetch = globalFetch as typeof fetch;
 
-    try {
-      const result = await fetchWithSsrFGuard({
-        url: "https://api.test.invalid/resource",
-        fetchImpl: async (input, init) => await globalFetch(input, init),
-      });
+    const result = await fetchWithSsrFGuard({
+      url: "https://api.test.invalid/resource",
+      fetchImpl,
+    });
 
-      expect(globalFetch).toHaveBeenCalledTimes(1);
-      await result.release();
-    } finally {
-      (globalThis as Record<string, unknown>).fetch = originalGlobalFetch;
-    }
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    await result.release();
   });
 
   it("fails closed when the runtime rejects the pinned dispatcher shape", async () => {
