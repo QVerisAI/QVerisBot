@@ -495,8 +495,8 @@ function pruneNodeModulesBinDirectories(nodeModulesDir) {
   }
   const pending = [nodeModulesDir];
   while (pending.length > 0) {
-    const currentDir = pending.shift();
-    if (!currentDir || !fs.existsSync(currentDir)) {
+    const currentDir = pending.pop();
+    if (!fs.existsSync(currentDir)) {
       continue;
     }
     for (const entry of fs.readdirSync(currentDir, { withFileTypes: true })) {
