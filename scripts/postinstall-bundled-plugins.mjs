@@ -355,6 +355,21 @@ function collectRuntimeDeps(packageJson) {
   };
 }
 
+function collectRootRuntimeDeps(params = {}) {
+  const packageRoot = params.packageRoot ?? DEFAULT_PACKAGE_ROOT;
+  const packageJsonPath = join(packageRoot, "package.json");
+  const pathExists = params.existsSync ?? existsSync;
+  const readJsonFile = params.readJson ?? readJson;
+  if (!pathExists(packageJsonPath)) {
+    return new Map();
+  }
+  try {
+    return new Map(Object.entries(collectRuntimeDeps(readJsonFile(packageJsonPath))));
+  } catch {
+    return new Map();
+  }
+}
+
 export function discoverBundledPluginRuntimeDeps(params = {}) {
   const extensionsDir = params.extensionsDir ?? DEFAULT_EXTENSIONS_DIR;
   const pathExists = params.existsSync ?? existsSync;
@@ -671,7 +686,13 @@ export function runBundledPluginPostinstall(params = {}) {
   const runtimeDeps =
     params.runtimeDeps ??
     discoverBundledPluginRuntimeDeps({ extensionsDir, existsSync: pathExists });
+  const rootRuntimeDeps = collectRootRuntimeDeps({
+    packageRoot,
+    existsSync: pathExists,
+    readJson: params.readJson ?? readJson,
+  });
   const missingSpecs = runtimeDeps
+    .filter((dep) => rootRuntimeDeps.has(dep.name))
     .filter((dep) =>
       runtimeDepNeedsInstall({
         dep,

@@ -44,6 +44,16 @@ async function writePluginPackage(
   }
 }
 
+async function writeRootPackageJson(
+  packageRoot: string,
+  packageJson: Record<string, unknown> = { name: "@qverisai/qverisbot" },
+) {
+  await fs.writeFile(
+    path.join(packageRoot, "package.json"),
+    `${JSON.stringify(packageJson, null, 2)}\n`,
+  );
+}
+
 describe("bundled plugin postinstall", () => {
   function createNpmInstallArgs(...packages: string[]) {
     return [
@@ -99,9 +109,15 @@ describe("bundled plugin postinstall", () => {
     });
   });
 
-  it("installs bundled plugin deps outside of source checkouts", async () => {
+  it("installs only root-mirrored bundled plugin deps outside of source checkouts", async () => {
     const extensionsDir = await createExtensionsDir();
     const packageRoot = path.dirname(path.dirname(extensionsDir));
+    await writeRootPackageJson(packageRoot, {
+      name: "@qverisai/qverisbot",
+      dependencies: {
+        acpx: "0.4.1",
+      },
+    });
     await writePluginPackage(extensionsDir, "acpx", {
       dependencies: {
         acpx: "0.4.1",
@@ -341,6 +357,12 @@ describe("bundled plugin postinstall", () => {
   it("runs nested local installs with sanitized env when the sentinel package is missing", async () => {
     const extensionsDir = await createExtensionsDir();
     const packageRoot = path.dirname(path.dirname(extensionsDir));
+    await writeRootPackageJson(packageRoot, {
+      name: "@qverisai/qverisbot",
+      dependencies: {
+        acpx: "0.4.1",
+      },
+    });
     await writePluginPackage(extensionsDir, "acpx", {
       dependencies: {
         acpx: "0.4.1",
@@ -394,6 +416,12 @@ describe("bundled plugin postinstall", () => {
   it("reinstalls bundled runtime deps when optional native children are missing", async () => {
     const extensionsDir = await createExtensionsDir();
     const packageRoot = path.dirname(path.dirname(extensionsDir));
+    await writeRootPackageJson(packageRoot, {
+      name: "@qverisai/qverisbot",
+      dependencies: {
+        "@snazzah/davey": "0.1.11",
+      },
+    });
     await writePluginPackage(extensionsDir, "discord", {
       dependencies: {
         "@snazzah/davey": "0.1.11",
@@ -519,6 +547,12 @@ describe("bundled plugin postinstall", () => {
   it("installs missing bundled plugin runtime deps during global installs", async () => {
     const extensionsDir = await createExtensionsDir();
     const packageRoot = path.dirname(path.dirname(extensionsDir));
+    await writeRootPackageJson(packageRoot, {
+      name: "@qverisai/qverisbot",
+      dependencies: {
+        "@slack/web-api": "7.11.0",
+      },
+    });
     await writePluginPackage(extensionsDir, "slack", {
       dependencies: {
         "@slack/web-api": "7.11.0",
@@ -540,17 +574,23 @@ describe("bundled plugin postinstall", () => {
       },
       extensionsDir,
       packageRoot,
-      npmRunner: createBareNpmRunner(["@slack/web-api@7.11.0", "grammy@1.38.4"]),
+      npmRunner: createBareNpmRunner(["@slack/web-api@7.11.0"]),
       spawnSync,
       log: { log: vi.fn(), warn: vi.fn() },
     });
 
-    expectNpmInstallSpawn(spawnSync, packageRoot, ["@slack/web-api@7.11.0", "grammy@1.38.4"]);
+    expectNpmInstallSpawn(spawnSync, packageRoot, ["@slack/web-api@7.11.0"]);
   });
 
-  it("installs only missing bundled plugin runtime deps", async () => {
+  it("installs only missing root-mirrored bundled plugin runtime deps", async () => {
     const extensionsDir = await createExtensionsDir();
     const packageRoot = path.dirname(path.dirname(extensionsDir));
+    await writeRootPackageJson(packageRoot, {
+      name: "@qverisai/qverisbot",
+      dependencies: {
+        "@slack/web-api": "7.11.0",
+      },
+    });
     await writePluginPackage(extensionsDir, "slack", {
       dependencies: {
         "@slack/web-api": "7.11.0",
@@ -576,17 +616,23 @@ describe("bundled plugin postinstall", () => {
       },
       extensionsDir,
       packageRoot,
-      npmRunner: createBareNpmRunner(["grammy@1.38.4"]),
+      npmRunner: createBareNpmRunner([]),
       spawnSync,
       log: { log: vi.fn(), warn: vi.fn() },
     });
 
-    expectNpmInstallSpawn(spawnSync, packageRoot, ["grammy@1.38.4"]);
+    expect(spawnSync).not.toHaveBeenCalled();
   });
 
-  it("installs bundled plugin deps when npm location is global", async () => {
+  it("installs mirrored bundled plugin deps when npm location is global", async () => {
     const extensionsDir = await createExtensionsDir();
     const packageRoot = path.dirname(path.dirname(extensionsDir));
+    await writeRootPackageJson(packageRoot, {
+      name: "@qverisai/qverisbot",
+      dependencies: {
+        grammy: "1.38.4",
+      },
+    });
     await writePluginPackage(extensionsDir, "telegram", {
       dependencies: {
         grammy: "1.38.4",
@@ -608,6 +654,32 @@ describe("bundled plugin postinstall", () => {
     });
 
     expectNpmInstallSpawn(spawnSync, packageRoot, ["grammy@1.38.4"]);
+  });
+
+  it("skips non-mirrored bundled plugin deps during installed-package postinstall", async () => {
+    const extensionsDir = await createExtensionsDir();
+    const packageRoot = path.dirname(path.dirname(extensionsDir));
+    await writeRootPackageJson(packageRoot, { name: "@qverisai/qverisbot" });
+    await writePluginPackage(extensionsDir, "telegram", {
+      dependencies: {
+        grammy: "1.38.4",
+      },
+    });
+    const spawnSync = vi.fn();
+
+    runBundledPluginPostinstall({
+      env: {
+        npm_config_location: "global",
+        npm_config_prefix: "/opt/homebrew",
+        HOME: "/tmp/home",
+      },
+      extensionsDir,
+      packageRoot,
+      spawnSync,
+      log: { log: vi.fn(), warn: vi.fn() },
+    });
+
+    expect(spawnSync).not.toHaveBeenCalled();
   });
 
   it("prunes only bundled plugin package node_modules in source checkouts", async () => {
