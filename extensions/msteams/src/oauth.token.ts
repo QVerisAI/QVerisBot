@@ -34,7 +34,7 @@ export async function exchangeMSTeamsCodeForTokens(params: {
   const currentFetch = globalThis.fetch;
   const { response, release } = await fetchWithSsrFGuard({
     url: tokenUrl,
-    fetchImpl: async (input, guardedInit) => await currentFetch(input, guardedInit),
+    fetchImpl: currentFetch,
     init: {
       method: "POST",
       headers: {
@@ -103,7 +103,7 @@ export async function refreshMSTeamsDelegatedTokens(params: {
   const currentFetch = globalThis.fetch;
   const { response, release } = await fetchWithSsrFGuard({
     url: tokenUrl,
-    fetchImpl: async (input, guardedInit) => await currentFetch(input, guardedInit),
+    fetchImpl: currentFetch,
     init: {
       method: "POST",
       headers: {

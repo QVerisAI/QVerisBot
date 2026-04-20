@@ -33,6 +33,26 @@ type XAccountConfig = {
   proxy?: string;
 };
 
+function normalizeXMessagingTarget(target: string): string | undefined {
+  const trimmed = target.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  if (/^(?:x|twitter):(user|tweet):/i.test(trimmed)) {
+    return trimmed.replace(/^twitter:/i, "x:");
+  }
+  if (/^user:\d+$/i.test(trimmed)) {
+    return `x:${trimmed.toLowerCase()}`;
+  }
+  if (/^@\w{4,15}$/i.test(trimmed) || /^\d{10,}$/.test(trimmed)) {
+    return trimmed;
+  }
+  if (/^https?:\/\/(www\.)?(twitter\.com|x\.com)\//i.test(trimmed)) {
+    return trimmed.replace(/^https?:\/\/(?:www\.)?(?:twitter\.com|x\.com)\//i, "https://x.com/");
+  }
+  return undefined;
+}
+
 /**
  * X channel plugin.
  */
@@ -119,6 +139,7 @@ export const xPlugin: ChannelPlugin<XAccountConfig> = {
   },
 
   messaging: {
+    normalizeTarget: normalizeXMessagingTarget,
     targetResolver: {
       looksLikeId: (raw: string) => {
         const trimmed = raw.trim();

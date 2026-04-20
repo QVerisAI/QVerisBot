@@ -13,11 +13,25 @@ export type PluginCacheInputs = {
   loadPaths: string[];
 };
 
+function resolvePluginHostEnv(env?: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  if (!env || env === process.env) {
+    return process.env;
+  }
+  const resolved = {
+    ...process.env,
+    ...env,
+  };
+  if (process.env.VITEST !== undefined) {
+    resolved.VITEST = process.env.VITEST;
+  }
+  return resolved;
+}
+
 export function resolvePluginSourceRoots(params: {
   workspaceDir?: string;
   env?: NodeJS.ProcessEnv;
 }): PluginSourceRoots {
-  const env = params.env ?? process.env;
+  const env = resolvePluginHostEnv(params.env);
   const workspaceRoot = params.workspaceDir ? resolveUserPath(params.workspaceDir, env) : undefined;
   const stock = resolveBundledPluginsDir(env);
   const global = path.join(resolveConfigDir(env), "extensions");
@@ -31,7 +45,7 @@ export function resolvePluginCacheInputs(params: {
   loadPaths?: string[];
   env?: NodeJS.ProcessEnv;
 }): PluginCacheInputs {
-  const env = params.env ?? process.env;
+  const env = resolvePluginHostEnv(params.env);
   const roots = resolvePluginSourceRoots({
     workspaceDir: params.workspaceDir,
     env,

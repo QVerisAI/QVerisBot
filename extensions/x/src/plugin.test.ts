@@ -6,6 +6,32 @@ import { describe, it, expect } from "vitest";
 import { xPlugin } from "./plugin.js";
 
 describe("X plugin", () => {
+  describe("messaging.normalizeTarget", () => {
+    const normalizeTarget = xPlugin.messaging?.normalizeTarget;
+
+    it("should exist", () => {
+      expect(normalizeTarget).toBeTypeOf("function");
+    });
+
+    it("should normalize prefixed user targets", () => {
+      expect(normalizeTarget?.("twitter:user:1566488849252958208")).toBe(
+        "x:user:1566488849252958208",
+      );
+      expect(normalizeTarget?.("user:1566488849252958208")).toBe("x:user:1566488849252958208");
+    });
+
+    it("should preserve handles and bare numeric ids", () => {
+      expect(normalizeTarget?.("@wanglinfang2")).toBe("@wanglinfang2");
+      expect(normalizeTarget?.("1566488849252958208")).toBe("1566488849252958208");
+    });
+
+    it("should normalize twitter profile urls onto x.com", () => {
+      expect(normalizeTarget?.("https://twitter.com/elonmusk")).toBe("https://x.com/elonmusk");
+      expect(normalizeTarget?.("http://x.com/elonmusk")).toBe("https://x.com/elonmusk");
+      expect(normalizeTarget?.("https://www.x.com/elonmusk")).toBe("https://x.com/elonmusk");
+    });
+  });
+
   describe("messaging.targetResolver.looksLikeId", () => {
     const looksLikeId = xPlugin.messaging?.targetResolver?.looksLikeId;
 

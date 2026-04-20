@@ -4,6 +4,7 @@ import {
   listKnownProviderAuthEnvVarNames,
   listKnownSecretEnvVarNames,
   omitEnvKeysCaseInsensitive,
+  resolveProviderAuthEnvVarCandidates,
 } from "./provider-env-vars.js";
 
 describe("provider env vars", () => {
@@ -63,5 +64,16 @@ describe("provider env vars", () => {
     expect(getProviderEnvVars("openai")).toEqual(["OPENAI_API_KEY"]);
     expect(getProviderEnvVars("anthropic")).toEqual(["ANTHROPIC_OAUTH_TOKEN", "ANTHROPIC_API_KEY"]);
     expect(getProviderEnvVars("fal")).toEqual(["FAL_KEY", "FAL_API_KEY"]);
+  });
+
+  it("keeps bundled provider auth env metadata available for sparse env snapshots", () => {
+    const candidates = resolveProviderAuthEnvVarCandidates({
+      env: { MINIMAX_API_KEY: "sk-test" } as NodeJS.ProcessEnv,
+    });
+
+    expect(candidates.minimax).toEqual(["MINIMAX_API_KEY"]);
+    expect(candidates.moonshot).toEqual(["MOONSHOT_API_KEY"]);
+    expect(candidates.nvidia).toEqual(["NVIDIA_API_KEY"]);
+    expect(candidates.vllm).toEqual(["VLLM_API_KEY"]);
   });
 });

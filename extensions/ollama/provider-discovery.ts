@@ -55,6 +55,9 @@ function resolveOllamaDiscoveryApiKey(params: {
 }
 
 function shouldSkipAmbientOllamaDiscovery(env: NodeJS.ProcessEnv): boolean {
+  if (env.OPENCLAW_TEST_ALLOW_AMBIENT_OLLAMA_DISCOVERY === "1") {
+    return false;
+  }
   return Boolean(env.VITEST) || env.NODE_ENV === "test";
 }
 

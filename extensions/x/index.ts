@@ -1,6 +1,5 @@
-import { buildChannelConfigSchema } from "openclaw/plugin-sdk/channel-config-schema";
 import { defineBundledChannelEntry } from "openclaw/plugin-sdk/channel-entry-contract";
-import { XConfigSchema } from "./src/config-schema.js";
+import { buildChannelConfigSchema, XConfigSchema } from "./config-api.js";
 
 export default defineBundledChannelEntry({
   id: "x",
