@@ -24,8 +24,7 @@ describe("Ollama provider", () => {
   const createAgentDir = () => mkdtempSync(join(tmpdir(), "openclaw-test-"));
 
   const enableDiscoveryEnv = () => {
-    vi.stubEnv("VITEST", "");
-    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("OPENCLAW_TEST_ALLOW_AMBIENT_OLLAMA_DISCOVERY", "1");
   };
 
   const fetchCallUrls = (fetchMock: ReturnType<typeof vi.fn>): string[] =>
@@ -53,7 +52,7 @@ describe("Ollama provider", () => {
     return withOllamaApiKey(() =>
       resolveProvidersWithOllamaOnly({
         agentDir,
-        env: { VITEST: "", NODE_ENV: "development" },
+        env: { OPENCLAW_TEST_ALLOW_AMBIENT_OLLAMA_DISCOVERY: "1" },
       }),
     );
   }

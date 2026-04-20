@@ -284,6 +284,10 @@ export async function fetchWithSsrFGuard(params: GuardedFetchOptions): Promise<G
   if (!defaultFetch) {
     throw new Error("fetch is not available");
   }
+  const usesMockedFetchWithoutPinnedDns =
+    params.lookupFn === undefined &&
+    params.dispatcherPolicy === undefined &&
+    (isMockedFetch(defaultFetch) || isMockedFetch(globalThis.fetch));
 
   const maxRedirects =
     typeof params.maxRedirects === "number" && Number.isFinite(params.maxRedirects)
@@ -337,7 +341,12 @@ export async function fetchWithSsrFGuard(params: GuardedFetchOptions): Promise<G
       await assertExplicitProxyAllowed(params.dispatcherPolicy, params.lookupFn, params.policy);
       const canUseTrustedEnvProxy =
         mode === GUARDED_FETCH_MODE.TRUSTED_ENV_PROXY && hasProxyEnvConfigured();
-      if (canUseTrustedEnvProxy) {
+      if (usesMockedFetchWithoutPinnedDns) {
+        // Test-installed fetch mocks should not have to satisfy real DNS lookups before
+        // the request reaches the mock. Keep hostname policy checks, but skip pinned
+        // dispatcher resolution so mocked fetch implementations can receive the request.
+        assertHostnameAllowedWithPolicy(parsedUrl.hostname, params.policy);
+      } else if (canUseTrustedEnvProxy) {
         dispatcher = createHttp1EnvHttpProxyAgent();
       } else if (usesTrustedExplicitProxyMode) {
         // Explicit proxy targets are still checked against the caller's hostname
