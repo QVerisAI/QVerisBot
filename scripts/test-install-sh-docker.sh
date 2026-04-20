@@ -148,7 +148,8 @@ SKIP_SMOKE_IMAGE_BUILD="${OPENCLAW_INSTALL_SMOKE_SKIP_IMAGE_BUILD:-0}"
 SKIP_NONROOT_IMAGE_BUILD="${OPENCLAW_INSTALL_NONROOT_SKIP_IMAGE_BUILD:-0}"
 SKIP_UPDATE="${OPENCLAW_INSTALL_SMOKE_SKIP_UPDATE:-0}"
 SKIP_NPM_GLOBAL="${OPENCLAW_INSTALL_SMOKE_SKIP_NPM_GLOBAL:-0}"
-UPDATE_BASELINE_VERSION="${OPENCLAW_INSTALL_SMOKE_UPDATE_BASELINE:-2026.4.10}"
+REQUESTED_UPDATE_BASELINE_VERSION="${OPENCLAW_INSTALL_SMOKE_UPDATE_BASELINE:-2026.4.10}"
+UPDATE_BASELINE_VERSION="$REQUESTED_UPDATE_BASELINE_VERSION"
 UPDATE_PACKAGE_SPEC="${OPENCLAW_INSTALL_SMOKE_UPDATE_PACKAGE_SPEC:-}"
 UPDATE_DIST_IMAGE="${OPENCLAW_INSTALL_SMOKE_UPDATE_DIST_IMAGE:-}"
 UPDATE_SKIP_LOCAL_BUILD="${OPENCLAW_INSTALL_SMOKE_UPDATE_SKIP_LOCAL_BUILD:-0}"
@@ -166,6 +167,40 @@ BASELINE_TAG_URL=""
 FRESH_TAG_URL=""
 UPDATE_TAG_URL=""
 UPDATE_DOCKER_HOST_ARGS=()
+UPDATE_SKIP_REASON=""
+
+resolve_update_baseline_version() {
+  local versions_json
+  versions_json="$(quiet_npm view "$PACKAGE_NAME" versions --json 2>/dev/null || true)"
+  node -e '
+const requested = String(process.argv[1] || "");
+const expected = String(process.argv[2] || "");
+const raw = String(process.argv[3] || "");
+let versions;
+try {
+  versions = JSON.parse(raw);
+} catch {
+  versions = raw ? [raw] : [];
+}
+if (!Array.isArray(versions)) {
+  versions = versions ? [versions] : [];
+}
+versions = versions
+  .map((value) => String(value ?? "").trim())
+  .filter((value) => value.length > 0);
+if (versions.length === 0) {
+  process.exit(0);
+}
+if (requested && versions.includes(requested)) {
+  process.stdout.write(requested);
+  process.exit(0);
+}
+const fallback = [...versions].reverse().find((value) => value !== expected) ?? "";
+if (fallback) {
+  process.stdout.write(fallback);
+}
+' "$REQUESTED_UPDATE_BASELINE_VERSION" "$UPDATE_EXPECT_VERSION" "$versions_json"
+}
 
 cleanup() {
   if [[ -n "$UPDATE_SERVER_PID" ]]; then
@@ -261,6 +296,17 @@ process.stdout.write(last.version);
     exit 1
   fi
 
+  UPDATE_BASELINE_VERSION="$(resolve_update_baseline_version)"
+  if [[ -z "$UPDATE_BASELINE_VERSION" ]]; then
+    UPDATE_SKIP_REASON="no published baseline version is available for ${PACKAGE_NAME}"
+    echo "==> Skip update baseline: $UPDATE_SKIP_REASON"
+    return 0
+  fi
+
+  if [[ "$UPDATE_BASELINE_VERSION" != "$REQUESTED_UPDATE_BASELINE_VERSION" ]]; then
+    echo "==> Fallback baseline version: requested ${PACKAGE_NAME}@${REQUESTED_UPDATE_BASELINE_VERSION}, using ${PACKAGE_NAME}@${UPDATE_BASELINE_VERSION}"
+  fi
+
   echo "==> Pack baseline tgz: ${PACKAGE_NAME}@${UPDATE_BASELINE_VERSION}"
   quiet_npm pack "${PACKAGE_NAME}@${UPDATE_BASELINE_VERSION}" --json --pack-destination "$UPDATE_DIR" >"$baseline_pack_json_file"
   BASELINE_TGZ_FILE="$(
@@ -291,10 +337,16 @@ start_update_server() {
   if [[ -z "$UPDATE_PORT" ]]; then
     UPDATE_PORT="$(allocate_host_port)"
   fi
-  BASELINE_TAG_URL="http://${UPDATE_HOST_ALIAS}:${UPDATE_PORT}/${BASELINE_TGZ_FILE}"
+  if [[ -n "$BASELINE_TGZ_FILE" ]]; then
+    BASELINE_TAG_URL="http://${UPDATE_HOST_ALIAS}:${UPDATE_PORT}/${BASELINE_TGZ_FILE}"
+  else
+    BASELINE_TAG_URL=""
+  fi
   FRESH_TAG_URL="http://${UPDATE_HOST_ALIAS}:${UPDATE_PORT}/${UPDATE_TGZ_FILE}"
   UPDATE_TAG_URL="http://${UPDATE_HOST_ALIAS}:${UPDATE_PORT}/${UPDATE_TGZ_FILE}"
-  echo "==> Serve baseline tgz: $BASELINE_TAG_URL"
+  if [[ -n "$BASELINE_TAG_URL" ]]; then
+    echo "==> Serve baseline tgz: $BASELINE_TAG_URL"
+  fi
   echo "==> Serve latest tgz: $FRESH_TAG_URL"
   (
     cd "$UPDATE_DIR"
@@ -351,36 +403,16 @@ else
     LATEST_VERSION="$(cat "$LATEST_FILE")"
   fi
 
-  echo "==> Run update smoke (${UPDATE_BASELINE_VERSION} -> ${UPDATE_EXPECT_VERSION})"
-  docker run --rm -t \
-      --platform "$SMOKE_PLATFORM" \
-      "${UPDATE_DOCKER_HOST_ARGS[@]}" \
-      -e QVERISBOT_INSTALL_PACKAGE="$PACKAGE_NAME" \
-      -e OPENCLAW_INSTALL_PACKAGE="$PACKAGE_NAME" \
-      -e OPENCLAW_INSTALL_SMOKE_MODE=update \
-      -e QVERISBOT_INSTALL_UPDATE_BASELINE="$UPDATE_BASELINE_VERSION" \
-      -e OPENCLAW_INSTALL_UPDATE_BASELINE="$UPDATE_BASELINE_VERSION" \
-      -e QVERISBOT_INSTALL_UPDATE_BASELINE_TAG_URL="$BASELINE_TAG_URL" \
-      -e OPENCLAW_INSTALL_UPDATE_BASELINE_TAG_URL="$BASELINE_TAG_URL" \
-      -e QVERISBOT_INSTALL_UPDATE_EXPECT_VERSION="$UPDATE_EXPECT_VERSION" \
-      -e OPENCLAW_INSTALL_UPDATE_EXPECT_VERSION="$UPDATE_EXPECT_VERSION" \
-      -e QVERISBOT_INSTALL_UPDATE_TAG_URL="$UPDATE_TAG_URL" \
-      -e OPENCLAW_INSTALL_UPDATE_TAG_URL="$UPDATE_TAG_URL" \
-      -e OPENCLAW_NO_ONBOARD=1 \
-      -e OPENCLAW_NO_PROMPT=1 \
-    -e DEBIAN_FRONTEND=noninteractive \
-    "$SMOKE_IMAGE"
-
-  if [[ "$SKIP_NPM_GLOBAL" == "1" ]]; then
-    echo "==> Skip direct npm global smoke (OPENCLAW_INSTALL_SMOKE_SKIP_NPM_GLOBAL=1)"
+  if [[ -z "$BASELINE_TGZ_FILE" ]]; then
+    echo "==> Skip update smoke (${UPDATE_SKIP_REASON})"
   else
-    echo "==> Run direct npm global smoke (${UPDATE_BASELINE_VERSION} -> ${UPDATE_EXPECT_VERSION})"
+    echo "==> Run update smoke (${UPDATE_BASELINE_VERSION} -> ${UPDATE_EXPECT_VERSION})"
     docker run --rm -t \
         --platform "$SMOKE_PLATFORM" \
         "${UPDATE_DOCKER_HOST_ARGS[@]}" \
         -e QVERISBOT_INSTALL_PACKAGE="$PACKAGE_NAME" \
         -e OPENCLAW_INSTALL_PACKAGE="$PACKAGE_NAME" \
-        -e OPENCLAW_INSTALL_SMOKE_MODE=npm-global \
+        -e OPENCLAW_INSTALL_SMOKE_MODE=update \
         -e QVERISBOT_INSTALL_UPDATE_BASELINE="$UPDATE_BASELINE_VERSION" \
         -e OPENCLAW_INSTALL_UPDATE_BASELINE="$UPDATE_BASELINE_VERSION" \
         -e QVERISBOT_INSTALL_UPDATE_BASELINE_TAG_URL="$BASELINE_TAG_URL" \
@@ -393,6 +425,30 @@ else
         -e OPENCLAW_NO_PROMPT=1 \
       -e DEBIAN_FRONTEND=noninteractive \
       "$SMOKE_IMAGE"
+
+    if [[ "$SKIP_NPM_GLOBAL" == "1" ]]; then
+      echo "==> Skip direct npm global smoke (OPENCLAW_INSTALL_SMOKE_SKIP_NPM_GLOBAL=1)"
+    else
+      echo "==> Run direct npm global smoke (${UPDATE_BASELINE_VERSION} -> ${UPDATE_EXPECT_VERSION})"
+      docker run --rm -t \
+          --platform "$SMOKE_PLATFORM" \
+          "${UPDATE_DOCKER_HOST_ARGS[@]}" \
+          -e QVERISBOT_INSTALL_PACKAGE="$PACKAGE_NAME" \
+          -e OPENCLAW_INSTALL_PACKAGE="$PACKAGE_NAME" \
+          -e OPENCLAW_INSTALL_SMOKE_MODE=npm-global \
+          -e QVERISBOT_INSTALL_UPDATE_BASELINE="$UPDATE_BASELINE_VERSION" \
+          -e OPENCLAW_INSTALL_UPDATE_BASELINE="$UPDATE_BASELINE_VERSION" \
+          -e QVERISBOT_INSTALL_UPDATE_BASELINE_TAG_URL="$BASELINE_TAG_URL" \
+          -e OPENCLAW_INSTALL_UPDATE_BASELINE_TAG_URL="$BASELINE_TAG_URL" \
+          -e QVERISBOT_INSTALL_UPDATE_EXPECT_VERSION="$UPDATE_EXPECT_VERSION" \
+          -e OPENCLAW_INSTALL_UPDATE_EXPECT_VERSION="$UPDATE_EXPECT_VERSION" \
+          -e QVERISBOT_INSTALL_UPDATE_TAG_URL="$UPDATE_TAG_URL" \
+          -e OPENCLAW_INSTALL_UPDATE_TAG_URL="$UPDATE_TAG_URL" \
+          -e OPENCLAW_NO_ONBOARD=1 \
+          -e OPENCLAW_NO_PROMPT=1 \
+        -e DEBIAN_FRONTEND=noninteractive \
+        "$SMOKE_IMAGE"
+    fi
   fi
 fi
 
