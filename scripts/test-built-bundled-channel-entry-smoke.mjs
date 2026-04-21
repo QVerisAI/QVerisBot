@@ -42,8 +42,72 @@ function getInstalledPackageRoot(installRoot, packageName) {
   return path.join(installRoot, "node_modules", ...packageName.split("/"));
 }
 
+function cleanupCreatedPaths(createdPaths, fsImpl) {
+  for (const createdPath of [...createdPaths].toReversed()) {
+    fsImpl.rmSync(createdPath, { recursive: true, force: true });
+  }
+}
+
 function extensionEntryToDistFilename(entry) {
   return entry.replace(/^\.\//u, "").replace(/\.[^.]+$/u, ".js");
+}
+
+function ensurePackageSelfReference({
+  aliasPackageName,
+  packageJsonPath,
+  resolvedPackageRoot,
+  createdPaths,
+  fsImpl,
+}) {
+  const installedPackageRoot = getInstalledPackageRoot(resolvedPackageRoot, aliasPackageName);
+  if (fsImpl.existsSync(installedPackageRoot)) {
+    const resolvedInstalledRoot = fsImpl.realpathSync(installedPackageRoot);
+    if (path.resolve(resolvedInstalledRoot) !== resolvedPackageRoot) {
+      throw new Error(
+        `existing package self-reference does not point at ${resolvedPackageRoot}: ${installedPackageRoot}`,
+      );
+    }
+  } else {
+    try {
+      fsImpl.mkdirSync(path.dirname(installedPackageRoot), { recursive: true });
+      try {
+        fsImpl.symlinkSync(
+          resolvedPackageRoot,
+          installedPackageRoot,
+          process.platform === "win32" ? "junction" : "dir",
+        );
+        createdPaths.push(installedPackageRoot);
+      } catch (error) {
+        const symlinkError = error;
+        if (
+          !symlinkError ||
+          typeof symlinkError !== "object" ||
+          !("code" in symlinkError) ||
+          !["EPERM", "EACCES", "ENOTSUP"].includes(symlinkError.code)
+        ) {
+          throw error;
+        }
+        fsImpl.mkdirSync(installedPackageRoot, { recursive: true });
+        createdPaths.push(installedPackageRoot);
+        fsImpl.writeFileSync(
+          path.join(installedPackageRoot, "package.json"),
+          fsImpl.readFileSync(packageJsonPath, "utf8"),
+          "utf8",
+        );
+        const distLinkPath = path.join(installedPackageRoot, "dist");
+        fsImpl.symlinkSync(
+          path.join(resolvedPackageRoot, "dist"),
+          distLinkPath,
+          process.platform === "win32" ? "junction" : "dir",
+        );
+        createdPaths.push(distLinkPath);
+      }
+    } catch (error) {
+      cleanupCreatedPaths(createdPaths, fsImpl);
+      throw error;
+    }
+  }
+  return installedPackageRoot;
 }
 
 export function createBundledChannelSmokeInstallView({ packageRoot, fs: fsImpl = fs } = {}) {
@@ -54,54 +118,25 @@ export function createBundledChannelSmokeInstallView({ packageRoot, fs: fsImpl =
   if (typeof packageName !== "string" || packageName.trim().length === 0) {
     throw new Error(`missing package name in ${packageJsonPath}`);
   }
-  const installedPackageRoot = getInstalledPackageRoot(resolvedPackageRoot, packageName);
   const createdPaths = [];
-  if (fsImpl.existsSync(installedPackageRoot)) {
-    const resolvedInstalledRoot = fsImpl.realpathSync(installedPackageRoot);
-    if (path.resolve(resolvedInstalledRoot) !== resolvedPackageRoot) {
-      throw new Error(
-        `existing package self-reference does not point at ${resolvedPackageRoot}: ${installedPackageRoot}`,
-      );
+  const packageAliases = packageName === "openclaw" ? [packageName] : [packageName, "openclaw"];
+  let installedPackageRoot = "";
+  for (const [index, packageAlias] of packageAliases.entries()) {
+    const aliasInstalledRoot = ensurePackageSelfReference({
+      aliasPackageName: packageAlias,
+      packageJsonPath,
+      resolvedPackageRoot,
+      createdPaths,
+      fsImpl,
+    });
+    if (index === 0) {
+      installedPackageRoot = aliasInstalledRoot;
     }
-  } else {
-    fsImpl.mkdirSync(path.dirname(installedPackageRoot), { recursive: true });
-    try {
-      fsImpl.symlinkSync(
-        resolvedPackageRoot,
-        installedPackageRoot,
-        process.platform === "win32" ? "junction" : "dir",
-      );
-    } catch (error) {
-      const symlinkError = error;
-      if (
-        !symlinkError ||
-        typeof symlinkError !== "object" ||
-        !("code" in symlinkError) ||
-        !["EPERM", "EACCES", "ENOTSUP"].includes(symlinkError.code)
-      ) {
-        throw error;
-      }
-      fsImpl.mkdirSync(installedPackageRoot, { recursive: true });
-      fsImpl.writeFileSync(
-        path.join(installedPackageRoot, "package.json"),
-        fsImpl.readFileSync(packageJsonPath, "utf8"),
-        "utf8",
-      );
-      fsImpl.symlinkSync(
-        path.join(resolvedPackageRoot, "dist"),
-        path.join(installedPackageRoot, "dist"),
-        process.platform === "win32" ? "junction" : "dir",
-      );
-      createdPaths.push(path.join(installedPackageRoot, "dist"));
-    }
-    createdPaths.push(installedPackageRoot);
   }
   return {
     installedPackageRoot,
     cleanup() {
-      for (const createdPath of createdPaths.toReversed()) {
-        fsImpl.rmSync(createdPath, { recursive: true, force: true });
-      }
+      cleanupCreatedPaths(createdPaths, fsImpl);
     },
   };
 }

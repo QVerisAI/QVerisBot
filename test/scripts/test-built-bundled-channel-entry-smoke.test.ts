@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   collectBundledChannelEntryFiles,
   createBundledChannelSmokeInstallView,
@@ -75,8 +75,67 @@ describe("test-built-bundled-channel-entry-smoke", () => {
       expect(smokeInstallView.installedPackageRoot).toBe(
         path.join(packageRoot, "node_modules", "@qverisai", "qverisbot"),
       );
+      await expect(
+        import(
+          pathToFileURL(
+            path.join(
+              packageRoot,
+              "node_modules",
+              "openclaw",
+              "dist",
+              "extensions",
+              "discord",
+              "index.js",
+            ),
+          ).href
+        ),
+      ).resolves.toMatchObject({
+        default: expect.objectContaining({
+          kind: "bundled-channel-entry",
+        }),
+      });
     } finally {
       smokeInstallView.cleanup();
     }
+  });
+
+  it("cleans up partially created fallback paths when setup fails", () => {
+    const packageRoot = "/tmp/openclaw-bundled-channel-smoke-fixture";
+    const installedPackageRoot = path.join(packageRoot, "node_modules", "@qverisai", "qverisbot");
+    const distLinkPath = path.join(installedPackageRoot, "dist");
+    const mkdirSync = vi.fn();
+    const rmSync = vi.fn();
+    const fsMock = {
+      existsSync: vi.fn().mockReturnValue(false),
+      readFileSync: vi.fn().mockReturnValue('{"name":"@qverisai/qverisbot"}\n'),
+      mkdirSync,
+      writeFileSync: vi.fn(),
+      rmSync,
+      symlinkSync: vi
+        .fn()
+        .mockImplementationOnce(() => {
+          const error = new Error("sandbox");
+          Object.assign(error, { code: "EPERM" });
+          throw error;
+        })
+        .mockImplementationOnce(() => {
+          throw new Error("dist link failed");
+        }),
+    };
+
+    expect(() =>
+      createBundledChannelSmokeInstallView({
+        packageRoot,
+        fs: fsMock,
+      }),
+    ).toThrow("dist link failed");
+
+    expect(mkdirSync).toHaveBeenNthCalledWith(1, path.dirname(installedPackageRoot), {
+      recursive: true,
+    });
+    expect(mkdirSync).toHaveBeenNthCalledWith(2, installedPackageRoot, { recursive: true });
+    expect(rmSync).toHaveBeenCalledTimes(1);
+    expect(rmSync).toHaveBeenCalledWith(installedPackageRoot, { recursive: true, force: true });
+    expect(rmSync).not.toHaveBeenCalledWith(distLinkPath, { recursive: true, force: true });
   });
 });
