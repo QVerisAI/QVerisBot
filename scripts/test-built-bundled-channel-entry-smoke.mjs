@@ -8,7 +8,7 @@ installProcessWarningFilter();
 
 process.env.OPENCLAW_DISABLE_BUNDLED_ENTRY_SOURCE_FALLBACK ??= "1";
 
-function parseArgs(argv) {
+export function parseArgs(argv) {
   let packageRoot = process.env.OPENCLAW_BUNDLED_CHANNEL_SMOKE_ROOT;
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -30,33 +30,130 @@ function parseArgs(argv) {
   };
 }
 
-const { packageRoot } = parseArgs(process.argv.slice(2));
-const distExtensionsRoot = path.join(packageRoot, "dist", "extensions");
+function readJson(pathname, fsImpl = fs) {
+  return JSON.parse(fsImpl.readFileSync(pathname, "utf8"));
+}
 
 async function importBuiltModule(absolutePath) {
   return import(pathToFileURL(absolutePath).href);
 }
 
-function readJson(pathname) {
-  return JSON.parse(fs.readFileSync(pathname, "utf8"));
+function getInstalledPackageRoot(installRoot, packageName) {
+  return path.join(installRoot, "node_modules", ...packageName.split("/"));
+}
+
+function cleanupCreatedPaths(createdPaths, fsImpl) {
+  for (const createdPath of [...createdPaths].toReversed()) {
+    fsImpl.rmSync(createdPath, { recursive: true, force: true });
+  }
 }
 
 function extensionEntryToDistFilename(entry) {
   return entry.replace(/^\.\//u, "").replace(/\.[^.]+$/u, ".js");
 }
 
-function collectBundledChannelEntryFiles() {
+function ensurePackageSelfReference({
+  aliasPackageName,
+  packageJsonPath,
+  resolvedPackageRoot,
+  createdPaths,
+  fsImpl,
+}) {
+  const installedPackageRoot = getInstalledPackageRoot(resolvedPackageRoot, aliasPackageName);
+  if (fsImpl.existsSync(installedPackageRoot)) {
+    const resolvedInstalledRoot = fsImpl.realpathSync(installedPackageRoot);
+    if (path.resolve(resolvedInstalledRoot) !== resolvedPackageRoot) {
+      throw new Error(
+        `existing package self-reference does not point at ${resolvedPackageRoot}: ${installedPackageRoot}`,
+      );
+    }
+  } else {
+    try {
+      fsImpl.mkdirSync(path.dirname(installedPackageRoot), { recursive: true });
+      try {
+        fsImpl.symlinkSync(
+          resolvedPackageRoot,
+          installedPackageRoot,
+          process.platform === "win32" ? "junction" : "dir",
+        );
+        createdPaths.push(installedPackageRoot);
+      } catch (error) {
+        const symlinkError = error;
+        if (
+          !symlinkError ||
+          typeof symlinkError !== "object" ||
+          !("code" in symlinkError) ||
+          !["EPERM", "EACCES", "ENOTSUP"].includes(symlinkError.code)
+        ) {
+          throw error;
+        }
+        fsImpl.mkdirSync(installedPackageRoot, { recursive: true });
+        createdPaths.push(installedPackageRoot);
+        fsImpl.writeFileSync(
+          path.join(installedPackageRoot, "package.json"),
+          fsImpl.readFileSync(packageJsonPath, "utf8"),
+          "utf8",
+        );
+        const distLinkPath = path.join(installedPackageRoot, "dist");
+        fsImpl.symlinkSync(
+          path.join(resolvedPackageRoot, "dist"),
+          distLinkPath,
+          process.platform === "win32" ? "junction" : "dir",
+        );
+        createdPaths.push(distLinkPath);
+      }
+    } catch (error) {
+      cleanupCreatedPaths(createdPaths, fsImpl);
+      throw error;
+    }
+  }
+  return installedPackageRoot;
+}
+
+export function createBundledChannelSmokeInstallView({ packageRoot, fs: fsImpl = fs } = {}) {
+  const resolvedPackageRoot = path.resolve(packageRoot);
+  const packageJsonPath = path.join(resolvedPackageRoot, "package.json");
+  const packageJson = readJson(packageJsonPath, fsImpl);
+  const packageName = packageJson.name;
+  if (typeof packageName !== "string" || packageName.trim().length === 0) {
+    throw new Error(`missing package name in ${packageJsonPath}`);
+  }
+  const createdPaths = [];
+  const packageAliases = packageName === "openclaw" ? [packageName] : [packageName, "openclaw"];
+  let installedPackageRoot = "";
+  for (const [index, packageAlias] of packageAliases.entries()) {
+    const aliasInstalledRoot = ensurePackageSelfReference({
+      aliasPackageName: packageAlias,
+      packageJsonPath,
+      resolvedPackageRoot,
+      createdPaths,
+      fsImpl,
+    });
+    if (index === 0) {
+      installedPackageRoot = aliasInstalledRoot;
+    }
+  }
+  return {
+    installedPackageRoot,
+    cleanup() {
+      cleanupCreatedPaths(createdPaths, fsImpl);
+    },
+  };
+}
+
+export function collectBundledChannelEntryFiles(packageRoot, fsImpl = fs) {
+  const distExtensionsRoot = path.join(packageRoot, "dist", "extensions");
   const files = [];
-  for (const dirent of fs.readdirSync(distExtensionsRoot, { withFileTypes: true })) {
+  for (const dirent of fsImpl.readdirSync(distExtensionsRoot, { withFileTypes: true })) {
     if (!dirent.isDirectory()) {
       continue;
     }
     const extensionRoot = path.join(distExtensionsRoot, dirent.name);
     const packageJsonPath = path.join(extensionRoot, "package.json");
-    if (!fs.existsSync(packageJsonPath)) {
+    if (!fsImpl.existsSync(packageJsonPath)) {
       continue;
     }
-    const packageJson = readJson(packageJsonPath);
+    const packageJson = readJson(packageJsonPath, fsImpl);
     if (!packageJson.openclaw?.channel) {
       continue;
     }
@@ -86,7 +183,7 @@ function collectBundledChannelEntryFiles() {
     }
 
     const channelEntryPath = path.join(extensionRoot, "channel-entry.js");
-    if (fs.existsSync(channelEntryPath)) {
+    if (fsImpl.existsSync(channelEntryPath)) {
       files.push({
         id: dirent.name,
         kind: "channel",
@@ -166,25 +263,37 @@ async function smokeSetupEntry(entryFile) {
   return true;
 }
 
-const entryFiles = collectBundledChannelEntryFiles();
-let channelCount = 0;
-let setupCount = 0;
-let legacySetupCount = 0;
+export async function main(argv = process.argv.slice(2)) {
+  const { packageRoot } = parseArgs(argv);
+  const smokeInstallView = createBundledChannelSmokeInstallView({ packageRoot });
+  try {
+    const entryFiles = collectBundledChannelEntryFiles(packageRoot);
+    let channelCount = 0;
+    let setupCount = 0;
+    let legacySetupCount = 0;
 
-for (const entryFile of entryFiles) {
-  if (entryFile.kind === "channel") {
-    await smokeChannelEntry(entryFile);
-    channelCount += 1;
-    continue;
-  }
-  if (await smokeSetupEntry(entryFile)) {
-    setupCount += 1;
-  } else {
-    legacySetupCount += 1;
+    for (const entryFile of entryFiles) {
+      if (entryFile.kind === "channel") {
+        await smokeChannelEntry(entryFile);
+        channelCount += 1;
+        continue;
+      }
+      if (await smokeSetupEntry(entryFile)) {
+        setupCount += 1;
+      } else {
+        legacySetupCount += 1;
+      }
+    }
+
+    assert.ok(channelCount > 0, "no bundled channel entries found");
+    process.stdout.write(
+      `[build-smoke] bundled channel entry smoke passed packageRoot=${packageRoot} channel=${channelCount} setup=${setupCount} legacySetup=${legacySetupCount}\n`,
+    );
+  } finally {
+    smokeInstallView.cleanup();
   }
 }
 
-assert.ok(channelCount > 0, "no bundled channel entries found");
-process.stdout.write(
-  `[build-smoke] bundled channel entry smoke passed packageRoot=${packageRoot} channel=${channelCount} setup=${setupCount} legacySetup=${legacySetupCount}\n`,
-);
+if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
+  await main();
+}
