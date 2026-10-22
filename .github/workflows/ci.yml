@@ -521,7 +521,7 @@ jobs:
   checks-node-extensions:
     name: checks-node-extensions
     needs: [preflight, checks-node-extensions-shard]
-    if: always() && needs.preflight.outputs.run_checks_fast == 'true'
+    if: ${{ !cancelled() && needs.preflight.outputs.run_checks_fast == 'true' }}
     runs-on: ubuntu-slim
     timeout-minutes: 5
     steps:
@@ -537,7 +537,7 @@ jobs:
   checks:
     name: ${{ matrix.check_name }}
     needs: [preflight, build-artifacts]
-    if: always() && needs.preflight.outputs.run_checks == 'true' && needs.build-artifacts.result == 'success'
+    if: ${{ !cancelled() && needs.preflight.outputs.run_checks == 'true' && needs.build-artifacts.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     strategy:
@@ -623,7 +623,7 @@ jobs:
   checks-node-core-test-shard:
     name: ${{ matrix.check_name }}
     needs: [preflight, build-artifacts]
-    if: always() && needs.preflight.outputs.run_checks == 'true' && needs.build-artifacts.result == 'success'
+    if: ${{ !cancelled() && needs.preflight.outputs.run_checks == 'true' && needs.build-artifacts.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     strategy:
@@ -712,7 +712,7 @@ jobs:
   checks-node-core-test:
     name: checks-node-core
     needs: [preflight, checks-node-core-test-shard]
-    if: always() && needs.preflight.outputs.run_checks == 'true'
+    if: ${{ !cancelled() && needs.preflight.outputs.run_checks == 'true' }}
     runs-on: ubuntu-slim
     timeout-minutes: 5
     steps:
@@ -756,7 +756,7 @@ jobs:
   check:
     name: "check"
     needs: [preflight]
-    if: always() && needs.preflight.outputs.run_check == 'true'
+    if: ${{ !cancelled() && needs.preflight.outputs.run_check == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -783,7 +783,7 @@ jobs:
   check-additional:
     name: "check-additional"
     needs: [preflight]
-    if: always() && needs.preflight.outputs.run_check_additional == 'true'
+    if: ${{ !cancelled() && needs.preflight.outputs.run_check_additional == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -990,7 +990,7 @@ jobs:
   build-smoke:
     name: "build-smoke"
     needs: [preflight, build-artifacts]
-    if: always() && needs.preflight.outputs.run_build_smoke == 'true' && (github.event_name != 'push' || needs.build-artifacts.result == 'success')
+    if: ${{ !cancelled() && needs.preflight.outputs.run_build_smoke == 'true' && (github.event_name != 'push' || needs.build-artifacts.result == 'success') }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -1093,7 +1093,7 @@ jobs:
   checks-windows:
     name: ${{ matrix.check_name }}
     needs: [preflight, build-artifacts]
-    if: always() && needs.preflight.outputs.run_checks_windows == 'true' && needs.build-artifacts.result == 'success'
+    if: ${{ !cancelled() && needs.preflight.outputs.run_checks_windows == 'true' && needs.build-artifacts.result == 'success' }}
     runs-on: windows-2025
     timeout-minutes: 60
     env:
@@ -1208,7 +1208,7 @@ jobs:
   macos-node:
     name: ${{ matrix.check_name }}
     needs: [preflight, build-artifacts]
-    if: always() && needs.preflight.outputs.run_macos_node == 'true' && needs.build-artifacts.result == 'success'
+    if: ${{ !cancelled() && needs.preflight.outputs.run_macos_node == 'true' && needs.build-artifacts.result == 'success' }}
     runs-on: macos-latest
     timeout-minutes: 20
     strategy:
