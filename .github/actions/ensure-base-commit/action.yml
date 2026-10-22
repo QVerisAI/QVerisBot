@@ -15,6 +15,7 @@ runs:
       env:
         BASE_SHA: ${{ inputs.base-sha }}
         FETCH_REF: ${{ inputs.fetch-ref }}
+        REPOSITORY_TOKEN: ${{ github.token }}
       run: |
         set -euo pipefail
 
@@ -38,9 +39,30 @@ runs:
           exit 0
         fi
 
+        # Authenticate only this process; checkout keeps credentials off disk.
+        # Fetch the exact base first instead of downloading unrelated history.
+        git_fetch() {
+          if [ -n "${REPOSITORY_TOKEN:-}" ]; then
+            encoded_auth=$(printf 'x-access-token:%s' "$REPOSITORY_TOKEN" | base64 | tr -d '\n')
+            echo "::add-mask::$encoded_auth"
+            GIT_CONFIG_COUNT=1 \
+              GIT_CONFIG_KEY_0="http.${GITHUB_SERVER_URL}/.extraheader" \
+              GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $encoded_auth" \
+              git fetch "$@"
+          else
+            git fetch "$@"
+          fi
+        }
+
+        if git_fetch --no-tags --depth=1 origin "$BASE_SHA" &&
+          git rev-parse --verify "$BASE_SHA^{commit}" >/dev/null 2>&1; then
+          echo "Resolved exact base commit: $BASE_SHA"
+          exit 0
+        fi
+
         for deepen_by in 25 100 300; do
           echo "Base commit missing; deepening $FETCH_REF by $deepen_by."
-          if ! git fetch --no-tags --deepen="$deepen_by" origin -- "$FETCH_REF"; then
+          if ! git_fetch --no-tags --deepen="$deepen_by" origin -- "$FETCH_REF"; then
             echo "::warning title=ensure-base-commit fetch failed::Failed to deepen $FETCH_REF by $deepen_by while looking for $BASE_SHA"
           fi
           if git rev-parse --verify "$BASE_SHA^{commit}" >/dev/null 2>&1; then
@@ -50,7 +72,7 @@ runs:
         done
 
         echo "Base commit still missing; fetching full history for $FETCH_REF."
-        if ! git fetch --no-tags origin -- "$FETCH_REF"; then
+        if ! git_fetch --no-tags origin -- "$FETCH_REF"; then
           echo "::warning title=ensure-base-commit fetch failed::Failed to fetch full history for $FETCH_REF while looking for $BASE_SHA"
         fi
         if git rev-parse --verify "$BASE_SHA^{commit}" >/dev/null 2>&1; then
@@ -58,4 +80,5 @@ runs:
           exit 0
         fi
 
-        echo "Base commit still unavailable after fetch attempts: $BASE_SHA"
+        echo "::error::Base commit still unavailable after fetch attempts: $BASE_SHA"
+        exit 1

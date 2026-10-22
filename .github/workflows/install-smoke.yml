@@ -101,6 +101,8 @@ jobs:
           file: ./Dockerfile
           build-args: |
             OPENCLAW_DOCKER_APT_UPGRADE=0
+          cache-from: type=gha,scope=install-smoke-root
+          cache-to: type=gha,mode=max,scope=install-smoke-root
           tags: openclaw-dockerfile-smoke:local
           load: true
           push: false
@@ -121,6 +123,8 @@ jobs:
           build-args: |
             OPENCLAW_DOCKER_APT_UPGRADE=0
             OPENCLAW_EXTENSIONS=matrix
+          cache-from: type=gha,scope=install-smoke-matrix
+          cache-to: type=gha,mode=max,scope=install-smoke-matrix
           tags: openclaw-ext-smoke:local
           load: true
           push: false
