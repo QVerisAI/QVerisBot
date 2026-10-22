@@ -130,7 +130,11 @@ function isTrulyEmptySchema(schemaRecord: Record<string, unknown>): boolean {
 
 export function normalizeToolParameterSchema(
   schema: unknown,
-  options?: { modelProvider?: string; modelId?: string; modelCompat?: ModelCompatConfig },
+  options?: {
+    modelProvider?: string;
+    modelId?: string;
+    modelCompat?: ModelCompatConfig | { compat?: unknown };
+  },
 ): unknown {
   const schemaRecord =
     schema && typeof schema === "object" ? (schema as Record<string, unknown>) : undefined;
@@ -255,7 +259,11 @@ export function normalizeToolParameterSchema(
 
 export function normalizeToolParameters(
   tool: AnyAgentTool,
-  options?: { modelProvider?: string; modelId?: string; modelCompat?: ModelCompatConfig },
+  options?: {
+    modelProvider?: string;
+    modelId?: string;
+    modelCompat?: ModelCompatConfig | { compat?: unknown };
+  },
 ): AnyAgentTool {
   function preserveToolMeta(target: AnyAgentTool): AnyAgentTool {
     copyPluginToolMeta(tool, target);

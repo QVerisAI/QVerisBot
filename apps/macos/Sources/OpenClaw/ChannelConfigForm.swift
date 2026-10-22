@@ -25,7 +25,9 @@ struct ConfigSchemaForm: View {
             if !literals.isEmpty, literals.count == nonNull.count {
                 return AnyView(
                     VStack(alignment: .leading, spacing: 6) {
-                        if let label { Text(label).font(.callout.weight(.semibold)) }
+                        if let label {
+                            Text(label).font(.callout.weight(.semibold))
+                        }
                         if let help {
                             Text(help)
                                 .font(.caption)
@@ -65,7 +67,9 @@ struct ConfigSchemaForm: View {
                     let sortedKeys = properties.keys.sorted { lhs, rhs in
                         let orderA = hintForPath(path + [.key(lhs)], hints: store.configUiHints)?.order ?? 0
                         let orderB = hintForPath(path + [.key(rhs)], hints: store.configUiHints)?.order ?? 0
-                        if orderA != orderB { return orderA < orderB }
+                        if orderA != orderB {
+                            return orderA < orderB
+                        }
                         return lhs < rhs
                     }
                     ForEach(sortedKeys, id: \ .self) { key in
@@ -82,7 +86,11 @@ struct ConfigSchemaForm: View {
         case "boolean":
             return AnyView(
                 Toggle(isOn: self.boolBinding(path, defaultValue: schema.explicitDefault as? Bool)) {
-                    if let label { Text(label) } else { Text("Enabled") }
+                    if let label {
+                        Text(label)
+                    } else {
+                        Text("Enabled")
+                    }
                 }
                 .help(help ?? ""))
         case "number", "integer":
@@ -92,7 +100,9 @@ struct ConfigSchemaForm: View {
         default:
             return AnyView(
                 VStack(alignment: .leading, spacing: 6) {
-                    if let label { Text(label).font(.callout.weight(.semibold)) }
+                    if let label {
+                        Text(label).font(.callout.weight(.semibold))
+                    }
                     Text("Unsupported field type.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -112,7 +122,9 @@ struct ConfigSchemaForm: View {
         let sensitive = hint?.sensitive ?? isSensitivePath(path)
         let defaultValue = schema.explicitDefault as? String
         VStack(alignment: .leading, spacing: 6) {
-            if let label { Text(label).font(.callout.weight(.semibold)) }
+            if let label {
+                Text(label).font(.callout.weight(.semibold))
+            }
             if let help {
                 Text(help)
                     .font(.caption)
@@ -146,7 +158,9 @@ struct ConfigSchemaForm: View {
         let defaultValue = (schema.explicitDefault as? Double)
             ?? (schema.explicitDefault as? Int).map(Double.init)
         VStack(alignment: .leading, spacing: 6) {
-            if let label { Text(label).font(.callout.weight(.semibold)) }
+            if let label {
+                Text(label).font(.callout.weight(.semibold))
+            }
             if let help {
                 Text(help)
                     .font(.caption)
@@ -173,7 +187,9 @@ struct ConfigSchemaForm: View {
         let items = value as? [Any] ?? []
         let itemSchema = schema.items
         VStack(alignment: .leading, spacing: 10) {
-            if let label { Text(label).font(.callout.weight(.semibold)) }
+            if let label {
+                Text(label).font(.callout.weight(.semibold))
+            }
             if let help {
                 Text(help)
                     .font(.caption)
@@ -265,7 +281,9 @@ struct ConfigSchemaForm: View {
     private func stringBinding(_ path: ConfigPath, defaultValue: String?) -> Binding<String> {
         Binding(
             get: {
-                if let value = store.configValue(at: path) as? String { return value }
+                if let value = store.configValue(at: path) as? String {
+                    return value
+                }
                 return defaultValue ?? ""
             },
             set: { newValue in
@@ -277,7 +295,9 @@ struct ConfigSchemaForm: View {
     private func boolBinding(_ path: ConfigPath, defaultValue: Bool?) -> Binding<Bool> {
         Binding(
             get: {
-                if let value = store.configValue(at: path) as? Bool { return value }
+                if let value = store.configValue(at: path) as? Bool {
+                    return value
+                }
                 return defaultValue ?? false
             },
             set: { newValue in
@@ -292,7 +312,9 @@ struct ConfigSchemaForm: View {
     {
         Binding(
             get: {
-                if let value = store.configValue(at: path) { return String(describing: value) }
+                if let value = store.configValue(at: path) {
+                    return String(describing: value)
+                }
                 guard let defaultValue else { return "" }
                 return isInteger ? String(Int(defaultValue)) : String(defaultValue)
             },

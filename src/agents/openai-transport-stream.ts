@@ -364,7 +364,7 @@ function convertResponsesTools(
     type: "function",
     name: tool.name,
     description: tool.description,
-    parameters: normalizeOpenAIStrictToolParameters(tool.parameters, strict),
+    parameters: normalizeOpenAIStrictToolParameters({ ...tool.parameters }, strict),
     strict,
   }));
 }

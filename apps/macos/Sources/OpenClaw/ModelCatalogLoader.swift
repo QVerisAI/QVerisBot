@@ -70,9 +70,15 @@ enum ModelCatalogLoader {
 
     private static func resolveDefaultPath() -> String {
         let cache = self.cachePath.path
-        if FileManager().isReadableFile(atPath: cache) { return cache }
-        if let bundlePath = self.bundleCatalogPath() { return bundlePath }
-        if let nodePath = self.nodeModulesCatalogPath() { return nodePath }
+        if FileManager().isReadableFile(atPath: cache) {
+            return cache
+        }
+        if let bundlePath = self.bundleCatalogPath() {
+            return bundlePath
+        }
+        if let nodePath = self.nodeModulesCatalogPath() {
+            return nodePath
+        }
         return cache
     }
 

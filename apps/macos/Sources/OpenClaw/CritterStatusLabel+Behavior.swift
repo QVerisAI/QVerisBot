@@ -208,7 +208,9 @@ extension CritterStatusLabel {
     }
 
     private var gatewayNeedsAttention: Bool {
-        if self.isSleeping { return false }
+        if self.isSleeping {
+            return false
+        }
         switch self.gatewayStatus {
         case .failed, .stopped:
             return !self.isPaused

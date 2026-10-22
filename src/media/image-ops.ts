@@ -3,7 +3,7 @@ import path from "node:path";
 import { resolvePreferredOpenClawTmpDir } from "../infra/tmp-openclaw-dir.js";
 import { runExec } from "../process/exec.js";
 
-type Sharp = typeof import("sharp");
+type Sharp = typeof import("sharp").default;
 
 export type ImageMetadata = {
   width: number;
@@ -36,7 +36,7 @@ async function loadSharp(): Promise<(buffer: Buffer) => ReturnType<Sharp>> {
   const sharp = mod.default ?? (mod as unknown as Sharp);
   return (buffer) =>
     sharp(buffer, {
-      failOnError: false,
+      failOn: "none",
       limitInputPixels: MAX_IMAGE_INPUT_PIXELS,
     });
 }

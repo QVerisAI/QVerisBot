@@ -62,7 +62,9 @@ actor RemoteTunnelManager {
             "ensure SSH tunnel target=\(settings.target, privacy: .public) " +
                 "identitySet=\(identitySet, privacy: .public)")
 
-        if let local = await self.controlTunnelPortIfRunning() { return local }
+        if let local = await self.controlTunnelPortIfRunning() {
+            return local
+        }
         await self.waitForRestartBackoffIfNeeded()
 
         let desiredPort = UInt16(GatewayEnvironment.gatewayPort())
@@ -84,8 +86,12 @@ actor RemoteTunnelManager {
 
     private func isSshProcess(_ desc: PortGuardian.Descriptor) -> Bool {
         let cmd = desc.command.lowercased()
-        if cmd.contains("ssh") { return true }
-        if let path = desc.executablePath?.lowercased(), path.contains("/ssh") { return true }
+        if cmd.contains("ssh") {
+            return true
+        }
+        if let path = desc.executablePath?.lowercased(), path.contains("/ssh") {
+            return true
+        }
         return false
     }
 

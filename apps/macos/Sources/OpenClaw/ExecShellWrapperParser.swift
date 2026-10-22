@@ -94,8 +94,12 @@ enum ExecShellWrapperParser {
     private static func extractPowerShellInlineCommand(_ command: [String]) -> String? {
         for idx in 1..<command.count {
             let token = command[idx].trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-            if token.isEmpty { continue }
-            if token == "--" { break }
+            if token.isEmpty {
+                continue
+            }
+            if token == "--" {
+                break
+            }
             if self.powershellInlineFlags.contains(token) {
                 let payload = idx + 1 < command.count
                     ? command[idx + 1].trimmingCharacters(in: .whitespacesAndNewlines)

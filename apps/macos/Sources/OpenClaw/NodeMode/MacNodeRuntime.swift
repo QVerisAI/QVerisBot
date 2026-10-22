@@ -130,7 +130,9 @@ actor MacNodeRuntime {
             let params = try? Self.decodeParams(OpenClawCanvasSnapshotParams.self, from: req.paramsJSON)
             let format = params?.format ?? .jpeg
             let maxWidth: Int? = {
-                if let raw = params?.maxWidth, raw > 0 { return raw }
+                if let raw = params?.maxWidth, raw > 0 {
+                    return raw
+                }
                 return switch format {
                 case .png: 900
                 case .jpeg: 1600
@@ -353,7 +355,9 @@ actor MacNodeRuntime {
     }
 
     private func mainActorServices() async -> any MacNodeRuntimeMainActorServices {
-        if let cachedMainActorServices { return cachedMainActorServices }
+        if let cachedMainActorServices {
+            return cachedMainActorServices
+        }
         let services = await self.makeMainActorServices()
         self.cachedMainActorServices = services
         return services
@@ -410,7 +414,9 @@ actor MacNodeRuntime {
     }
 
     private func ensureA2UIHost() async throws {
-        if await self.isA2UIReady() { return }
+        if await self.isA2UIReady() {
+            return
+        }
         guard let a2uiUrl = await self.resolveA2UIHostUrl() else {
             throw NSError(domain: "Canvas", code: 30, userInfo: [
                 NSLocalizedDescriptionKey: "A2UI_HOST_NOT_CONFIGURED: gateway did not advertise canvas host",
@@ -420,7 +426,9 @@ actor MacNodeRuntime {
         _ = try await MainActor.run {
             try CanvasManager.shared.show(sessionKey: sessionKey, path: a2uiUrl)
         }
-        if await self.isA2UIReady(poll: true) { return }
+        if await self.isA2UIReady(poll: true) {
+            return
+        }
         throw NSError(domain: "Canvas", code: 31, userInfo: [
             NSLocalizedDescriptionKey: "A2UI_HOST_UNAVAILABLE: A2UI host not reachable",
         ])
@@ -445,7 +453,9 @@ actor MacNodeRuntime {
                 })()
                 """)
                 let trimmed = ready.trimmingCharacters(in: .whitespacesAndNewlines)
-                if trimmed == "true" { return true }
+                if trimmed == "true" {
+                    return true
+                }
             } catch {
                 // Ignore transient eval failures while the page is loading.
             }
@@ -517,7 +527,9 @@ actor MacNodeRuntime {
                 skillAllow: evaluation.skillAllow,
                 sessionKey: sessionKey,
                 runId: runId))
-        if let response = approval.response { return response }
+        if let response = approval.response {
+            return response
+        }
         let approvedByAsk = approval.approvedByAsk
         let persistAllowlist = approval.persistAllowlist
         self.persistAllowlistPatterns(
@@ -962,7 +974,9 @@ extension MacNodeRuntime {
     }
 
     private nonisolated static func locationPreciseEnabled() -> Bool {
-        if UserDefaults.standard.object(forKey: locationPreciseKey) == nil { return true }
+        if UserDefaults.standard.object(forKey: locationPreciseKey) == nil {
+            return true
+        }
         return UserDefaults.standard.bool(forKey: locationPreciseKey)
     }
 

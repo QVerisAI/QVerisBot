@@ -458,10 +458,14 @@ struct GeneralSettings: View {
 
             if let snap = snapshot {
                 let linkId = snap.channelOrder?.first(where: {
-                    if let summary = snap.channels[$0] { return summary.linked != nil }
+                    if let summary = snap.channels[$0] {
+                        return summary.linked != nil
+                    }
                     return false
                 }) ?? snap.channels.keys.first(where: {
-                    if let summary = snap.channels[$0] { return summary.linked != nil }
+                    if let summary = snap.channels[$0] {
+                        return summary.linked != nil
+                    }
                     return false
                 })
                 let linkLabel =

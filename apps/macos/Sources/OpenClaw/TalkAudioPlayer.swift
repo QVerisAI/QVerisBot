@@ -126,7 +126,9 @@ final class TalkAudioPlayer: NSObject, @preconcurrency AVAudioPlayerDelegate {
             } catch {
                 return
             }
-            if Task.isCancelled { return }
+            if Task.isCancelled {
+                return
+            }
 
             guard self.playback === playback else { return }
             if self.player?.isPlaying != true {
@@ -142,7 +144,9 @@ final class TalkAudioPlayer: NSObject, @preconcurrency AVAudioPlayerDelegate {
             } catch {
                 return
             }
-            if Task.isCancelled { return }
+            if Task.isCancelled {
+                return
+            }
 
             guard self.playback === playback else { return }
             guard self.player?.isPlaying == true else { return }

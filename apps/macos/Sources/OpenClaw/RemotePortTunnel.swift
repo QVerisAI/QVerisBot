@@ -164,7 +164,9 @@ final class RemotePortTunnel {
     }
 
     private static func findPort(preferred: UInt16?, allowRandom: Bool) async throws -> UInt16 {
-        if let preferred, self.portIsFree(preferred) { return preferred }
+        if let preferred, self.portIsFree(preferred) {
+            return preferred
+        }
         if let preferred, !allowRandom {
             throw NSError(
                 domain: "RemotePortTunnel",

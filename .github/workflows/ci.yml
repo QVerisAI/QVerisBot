@@ -1277,7 +1277,22 @@ jobs:
           xcodebuild -version
 
       - name: Install XcodeGen / SwiftLint / SwiftFormat
-        run: brew install xcodegen swiftlint swiftformat
+        run: brew install xcodegen swiftlint
+
+      - name: Install pinned SwiftFormat
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/swiftformat-0.63.1.zip"
+          curl --fail --location --retry 3 \
+            https://github.com/nicklockwood/SwiftFormat/releases/download/0.63.1/swiftformat.zip \
+            --output "$archive"
+          echo "385ef1a263ba28685157b98c5536b9c9105e124518f28b7ef8a2bee4b167eaeb  $archive" | shasum -a 256 --check
+          mkdir -p "$RUNNER_TEMP/swiftformat-bin"
+          unzip -q -o "$archive" -d "$RUNNER_TEMP/swiftformat-bin"
+          chmod +x "$RUNNER_TEMP/swiftformat-bin/swiftformat"
+          "$RUNNER_TEMP/swiftformat-bin/swiftformat" --version
+          echo "$RUNNER_TEMP/swiftformat-bin" >> "$GITHUB_PATH"
 
       - name: Cache SwiftPM
         uses: actions/cache@v5

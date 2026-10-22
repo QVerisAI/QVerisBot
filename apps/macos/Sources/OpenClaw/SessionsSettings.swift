@@ -50,30 +50,29 @@ struct SessionsSettings: View {
         }
     }
 
+    @ViewBuilder
     private var content: some View {
-        Group {
-            if self.rows.isEmpty, self.errorMessage == nil {
-                Text("No sessions yet. They appear after the first inbound message or heartbeat.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .padding(.top, 6)
-            } else {
-                List(self.rows) { row in
-                    self.sessionRow(row)
-                }
-                .listStyle(.inset)
-                .overlay(alignment: .topLeading) {
-                    if let errorMessage {
-                        Text(errorMessage)
-                            .font(.footnote)
-                            .foregroundStyle(.red)
-                            .padding(.leading, 4)
-                            .padding(.top, 4)
-                    }
-                }
-                // The view already applies horizontal padding; keep the list aligned with the text above.
-                .padding(.horizontal, -12)
+        if self.rows.isEmpty, self.errorMessage == nil {
+            Text("No sessions yet. They appear after the first inbound message or heartbeat.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .padding(.top, 6)
+        } else {
+            List(self.rows) { row in
+                self.sessionRow(row)
             }
+            .listStyle(.inset)
+            .overlay(alignment: .topLeading) {
+                if let errorMessage {
+                    Text(errorMessage)
+                        .font(.footnote)
+                        .foregroundStyle(.red)
+                        .padding(.leading, 4)
+                        .padding(.top, 4)
+                }
+            }
+            // The view already applies horizontal padding; keep the list aligned with the text above.
+            .padding(.horizontal, -12)
         }
     }
 

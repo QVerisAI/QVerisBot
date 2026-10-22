@@ -1,15 +1,27 @@
 import fs from "node:fs/promises";
-import type { AgentTool, AgentToolResult } from "@mariozechner/pi-agent-core";
-import type { TSchema } from "@sinclair/typebox";
+import type {
+  AgentTool,
+  AgentToolResult,
+  AgentToolUpdateCallback,
+} from "@mariozechner/pi-agent-core";
+import type { Static, TSchema } from "@sinclair/typebox";
 import { detectMime } from "../../media/mime.js";
 import { readSnakeCaseParamRaw } from "../../param-key.js";
 import type { ImageSanitizationLimits } from "../image-sanitization.js";
 import { sanitizeToolResultImages } from "../tool-images.js";
 
-export type AgentToolWithMeta<TParameters extends TSchema, TResult> = AgentTool<
-  TParameters,
-  TResult
+export type AgentToolWithMeta<TParameters extends TSchema, TResult> = Omit<
+  AgentTool<TParameters, TResult>,
+  "execute" | "prepareArguments"
 > & {
+  // Plugin schemas still use the original TypeBox Static inference.
+  prepareArguments?: (args: unknown) => Static<TParameters>;
+  execute: (
+    toolCallId: string,
+    params: Static<TParameters>,
+    signal?: AbortSignal,
+    onUpdate?: AgentToolUpdateCallback<TResult>,
+  ) => Promise<AgentToolResult<TResult>>;
   ownerOnly?: boolean;
   displaySummary?: string;
 };

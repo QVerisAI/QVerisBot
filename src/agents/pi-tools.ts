@@ -1,5 +1,4 @@
-import { codingTools, createReadTool, readTool } from "@mariozechner/pi-coding-agent";
-import type { ModelCompatConfig } from "../config/types.models.js";
+import { createCodingTools, createReadTool } from "@mariozechner/pi-coding-agent";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
 import type { ToolLoopDetectionConfig } from "../config/types.tools.js";
 import { resolveMergedSafeBinProfileFixtures } from "../infra/exec-safe-bin-runtime-policy.js";
@@ -128,7 +127,7 @@ function applyModelProviderToolPolicy(
     modelApi?: string;
     modelId?: string;
     agentDir?: string;
-    modelCompat?: ModelCompatConfig;
+    modelCompat?: unknown;
   },
 ): AnyAgentTool[] {
   if (params?.config?.agents?.defaults?.experimental?.localModelLean === true) {
@@ -283,7 +282,7 @@ export function createOpenClawCodingTools(options?: {
   /** Model context window in tokens (used to scale read-tool output budget). */
   modelContextWindowTokens?: number;
   /** Resolved runtime model compatibility hints. */
-  modelCompat?: ModelCompatConfig;
+  modelCompat?: unknown;
   /**
    * Auth mode for the current provider. We only need this for Anthropic OAuth
    * tool-name blocking quirks.
@@ -421,8 +420,8 @@ export function createOpenClawCodingTools(options?: {
   }
   const imageSanitization = resolveImageSanitizationLimits(options?.config);
 
-  const base = (codingTools as unknown as AnyAgentTool[]).flatMap((tool) => {
-    if (tool.name === readTool.name) {
+  const base = (createCodingTools(workspaceRoot) as unknown as AnyAgentTool[]).flatMap((tool) => {
+    if (tool.name === "read") {
       if (sandboxRoot) {
         const sandboxed = createSandboxedReadTool({
           root: sandboxRoot,
@@ -668,7 +667,7 @@ export function createOpenClawCodingTools(options?: {
     normalizeToolParameters(tool, {
       modelProvider: options?.modelProvider,
       modelId: options?.modelId,
-      modelCompat: options?.modelCompat,
+      modelCompat: { compat: options?.modelCompat },
     }),
   );
   const withHooks = normalized.map((tool) =>

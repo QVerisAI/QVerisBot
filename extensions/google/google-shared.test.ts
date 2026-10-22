@@ -288,7 +288,7 @@ describe("google-shared convertMessages", () => {
     expect(contents[3].role).toBe("user");
   });
 
-  it("ensures function call comes after user turn, not after model turn", () => {
+  it("preserves model turns and supplies a missing tool result", () => {
     const model = makeModel("gemini-1.5-pro");
     const context = {
       messages: [
@@ -309,12 +309,15 @@ describe("google-shared convertMessages", () => {
     } as unknown as Context;
 
     const contents = convertMessages(model, context);
-    expectConvertedRoles(contents, ["user", "model", "model"]);
+    expectConvertedRoles(contents, ["user", "model", "model", "user"]);
     const toolCallPart = contents[2].parts?.find(
       (part) => typeof part === "object" && part !== null && "functionCall" in part,
     );
     const toolCall = asRecord(toolCallPart);
     expect(toolCall.functionCall).toBeTruthy();
+    expect(contents[3].parts).toEqual([
+      { functionResponse: { name: "myTool", response: { error: "No result provided" } } },
+    ]);
   });
 
   it("strips tool call and response ids for google-gemini-cli", () => {
@@ -345,7 +348,7 @@ describe("google-shared convertMessages", () => {
       ],
     } as unknown as Context;
 
-    const contents = convertMessages(model, context);
+    const contents = convertMessages({ ...model, api: "google-generative-ai" }, context);
     const parts = contents.flatMap((content) => content.parts ?? []);
     const toolCallPart = parts.find(
       (part) => typeof part === "object" && part !== null && "functionCall" in part,

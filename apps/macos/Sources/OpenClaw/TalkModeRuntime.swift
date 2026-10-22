@@ -261,7 +261,9 @@ actor TalkModeRuntime {
         self.rmsTask = Task { [weak self, meter] in
             while let self {
                 try? await Task.sleep(nanoseconds: 50_000_000)
-                if Task.isCancelled { return }
+                if Task.isCancelled {
+                    return
+                }
                 await self.noteAudioLevel(rms: meter.get())
             }
         }
@@ -778,10 +780,14 @@ actor TalkModeRuntime {
     private func resolveVoiceId(preferred: String?, apiKey: String) async -> String? {
         let trimmed = preferred?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if !trimmed.isEmpty {
-            if let resolved = self.resolveVoiceAlias(trimmed) { return resolved }
+            if let resolved = self.resolveVoiceAlias(trimmed) {
+                return resolved
+            }
             self.ttsLogger.warning("talk unknown voice alias \(trimmed, privacy: .public)")
         }
-        if let fallbackVoiceId { return fallbackVoiceId }
+        if let fallbackVoiceId {
+            return fallbackVoiceId
+        }
 
         do {
             let voices = try await ElevenLabsTTSClient(apiKey: apiKey).listVoices()
@@ -810,7 +816,9 @@ actor TalkModeRuntime {
         let trimmed = (value ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
         let normalized = trimmed.lowercased()
-        if let mapped = self.voiceAliases[normalized] { return mapped }
+        if let mapped = self.voiceAliases[normalized] {
+            return mapped
+        }
         if self.voiceAliases.values.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }) {
             return trimmed
         }
@@ -991,7 +999,9 @@ extension TalkModeRuntime {
     // MARK: - Audio level handling
 
     private func noteAudioLevel(rms: Double) async {
-        if self.phase != .listening, self.phase != .speaking { return }
+        if self.phase != .listening, self.phase != .speaking {
+            return
+        }
         let alpha: Double = rms < self.noiseFloorRMS ? 0.08 : 0.01
         self.noiseFloorRMS = max(1e-7, self.noiseFloorRMS + (rms - self.noiseFloorRMS) * alpha)
 
@@ -1023,7 +1033,9 @@ extension TalkModeRuntime {
     private func shouldInterrupt(transcript: String, hasConfidence: Bool) async -> Bool {
         let trimmed = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.count >= 3 else { return false }
-        if self.isLikelyEcho(of: trimmed) { return false }
+        if self.isLikelyEcho(of: trimmed) {
+            return false
+        }
         let now = Date()
         if let lastSpeechEnergyAt, now.timeIntervalSince(lastSpeechEnergyAt) > 0.35 {
             return false

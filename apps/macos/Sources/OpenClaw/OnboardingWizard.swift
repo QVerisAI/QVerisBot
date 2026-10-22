@@ -149,7 +149,9 @@ final class OnboardingWizardModel {
         if self.currentStep == nil, res.step != nil {
             onboardingWizardLogger.error("wizard step decode failed")
         }
-        if res.done { self.currentStep = nil }
+        if res.done {
+            self.currentStep = nil
+        }
         self.restartAttempts = 0
     }
 
@@ -161,7 +163,9 @@ final class OnboardingWizardModel {
         if self.currentStep == nil, res.step != nil {
             onboardingWizardLogger.error("wizard step decode failed")
         }
-        if res.done { self.currentStep = nil }
+        if res.done {
+            self.currentStep = nil
+        }
         if res.done || status == "done" || status == "cancelled" || status == "error" {
             self.sessionId = nil
         }
@@ -376,8 +380,12 @@ struct OnboardingWizardStepView: View {
 
     private var isBlocked: Bool {
         let type = wizardStepType(step)
-        if type == "select" { return self.optionItems.isEmpty }
-        if type == "multiselect" { return self.optionItems.isEmpty }
+        if type == "select" {
+            return self.optionItems.isEmpty
+        }
+        if type == "multiselect" {
+            return self.optionItems.isEmpty
+        }
         return false
     }
 

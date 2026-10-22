@@ -9,7 +9,7 @@ type OpenAIStrictToolModel = {
   api?: unknown;
   baseUrl?: unknown;
   id?: unknown;
-  compat?: { supportsStore?: boolean };
+  compat?: unknown;
 };
 
 type ToolWithParameters = {

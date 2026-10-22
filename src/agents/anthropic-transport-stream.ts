@@ -384,8 +384,8 @@ function convertAnthropicTools(tools: Context["tools"], isOAuthToken: boolean) {
     description: tool.description,
     input_schema: {
       type: "object",
-      properties: tool.parameters.properties || {},
-      required: tool.parameters.required || [],
+      properties: ("properties" in tool.parameters ? tool.parameters.properties : undefined) || {},
+      required: ("required" in tool.parameters ? tool.parameters.required : undefined) || [],
     },
   }));
 }

@@ -91,7 +91,9 @@ public final class GatewayDiscoveryModel {
     }
 
     public func start() {
-        if !self.browsers.isEmpty { return }
+        if !self.browsers.isEmpty {
+            return
+        }
 
         for domain in OpenClawBonjour.gatewayServiceDomains {
             let browser = GatewayDiscoveryBrowserSupport.makeBrowser(
@@ -299,7 +301,9 @@ public final class GatewayDiscoveryModel {
 
     private func scheduleWideAreaFallback() {
         guard let domain = OpenClawBonjour.wideAreaGatewayServiceDomain else { return }
-        if Self.isRunningTests { return }
+        if Self.isRunningTests {
+            return
+        }
         guard self.wideAreaFallbackTask == nil else { return }
         self.wideAreaFallbackTask = Task.detached(priority: .utility) { [weak self] in
             guard let self else { return }
@@ -309,7 +313,9 @@ public final class GatewayDiscoveryModel {
                 let hasResults = await MainActor.run {
                     self.hasUsableWideAreaResults
                 }
-                if hasResults { return }
+                if hasResults {
+                    return
+                }
 
                 // Wide-area discovery can be racy (Tailscale not yet up, DNS zone not
                 // published yet). Retry with a short backoff while onboarding is open.
@@ -331,7 +337,9 @@ public final class GatewayDiscoveryModel {
     }
 
     private func scheduleTailscaleServeFallback() {
-        if Self.isRunningTests { return }
+        if Self.isRunningTests {
+            return
+        }
         guard self.tailscaleServeFallbackTask == nil else { return }
         self.tailscaleServeFallbackTask = Task.detached(priority: .utility) { [weak self] in
             guard let self else { return }
@@ -343,7 +351,9 @@ public final class GatewayDiscoveryModel {
                         currentGateways: self.gateways,
                         tailscaleServeGateways: self.tailscaleServeFallbackGateways)
                 }
-                if !shouldContinue { return }
+                if !shouldContinue {
+                    return
+                }
 
                 let beacons = await TailscaleServeGatewayDiscovery.discover(timeoutSeconds: 2.4)
                 if !beacons.isEmpty {
@@ -374,7 +384,9 @@ public final class GatewayDiscoveryModel {
     private var hasUsableWideAreaResults: Bool {
         guard let domain = OpenClawBonjour.wideAreaGatewayServiceDomain else { return false }
         guard let gateways = self.gatewaysByDomain[domain], !gateways.isEmpty else { return false }
-        if !self.filterLocalGateways { return true }
+        if !self.filterLocalGateways {
+            return true
+        }
         return gateways.contains(where: { !$0.isLocal })
     }
 
@@ -395,7 +407,9 @@ public final class GatewayDiscoveryModel {
         var seen = Set<String>()
         let deduped = gateways.filter { gateway in
             let key = Self.dedupeKey(for: gateway)
-            if seen.contains(key) { return false }
+            if seen.contains(key) {
+                return false
+            }
             seen.insert(key)
             return true
         }
@@ -406,7 +420,9 @@ public final class GatewayDiscoveryModel {
 
     private nonisolated static var isRunningTests: Bool {
         // Keep discovery background work from running forever during SwiftPM test runs.
-        if Bundle.allBundles.contains(where: { $0.bundleURL.pathExtension == "xctest" }) { return true }
+        if Bundle.allBundles.contains(where: { $0.bundleURL.pathExtension == "xctest" }) {
+            return true
+        }
 
         let env = ProcessInfo.processInfo.environment
         return env["XCTestConfigurationFilePath"] != nil
@@ -650,7 +666,9 @@ public final class GatewayDiscoveryModel {
     private nonisolated static func normalizeHostToken(_ raw: String?) -> String? {
         guard let raw else { return nil }
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty { return nil }
+        if trimmed.isEmpty {
+            return nil
+        }
         let lower = trimmed.lowercased()
         let strippedTrailingDot = lower.hasSuffix(".")
             ? String(lower.dropLast())
@@ -667,7 +685,9 @@ public final class GatewayDiscoveryModel {
         guard let raw else { return nil }
         let prettified = Self.prettifyInstanceName(raw)
         let trimmed = prettified.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty { return nil }
+        if trimmed.isEmpty {
+            return nil
+        }
         return trimmed.lowercased()
     }
 

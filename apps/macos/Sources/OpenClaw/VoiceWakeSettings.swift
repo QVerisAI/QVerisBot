@@ -283,10 +283,18 @@ struct VoiceWakeSettings: View {
                     onUpdate: { newState in
                         DispatchQueue.main.async { [self] in
                             self.testState = newState
-                            if case .detected = newState { self.isTesting = false }
-                            if case .failed = newState { self.isTesting = false }
-                            if case .detected = newState { self.testTimeoutTask?.cancel() }
-                            if case .failed = newState { self.testTimeoutTask?.cancel() }
+                            if case .detected = newState {
+                                self.isTesting = false
+                            }
+                            if case .failed = newState {
+                                self.isTesting = false
+                            }
+                            if case .detected = newState {
+                                self.testTimeoutTask?.cancel()
+                            }
+                            if case .failed = newState {
+                                self.testTimeoutTask?.cancel()
+                            }
                         }
                     })
                 self.testTimeoutTask?.cancel()

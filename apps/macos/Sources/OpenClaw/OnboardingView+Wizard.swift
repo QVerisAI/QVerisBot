@@ -44,10 +44,18 @@ private struct OnboardingWizardCardContent: View {
     }
 
     private var state: CardState {
-        if let error = wizard.errorMessage { return .error(error) }
-        if self.wizard.isStarting { return .starting }
-        if let step = wizard.currentStep { return .step(step) }
-        if self.wizard.isComplete { return .complete }
+        if let error = wizard.errorMessage {
+            return .error(error)
+        }
+        if self.wizard.isStarting {
+            return .starting
+        }
+        if let step = wizard.currentStep {
+            return .step(step)
+        }
+        if self.wizard.isComplete {
+            return .complete
+        }
         return .waiting
     }
 

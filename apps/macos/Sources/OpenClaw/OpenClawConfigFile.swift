@@ -39,7 +39,9 @@ enum OpenClawConfigFile {
 
     static func saveDict(_ dict: [String: Any]) {
         // Nix mode disables config writes in production, but tests rely on saving temp configs.
-        if ProcessInfo.processInfo.isNixMode, !ProcessInfo.processInfo.isRunningTests { return }
+        if ProcessInfo.processInfo.isNixMode, !ProcessInfo.processInfo.isRunningTests {
+            return
+        }
         let url = self.url()
         let previousData = try? Data(contentsOf: url)
         let previousRoot = previousData.flatMap { self.parseConfigData($0) }
@@ -170,7 +172,9 @@ enum OpenClawConfigFile {
     static func gatewayPort() -> Int? {
         let root = self.loadDict()
         guard let gateway = root["gateway"] as? [String: Any] else { return nil }
-        if let port = gateway["port"] as? Int, port > 0 { return port }
+        if let port = gateway["port"] as? Int, port > 0 {
+            return port
+        }
         if let number = gateway["port"] as? NSNumber, number.intValue > 0 {
             return number.intValue
         }
@@ -252,7 +256,9 @@ enum OpenClawConfigFile {
     static func hostKey(_ host: String) -> String {
         let trimmed = host.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !trimmed.isEmpty else { return "" }
-        if trimmed.contains(":") { return trimmed }
+        if trimmed.contains(":") {
+            return trimmed
+        }
         let digits = CharacterSet(charactersIn: "0123456789.")
         if trimmed.rangeOfCharacter(from: digits.inverted) == nil {
             return trimmed
@@ -399,14 +405,22 @@ enum OpenClawConfigFile {
     }
 
     private static func fileAttributeInt(_ value: Any?) -> Int? {
-        if let number = value as? NSNumber { return number.intValue }
-        if let number = value as? Int { return number }
+        if let number = value as? NSNumber {
+            return number.intValue
+        }
+        if let number = value as? Int {
+            return number
+        }
         return nil
     }
 
     private static func fileSystemNumber(_ value: Any?) -> String? {
-        if let number = value as? NSNumber { return number.stringValue }
-        if let number = value as? Int { return String(number) }
+        if let number = value as? NSNumber {
+            return number.stringValue
+        }
+        if let number = value as? Int {
+            return String(number)
+        }
         return nil
     }
 

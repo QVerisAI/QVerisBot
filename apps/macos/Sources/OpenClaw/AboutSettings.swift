@@ -157,7 +157,9 @@ private struct AboutLinkRow: View {
 
     var body: some View {
         Button {
-            if let url = URL(string: url) { NSWorkspace.shared.open(url) }
+            if let url = URL(string: url) {
+                NSWorkspace.shared.open(url)
+            }
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: self.icon)
