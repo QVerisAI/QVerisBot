@@ -82,4 +82,4 @@ jobs:
           token: ${{ steps.release-token.outputs.token }}
           tag_name: ${{ github.ref_name }}
           generate_release_notes: true
-          prerelease: ${{ contains(github.ref_name, '-') }}
+          prerelease: ${{ contains(github.ref_name, '-beta.') }}
