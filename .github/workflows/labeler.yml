@@ -27,23 +27,32 @@ permissions: {}
 
 jobs:
   label:
-    if: github.event_name == 'pull_request_target'
     permissions:
       contents: read
       pull-requests: write
-      issues: write
-    runs-on: ubuntu-slim
-    timeout-minutes: 5
+    runs-on: blacksmith-16vcpu-ubuntu-2404
     steps:
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        continue-on-error: true
+        with:
+          app-id: "2729701"
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+      - uses: actions/create-github-app-token@v2
+        id: app-token-fallback
+        if: steps.app-token.outcome == 'failure'
+        with:
+          app-id: "2971289"
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY_FALLBACK }}
       - uses: actions/labeler@v6
         with:
           configuration-path: .github/labeler.yml
-          repo-token: ${{ github.token }}
+          repo-token: ${{ steps.app-token.outputs.token || steps.app-token-fallback.outputs.token }}
           sync-labels: true
       - name: Apply PR size label
         uses: actions/github-script@v8
         with:
-          github-token: ${{ github.token }}
+          github-token: ${{ steps.app-token.outputs.token || steps.app-token-fallback.outputs.token }}
           script: |
             const pullRequest = context.payload.pull_request;
             if (!pullRequest) {
@@ -132,7 +141,7 @@ jobs:
       - name: Apply maintainer or trusted-contributor label
         uses: actions/github-script@v8
         with:
-          github-token: ${{ github.token }}
+          github-token: ${{ steps.app-token.outputs.token || steps.app-token-fallback.outputs.token }}
           script: |
             const login = context.payload.pull_request?.user?.login;
             if (!login) {
@@ -154,7 +163,7 @@ jobs:
               });
               isMaintainer = membership?.data?.state === "active";
             } catch (error) {
-              if (error?.status !== 404 && error?.status !== 403) {
+              if (error?.status !== 404) {
                 throw error;
               }
             }
@@ -203,7 +212,7 @@ jobs:
       - name: Apply beta-blocker title label
         uses: actions/github-script@v8
         with:
-          github-token: ${{ github.token }}
+          github-token: ${{ steps.app-token.outputs.token || steps.app-token-fallback.outputs.token }}
           script: |
             const pullRequest = context.payload.pull_request;
             if (!pullRequest) {
@@ -220,7 +229,7 @@ jobs:
                 name: labelName,
               });
             } catch (error) {
-              if (error?.status !== 404 && error?.status !== 403) {
+              if (error?.status !== 404) {
                 throw error;
               }
               core.info(`Skipping ${labelName} labeling because the label does not exist in the repository.`);
@@ -256,7 +265,7 @@ jobs:
       - name: Apply too-many-prs label
         uses: actions/github-script@v8
         with:
-          github-token: ${{ github.token }}
+          github-token: ${{ steps.app-token.outputs.token || steps.app-token-fallback.outputs.token }}
           script: |
             const pullRequest = context.payload.pull_request;
             if (!pullRequest) {
@@ -339,7 +348,7 @@ jobs:
                 });
                 isMaintainer = membership?.data?.state === "active";
               } catch (error) {
-                if (error?.status !== 404 && error?.status !== 403) {
+                if (error?.status !== 404) {
                   throw error;
                 }
               }
@@ -430,13 +439,24 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
-    runs-on: ubuntu-slim
-    timeout-minutes: 5
+    runs-on: blacksmith-16vcpu-ubuntu-2404
     steps:
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        continue-on-error: true
+        with:
+          app-id: "2729701"
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+      - uses: actions/create-github-app-token@v2
+        id: app-token-fallback
+        if: steps.app-token.outcome == 'failure'
+        with:
+          app-id: "2971289"
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY_FALLBACK }}
       - name: Backfill PR labels
         uses: actions/github-script@v8
         with:
-          github-token: ${{ github.token }}
+          github-token: ${{ steps.app-token.outputs.token || steps.app-token-fallback.outputs.token }}
           script: |
             const owner = context.repo.owner;
             const repo = context.repo.repo;
@@ -513,7 +533,7 @@ jobs:
                 });
                 isMaintainer = membership?.data?.state === "active";
               } catch (error) {
-                if (error?.status !== 404 && error?.status !== 403) {
+                if (error?.status !== 404) {
                   throw error;
                 }
               }
@@ -715,16 +735,26 @@ jobs:
             core.info(`Processed ${processed} pull requests.`);
 
   label-issues:
-    if: github.event_name == 'issues'
     permissions:
       issues: write
-    runs-on: ubuntu-slim
-    timeout-minutes: 5
+    runs-on: blacksmith-16vcpu-ubuntu-2404
     steps:
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        continue-on-error: true
+        with:
+          app-id: "2729701"
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+      - uses: actions/create-github-app-token@v2
+        id: app-token-fallback
+        if: steps.app-token.outcome == 'failure'
+        with:
+          app-id: "2971289"
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY_FALLBACK }}
       - name: Apply maintainer or trusted-contributor label
         uses: actions/github-script@v8
         with:
-          github-token: ${{ github.token }}
+          github-token: ${{ steps.app-token.outputs.token || steps.app-token-fallback.outputs.token }}
           script: |
             const login = context.payload.issue?.user?.login;
             if (!login) {
@@ -746,7 +776,7 @@ jobs:
               });
               isMaintainer = membership?.data?.state === "active";
             } catch (error) {
-              if (error?.status !== 404 && error?.status !== 403) {
+              if (error?.status !== 404) {
                 throw error;
               }
             }
@@ -795,7 +825,7 @@ jobs:
       - name: Apply beta-blocker title label
         uses: actions/github-script@v8
         with:
-          github-token: ${{ github.token }}
+          github-token: ${{ steps.app-token.outputs.token || steps.app-token-fallback.outputs.token }}
           script: |
             const issue = context.payload.issue;
             if (!issue || issue.pull_request) {
@@ -812,7 +842,7 @@ jobs:
                 name: labelName,
               });
             } catch (error) {
-              if (error?.status !== 404 && error?.status !== 403) {
+              if (error?.status !== 404) {
                 throw error;
               }
               core.info(`Skipping ${labelName} labeling because the label does not exist in the repository.`);
